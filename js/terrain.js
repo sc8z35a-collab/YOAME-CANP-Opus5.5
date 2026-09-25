@@ -41,6 +41,8 @@ function rawHeight(x, z) {
   const east = Math.max(0, x - 9);
   h += east * 0.5 + Math.pow(east, 1.35) * 0.02;
   h += Math.max(0, -x - 24) * 0.35;
+  // avoid random ponds away from the creek (keeps flood water readable)
+  h = Math.max(h, -0.9 + noise2(x * 0.05, z * 0.05) * 0.3);
   // creek channel
   const cd = Math.abs(x - creekX(z));
   const bank = 1 - smooth(2.2, 7.5, cd);
