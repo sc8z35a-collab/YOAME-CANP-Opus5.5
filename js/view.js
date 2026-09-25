@@ -5,7 +5,7 @@ import { FLOOR } from './camper.js';
 
 // local camper coords: eye position + default yaw (0 = looking toward -z/front), pitch
 export const VIEWS = {
-  lounge: { label: 'ソファ', pos: [-0.55, FLOOR + 1.12, -0.05], yaw: 1.25, pitch: -0.05, limits: [-3.2, 3.2] },
+  lounge: { label: 'ソファ', pos: [-0.72, FLOOR + 1.12, 0.02], yaw: 0.45, pitch: -0.05, limits: [-3.2, 3.2] },
   driver: { label: '運転席', pos: [-0.55, FLOOR + 1.28, -3.25], yaw: 0, pitch: -0.02, limits: [-1.7, 1.7] },
   bed: { label: 'ベッド', pos: [0.15, FLOOR + 1.08, 2.7], yaw: 0.0, pitch: 0.55, limits: [-3.2, 3.2], lie: true },
   kitchen: { label: 'キッチン', pos: [0.15, FLOOR + 1.6, -0.9], yaw: -1.35, pitch: -0.2, limits: [-3.2, 3.2] },
