@@ -192,53 +192,65 @@ export async function buildForest(scene) {
   await buildProps(scene);
 }
 
-async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true, wind = 0, yOff = 0, tilt = 0.1, colliderR = 0 } = {}) {
+// Spatially chunked instancing: each 32m cell is its own InstancedMesh so frustum culling
+// works, and small plants are distance-culled (maxDist) every few frames.
+export const chunks = [];
+const CELL = 32;
+async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true, wind = 0, yOff = 0, tilt = 0.1, colliderR = 0, maxDist = 400 } = {}) {
   const parts = await glbParts(name);
   const dummy = new THREE.Object3D();
-  for (const part of parts) {
-    const mat = part.mat.clone();
-    if (wind) windify(mat, { strength: wind });
-    if (mat.map) mat.map.anisotropy = 8;
-    const im = new THREE.InstancedMesh(part.geo, mat, pts.length);
-    pts.forEach((p, i) => {
-      const s = scale[0] + (scale[1] - scale[0]) * p.r;
-      dummy.position.set(p.x, p.y + yOff, p.z);
-      dummy.rotation.set((p.r - 0.5) * tilt, p.r * 31, (p.r * 7 % 1 - 0.5) * tilt);
-      dummy.scale.setScalar(s);
-      dummy.updateMatrix();
-      im.setMatrixAt(i, dummy.matrix);
+  const cells = new Map();
+  for (const p of pts) { const k = Math.floor(p.x / CELL) + ',' + Math.floor(p.z / CELL); (cells.get(k) || cells.set(k, []).get(k)).push(p); }
+  const mats = parts.map(part => { const m = part.mat.clone(); if (wind) windify(m, { strength: wind }); if (m.map) m.map.anisotropy = 8; return m; });
+  for (const list of cells.values()) {
+    const cx = list.reduce((a, p) => a + p.x, 0) / list.length, cz = list.reduce((a, p) => a + p.z, 0) / list.length;
+    parts.forEach((part, pi) => {
+      const im = new THREE.InstancedMesh(part.geo, mats[pi], list.length);
+      list.forEach((p, i) => {
+        const s = scale[0] + (scale[1] - scale[0]) * p.r;
+        dummy.position.set(p.x, p.y + yOff, p.z);
+        dummy.rotation.set((p.r - 0.5) * tilt, p.r * 31, (p.r * 7 % 1 - 0.5) * tilt);
+        dummy.scale.setScalar(s);
+        dummy.updateMatrix();
+        im.setMatrixAt(i, dummy.matrix);
+      });
+      im.castShadow = shadow; im.receiveShadow = true;
+      im.computeBoundingSphere();
+      scene.add(im);
+      chunks.push({ m: im, x: cx, z: cz, d: maxDist + CELL * 0.7 });
     });
-    im.castShadow = shadow; im.receiveShadow = true;
-    im.computeBoundingSphere();
-    scene.add(im);
   }
   if (colliderR) pts.forEach(p => colliders.push({ x: p.x, z: p.z, r: colliderR }));
+}
+export function updateForest(cam) {
+  if (G.frame % 10) return;
+  for (const c of chunks) c.m.visible = Math.hypot(c.x - cam.x, c.z - cam.z) < c.d;
 }
 
 async function buildUnderstory(scene, hi) {
   const k = hi ? 1 : 0.6;
   const shady = (x, z) => clearOf(x, z, 7.5, 2.6, 3.5);
-  const ferns = place(Math.round(900 * k), 71, (x, z, R) => shady(x, z) && slopeAt(x, z) < 0.8 && R() < 0.5 + fbm(x * 0.04, z * 0.04) * 0.9);
+  const ferns = place(Math.round(520 * k), 71, (x, z, R) => shady(x, z) && slopeAt(x, z) < 0.8 && R() < 0.5 + fbm(x * 0.04, z * 0.04) * 0.9);
   // dense ferns near the camper clearing edge (seen from windows)
-  const ring = place(Math.round(260 * k), 72, (x, z) => { const d = Math.hypot(x, z); return d > 7.5 && d < 20 && shady(x, z); });
-  await instanceGLB(scene, 'fern_02', ferns.concat(ring), { scale: [0.9, 1.7], wind: 1.2, shadow: hi });
-  const shrubs = place(Math.round(420 * k), 73, (x, z, R) => shady(x, z) && R() < 0.6);
-  await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi });
-  await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi });
-  const weeds = place(Math.round(900 * k), 74, (x, z) => {
+  const ring = place(Math.round(220 * k), 72, (x, z) => { const d = Math.hypot(x, z); return d > 7.5 && d < 20 && shady(x, z); });
+  await instanceGLB(scene, 'fern_02', ferns.concat(ring), { scale: [0.9, 1.7], wind: 1.2, shadow: hi, maxDist: 55 });
+  const shrubs = place(Math.round(300 * k), 73, (x, z, R) => shady(x, z) && R() < 0.6);
+  await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi, maxDist: 70 });
+  await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi, maxDist: 70 });
+  const weeds = place(Math.round(520 * k), 74, (x, z) => {
     for (const s in SPOTS) { const d = Math.hypot(x - SPOTS[s].x, z - SPOTS[s].z); if (d > 5 && d < 15) return true; }
     const cd = Math.abs(x - creekX(z)); return cd > 3 && cd < 7;
   });
-  await instanceGLB(scene, 'weed_plant_02', weeds.filter((_, i) => i % 2), { scale: [0.8, 1.4], wind: 1.6, shadow: false });
-  await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false });
-  const rocks = place(Math.round(160 * k), 75, (x, z, R) => clearOf(x, z, 9, 3, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
-  await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.5 });
+  await instanceGLB(scene, 'weed_plant_02', weeds.filter((_, i) => i % 2), { scale: [0.8, 1.4], wind: 1.6, shadow: false, maxDist: 40 });
+  await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false, maxDist: 40 });
+  const rocks = place(Math.round(110 * k), 75, (x, z, R) => clearOf(x, z, 9, 3, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
+  await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.5, maxDist: 120 });
   const small = place(Math.round(300 * k), 76, (x, z) => Math.abs(x - creekX(z)) < 5.5 || trackDist(x, z) < 4);
-  await instanceGLB(scene, 'rock_07', small, { scale: [1.5, 4.0], yOff: -0.03, tilt: 1, shadow: false });
+  await instanceGLB(scene, 'rock_07', small, { scale: [1.5, 4.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
   const logs = place(40, 77, (x, z) => clearOf(x, z, 10, 3.5, 4));
   await instanceGLB(scene, 'dead_tree_trunk', logs, { scale: [1.2, 2.2], yOff: 0.05, tilt: 0.05, colliderR: 1 });
   await instanceGLB(scene, 'tree_stump_01', place(45, 78, (x, z) => clearOf(x, z, 8, 3, 4)), { scale: [0.8, 1.3], yOff: -0.05, colliderR: 0.8 });
-  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false });
+  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40 });
 }
 
 // Camp props around the parked camper (placed in world, relative to hollow spot)

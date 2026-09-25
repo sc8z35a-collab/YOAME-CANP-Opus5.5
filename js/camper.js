@@ -555,6 +555,26 @@ function buildInterior(I, M) {
     }
   }
   setCurtains(0, true);
+  occludeInterior(I);
+}
+
+// Interior is enclosed: hemisphere/env (unshadowed) light must be attenuated, otherwise the
+// van looks roofless. Patch every interior material's indirect term with a shared factor.
+export const uIntAmb = { value: 0.3 };
+function occludeInterior(root) {
+  const done = new Set();
+  root.traverse(o => {
+    const m = o.material; if (!m || done.has(m) || !m.isMeshStandardMaterial) return; done.add(m);
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      prev && prev.call(m, sh, r);
+      sh.uniforms.uIntAmb = uIntAmb;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIntAmb;')
+        .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= uIntAmb; reflectedLight.indirectSpecular *= uIntAmb;');
+    };
+    m.customProgramCacheKey = () => 'int' + (prev ? prev.toString().length : 0);
+    m.needsUpdate = true;
+  });
 }
 
 export function setCurtains(v, instant = false) {

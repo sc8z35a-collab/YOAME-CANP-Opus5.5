@@ -2,7 +2,7 @@
 import { THREE, G, U, P, QA, bus, clamp, damp, lerp, smooth } from './core.js';
 import { setAniso, progress } from './assets.js';
 import { buildTerrain, heightAt, SPOTS, spotHeight, TRACK } from './terrain.js';
-import { buildForest, camp } from './forest.js';
+import { buildForest, camp, updateForest } from './forest.js';
 import { buildCamper, updateCamper, C } from './camper.js';
 import { buildWeather, updateWeather, W } from './weather.js';
 import { buildAnimals, updateAnimals, Z } from './animals.js';
@@ -224,6 +224,7 @@ function loop(now) {
   updateAnimals(dt);
   updateCamper(dt);
   updateView(dt, camera);
+  updateForest(camera.position);
   updateAudio(dt);
   updateUI();
   // campfire at dusk/night when calm
