@@ -83,9 +83,8 @@ float crackLines(vec2 uv, vec2 c, float amt){
 
 export function makeGlass({ tint = 0xffffff, crackable = true, horizontal = false, env = 0.6 } = {}) {
   const m = new THREE.MeshPhysicalMaterial({
-    color: tint, metalness: 0, roughness: 0.03, transmission: 1, thickness: 0.18, ior: 1.33,
-    transparent: false, side: THREE.DoubleSide, envMapIntensity: env, specularIntensity: 1,
-    attenuationColor: new THREE.Color(0xeef6f2), attenuationDistance: 3,
+    color: tint, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.07,
+    side: THREE.DoubleSide, envMapIntensity: env, specularIntensity: 1, ior: 1.5,
   });
   m.depthWrite = false;
   const u = { uCrack: { value: 0 }, uCrackAt: { value: new THREE.Vector2(0.5, 0.5) }, uSlope: { value: horizontal ? 0 : 1 } };
@@ -126,10 +125,12 @@ export function makeGlass({ tint = 0xffffff, crackable = true, horizontal = fals
           vec2 o = gDrops.xy*.9 + vec2(gCrack)*.4;
           normal = normalize(normal + (T*o.x + B*o.y)*s*1.2);
         }`)
-      .replace('#include <transmission_fragment>', `#include <transmission_fragment>
-        totalDiffuse = mix(totalDiffuse, totalDiffuse*vec3(1.02,1.02,1.0) + vec3(.035,.04,.045), gFog);`)
       .replace('#include <opaque_fragment>', `
-        outgoingLight += vec3(.8,.85,.9)*gCrack*.35 + vec3(.6,.7,.9)*uFlash*gDrops.z*.4;
+        // drops: darker refracted core + bright specular rim; condensation: lit milky film
+        float lum = dot(outgoingLight, vec3(.333));
+        outgoingLight = mix(outgoingLight, outgoingLight*0.55, gDrops.z*.35);
+        outgoingLight += vec3(.8,.85,.9)*gCrack*.25*max(lum,.15) + vec3(.6,.7,.9)*uFlash*gDrops.z*.5;
+        diffuseColor.a = clamp(opacity + gDrops.z*.28 + gFog*.55 + gCrack*.55 + uDirt*.04, 0., .92);
         #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'rainglass' + (horizontal ? 'h' : 'v');
