@@ -1,0 +1,21 @@
+{
+ "syntax": [],
+ "imports": [],
+ "modules": [
+  "js/animals.js",
+  "js/assets.js",
+  "js/audio.js",
+  "js/camper.js",
+  "js/core.js",
+  "js/events.js",
+  "js/forest.js",
+  "js/glass.js",
+  "js/main.js",
+  "js/terrain.js",
+  "js/ui.js",
+  "js/view.js",
+  "js/weather.js"
+ ],
+ "ok": true,
+ "seconds": 0.9
+}
