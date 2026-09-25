@@ -143,11 +143,11 @@ export function buildTerrain(scene) {
         vec3 cM = texture2D(tMud, uvA).rgb;
         vec3 cR = texture2D(tRock, uvA*0.5).rgb;
         vec3 cGr = texture2D(tGrass, uvA*1.3).rgb;
-        float wl = smoothstep(0.35, 0.75, vSplat.x + (br-0.5)*0.7);
+        float wl = smoothstep(0.15, 0.55, vSplat.x + (br-0.5)*0.7);
         float wm = smoothstep(0.2, 0.6, vSplat.y + (br-0.5)*0.4);
         float wr = smoothstep(0.3, 0.7, vSplat.z + (br-0.5)*0.5);
         float wg = smoothstep(0.25, 0.7, vSplat.w + (br-0.5)*0.6);
-        vec3 col = mix(cG, cL, wl);
+        vec3 col = mix(cG*vec3(0.62,0.58,0.5), cL*0.85, wl);
         col = mix(col, cGr*vec3(0.95,1.05,0.8), wg*0.9);
         col = mix(col, cR, wr);
         col = mix(col, cM, wm);

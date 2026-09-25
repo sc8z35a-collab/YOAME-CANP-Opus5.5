@@ -181,6 +181,7 @@ async function init() {
   await buildAnimals(scene);
   buildEvents(scene);
   initView(canvas);
+  if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
   buildUI();
   resize();
   updateWeather(0.016, camera);

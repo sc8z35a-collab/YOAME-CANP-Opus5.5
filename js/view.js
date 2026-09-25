@@ -11,7 +11,7 @@ export const VIEWS = {
   kitchen: { label: 'キッチン', pos: [0.15, FLOOR + 1.6, -0.9], yaw: -1.35, pitch: -0.2, limits: [-3.2, 3.2] },
   rear: { label: '後部窓', pos: [0.1, FLOOR + 1.35, 2.35], yaw: Math.PI, pitch: -0.05, limits: [-3.2, 3.2] },
   alcove: { label: 'ロフト', pos: [0.2, 2.62, -3.3], yaw: Math.PI * 0.95, pitch: -0.25, limits: [-3.2, 3.2], lie: true },
-  outside: { label: '外', pos: [7.5, 1.7, -7.5], yaw: 0.75 + Math.PI, pitch: -0.08, limits: [-9, 9], out: true },
+  outside: { label: '外', pos: [7.5, 1.7, -7.5], yaw: 2.36, pitch: -0.08, limits: [-9, 9], out: true },
 };
 
 export const V = { cur: 'lounge', pos: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0, fov: 62, tfov: 62, trans: 1, from: new THREE.Vector3(), breath: 0, peek: 0 };
