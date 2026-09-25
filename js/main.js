@@ -18,6 +18,8 @@ import { ShaderPass } from './lib/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from './lib/addons/postprocessing/OutputPass.js';
 
 window.__QA = { ready: false, fps: 0 };
+if (QA) { window.__G = G; import('./view.js').then(m => window.__V = m.V); }
+window.__QA.resume = () => { window.__QA.run = true; requestAnimationFrame(loop); };
 const loadEl = document.getElementById('loading');
 const barEl = document.getElementById('loadbar');
 
@@ -150,7 +152,7 @@ function updateDrive(dt) {
 
 // camper rocking (spring) from impacts & wind
 function updateRock(dt) {
-  G.rockAngle = G.rockAngle || 0;
+  G.rockAngle = G.rockAngle || 0; G.rockV = G.rockV || 0;
   const windF = (G.wind > 0.7 ? Math.sin(G.t * 1.7) * Math.sin(G.t * 0.63) * 0.004 * G.wind : 0);
   G.rockV = (G.rockV || 0) + (-G.rockAngle * 60 - G.rockV * 6) * dt + windF;
   G.rockAngle += G.rockV * dt;
@@ -201,6 +203,7 @@ const loadTick = setInterval(() => { if (progress.total) barEl.style.width = (10
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, qaFrames = 0;
 function loop(now) {
+  if (QA && window.__QA.ready && !window.__QA.run) { window.__QA.frozen = true; return; }
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (QA) dt = 1 / 30;
@@ -239,11 +242,14 @@ function loop(now) {
   gu.uDark.value = G.state.hiding ? 1 : 0;
   gu.uSub.value = clamp((G.submerge || 0) - 0.5);
   bloom.strength = 0.45 + G.night * 0.35 + G.flash * 0.6;
-  composer.render(dt);
+  if (P.has('nopost')) renderer.render(scene, camera); else composer.render(dt);
   // fps
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 1) { window.__QA.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
-  if (QA && ++qaFrames === 45) { window.__QA.ready = true; window.__QA.state = { ...G.state, hour: G.hour, weather: W.mode, water: G.waterLevel }; }
+  window.__QA.frames = qaFrames + 1;
+  if (QA && ++qaFrames === (parseInt(P.get('frames')) || 6)) { window.__QA.ready = true; try { window.__QA.shot = canvas.toDataURL('image/jpeg', 0.9); } catch (e) { window.__QA.shotErr = String(e); }
+    window.__QA.cam = camera.position.toArray().map(v => +v.toFixed(2)).concat(G.camper.position.toArray().map(v => +v.toFixed(2))); window.__QA.exp = renderer.toneMappingExposure; window.__QA.fogD = scene.fog.density; window.__QA.info = renderer.info.render;
+    window.__QA.state = { ...G.state, hour: G.hour, weather: W.mode, water: G.waterLevel }; }
 }
 function VIEWS_out() { return V.cur === 'outside'; }
 

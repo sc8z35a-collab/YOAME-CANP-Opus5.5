@@ -298,7 +298,7 @@ export function buildCamper(scene) {
   const spotHousing = rbox(0.22, 0.16, 0.2, darkPlastic, 0, ROOF + 0.18, -3.4, 0.04);
   g.add(spotHousing);
   const spot = new THREE.SpotLight(0xe8f0ff, 0, 60, 0.5, 0.35, 1.2);
-  spot.position.set(0, ROOF + 0.25, -3.4); spot.castShadow = G.quality !== 'm';
+  spot.position.set(0, ROOF + 0.25, -3.4); spot.castShadow = false;
   spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.0005;
   g.add(spot, spot.target); spot.target.position.set(0, 0, -20);
   C.spot = spot;
@@ -517,8 +517,7 @@ function buildInterior(I, M) {
   }
   C.emissives.push({ m: domeM, base: 2.2, kind: 'dome' });
   const main = new THREE.PointLight(0xffc88a, 2.4, 7, 1.6); main.position.set(0, CEIL - 0.2, -1.0);
-  if (G.quality !== 'm') { main.castShadow = true; main.shadow.mapSize.set(512, 512); main.shadow.bias = -0.004; main.shadow.radius = 4; main.shadow.camera.near = 0.05; }
-  const bedL = new THREE.PointLight(0xffb070, 1.2, 4, 1.8); bedL.position.set(0.3, 2.35, 2.2);
+    const bedL = new THREE.PointLight(0xffb070, 1.2, 4, 1.8); bedL.position.set(0.3, 2.35, 2.2);
   const cabL = new THREE.PointLight(0xffbb80, 0.5, 3, 2); cabL.position.set(0, 2.05, -3.3);
   add(main, bedL, cabL);
   C.interiorLights = [{ l: main, base: 2.4 }, { l: bedL, base: 1.2 }, { l: cabL, base: 0.5 }];
