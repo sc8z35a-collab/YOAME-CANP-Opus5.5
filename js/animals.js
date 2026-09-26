@@ -22,6 +22,11 @@ function fitModel(root, h, yaw = 0) {
   const inner = new THREE.Group();
   inner.add(root);
   inner.scale.setScalar(s);
+  // centre the model on its footprint (GLB origins are arbitrary: e.g. the stag's origin sits 0.84m
+  // behind its centre), then put the feet on y=0. Yaw is applied on a parent so centring stays valid.
+  // box is in root's parent space (unscaled), so shifting root.position by it is exact
+  const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+  root.position.x -= cx; root.position.z -= cz;
   inner.position.y = -b.min.y * s;
   inner.rotation.y = yaw;
   holder.add(inner);
