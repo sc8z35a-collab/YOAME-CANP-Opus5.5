@@ -109,11 +109,12 @@ class Bear extends Animal {
     this.body = obj.children[0];
     this.baseY = this.body.position.y; this.baseYaw = this.body.rotation.y; // keep fitModel foot offset / facing
     // fur tint, subtle sheen
-    root.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.roughness = 0.95; o.material.color?.multiplyScalar(0.55); } });
+    root.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.roughness = 0.95; o.material.color?.multiplyScalar(0.8); } });
     this.phase = 0; this.rear = 0; this.aggro = 0; this.hitCd = 0;
     // eye shine
-    const em = new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0 });
-    const eg = new THREE.SphereGeometry(0.025, 6, 4);
+    // eye-shine (tapetum reflection): additive, unfogged, bloom-able so it reads at distance in the dark
+    const em = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.7, 0.9), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const eg = new THREE.SphereGeometry(0.03, 8, 6);
     this.eyes = [new THREE.Mesh(eg, em), new THREE.Mesh(eg, em)];
     // place eyes from the fitted bounds: near the front (snout) end, ~80% height
     obj.updateMatrixWorld(true);

@@ -369,10 +369,11 @@ export function buildCamper(scene) {
   C.spill = [];
   for (const id of ['dinette', 'kitchen', 'rear']) {
     const w = WINDOWS.find(x => x.id === id), L = windowLocal(w);
-    const sl = new THREE.SpotLight(0xffb070, 0, 16, 0.95, 0.9, 1.6);
+    // physical units: ~150cd through a big window gives ~4 lux at 6m (enough to read a bear's silhouette)
+    const sl = new THREE.SpotLight(0xffb070, 0, 22, 0.95, 0.85, 2);
     sl.position.copy(L.p).addScaledVector(L.n, 0.05);
     sl.target.position.copy(L.p).addScaledVector(L.n, 6); sl.target.position.y = 0;
-    g.add(sl, sl.target); C.spill.push({ l: sl, base: id === 'dinette' ? 18 : 10 });
+    g.add(sl, sl.target); C.spill.push({ l: sl, base: id === 'dinette' ? 160 : 90 });
   }
 
   // ---------- glass
