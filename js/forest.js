@@ -10,6 +10,7 @@ const TWIGS = [[0.184, 0.041, 0.435, 0.317], [0.646, 0.034, 0.943, 0.375], [0.3,
 
 export const colliders = []; // {x,z,r} for animals / events
 export const treeList = [];   // {x,z,h,s}
+export const treeKit = {};    // geometry+materials of a forest tree (reused by events)
 
 function windify(mat, { strength = 1, card = false } = {}) {
   mat.onBeforeCompile = sh => {
@@ -155,6 +156,9 @@ export async function buildForest(scene) {
   windify(needleMat, { strength: 1, card: true });
 
   const templates = [buildTreeTemplate(11, 'cedar'), buildTreeTemplate(23, 'fir'), buildTreeTemplate(37, 'cedar')];
+  // expose one full-quality tree (same template/materials) for the falling-tree event
+  treeKit.trunk = templates[1].trunk; treeKit.cards = templates[1].cards; treeKit.H = templates[1].H;
+  treeKit.bark = barkF; treeKit.needles = needleMat;
   const pts = place(hi ? 950 : 650, 5, (x, z, R) => {
     if (!clearOf(x, z)) return false;
     const d = Math.hypot(x, z);

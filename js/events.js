@@ -7,6 +7,7 @@ import { C, WINDOWS, windowLocal } from './camper.js';
 import { Z, spawnBear, spawnDeer, spawnWolves } from './animals.js';
 import { glassShared } from './glass.js';
 import { tex } from './assets.js';
+import { treeKit } from './forest.js';
 
 export const E = { active: null, cooldown: 25, log: [], slide: null, flood: { t: 0, on: false, peak: 0 }, fallen: null };
 const R = rng(1234);
@@ -186,12 +187,13 @@ function updateFlood(dt) {
 // ---------------------------------------------------------------- falling tree
 let treeMesh = null;
 function buildFallingTree(scene) {
-  const g = new THREE.CylinderGeometry(0.18, 0.35, 16, 10); g.translate(0, 8, 0);
-  treeMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex('pine_bark_diffuse', { srgb: true }), normalMap: tex('pine_bark_nor_gl'), roughness: 1 }));
-  treeMesh.castShadow = true; treeMesh.visible = false; scene.add(treeMesh);
-  // add a few crown boughs
-  const crown = new THREE.Mesh(new THREE.ConeGeometry(2.6, 7, 10), new THREE.MeshStandardMaterial({ color: 0x1f3322, roughness: 0.9 }));
-  crown.position.y = 12.5; treeMesh.add(crown);
+  // same procedural conifer as the forest (bark + twig cards), scaled a bit
+  treeMesh = new THREE.Group();
+  const trunk = new THREE.Mesh(treeKit.trunk, treeKit.bark);
+  const crown = new THREE.Mesh(treeKit.cards, treeKit.needles);
+  for (const m of [trunk, crown]) { m.castShadow = true; m.receiveShadow = true; treeMesh.add(m); }
+  treeMesh.scale.setScalar(0.85);
+  treeMesh.visible = false; scene.add(treeMesh);
 }
 export function startTreeFall() {
   if (!treeMesh || E.fallen) return false;
@@ -200,7 +202,11 @@ export function startTreeFall() {
   const base = new THREE.Vector3(c.x + Math.cos(a) * 9 * side, 0, c.z - Math.sin(a) * 9 * side);
   base.y = heightAt(base.x, base.z) - 0.2;
   treeMesh.position.copy(base); treeMesh.rotation.set(0, 0, 0); treeMesh.visible = true;
-  E.fallen = { t: 0, axis: new THREE.Vector3(Math.sin(a), 0, Math.cos(a)).multiplyScalar(-side), hit: false, ang: 0, v: 0 };
+  // camper local +x in world = (cos a, 0, -sin a); local +z = (sin a, 0, cos a).
+  // Rotating +Y about +Z by +θ moves the top toward -X, so axis = localZ * side tips toward the van.
+  // Contact: trunk reaches roof edge (|x|=XW) at height above base = roofTop - baseY.
+  const rise = c.y + 2.95 - base.y, run = 9 - 1.2;
+  E.fallen = { t: 0, axis: new THREE.Vector3(Math.sin(a), 0, Math.cos(a)).multiplyScalar(side), hit: false, ang: 0, v: 0, maxA: Math.atan2(run, rise) };
   strike(true);
   warn('バキバキッ…！ 木が倒れてくる！', 'danger', 3500);
   bus.emit('sfx', 'crack', 1);
@@ -210,7 +216,7 @@ function updateTree(dt) {
   const f = E.fallen; if (!f) return;
   f.t += dt;
   if (f.t < 1.2) { treeMesh.rotation.z = Math.sin(f.t * 30) * 0.004; return; }
-  const maxA = 1.28; // resting against camper roof
+  const maxA = f.maxA; // resting on the camper roof edge
   if (f.ang < maxA) { f.v += dt * 1.6 * Math.sin(f.ang + 0.15); f.ang = Math.min(maxA, f.ang + f.v * dt); }
   else if (!f.hit) {
     f.hit = true; f.v = 0;
