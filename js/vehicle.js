@@ -73,11 +73,44 @@ export function setPose(x, z, rot, drop = 0.15) {
   VEH.pos.set(x, y, z).add(_v.copy(COM).applyQuaternion(VEH.q));
 }
 
-function addForceAt(f, wp) { F.add(f); T.add(_v3.copy(wp).sub(VEH.pos).cross(f)); }
+const _em = new THREE.Vector3(), _eq = new THREE.Quaternion();
+/** effective mass of the body at world point wp along unit direction n */
+function effMass(wp, n) {
+  const rn = _em.copy(wp).sub(VEH.pos).cross(n).applyQuaternion(_eq.copy(VEH.q).invert());
+  return 1 / (1 / M + rn.x * rn.x / I.x + rn.y * rn.y / I.y + rn.z * rn.z / I.z);
+}
+const _af = new THREE.Vector3();
+function addForceAt(f, wp) { F.add(f); T.add(_af.copy(wp).sub(VEH.pos).cross(f)); }
+
+// ---------------------------------------------------------------- contacts
+const _cv = new THREE.Vector3(), _ct = new THREE.Vector3(), _cj = new THREE.Vector3();
+let hardHit = 0, contactDt = STEP;
+/** Push the body at world point p out along unit normal n (penetration pen). Obstacle o (optional) gets the reaction. */
+function contact(p, n, pen, o, mu) {
+  const vel = pointVel(p, _cv);
+  if (o) vel.sub(o.v);
+  const vn = vel.dot(n);
+  if (-vn > hardHit) hardHit = -vn;
+  const bias = Math.min(pen * 6, 1.5);          // separation speed used to resolve penetration
+  if (vn >= bias) return;
+  const me = effMass(p, n), mo = o && !o.static ? o.m : Infinity;
+  const mEff = 1 / (1 / me + 1 / mo);
+  const jn = mEff * (bias - vn) * 0.35;         // relaxed (many simultaneous contacts)
+  _cj.copy(n).multiplyScalar(jn);
+  const vt = _ct.copy(vel).addScaledVector(n, -vn), vtl = vt.length();
+  if (vtl > 1e-4) {
+    vt.divideScalar(vtl);
+    const mt = 1 / (1 / effMass(p, vt) + 1 / mo);
+    _cj.addScaledVector(vt, -Math.min(mu * jn, mt * vtl * 0.35));
+  }
+  F.addScaledVector(_cj, 1 / contactDt); T.add(_af.copy(p).sub(VEH.pos).cross(_cj).divideScalar(contactDt));
+  if (o && !o.static) { o.v.addScaledVector(_cj, -1 / o.m); o.hitT = G.t; }
+}
 
 // ---------------------------------------------------------------- one physics step
-const near = [];
+const near = [], _cp = new THREE.Vector3();
 function step(dt) {
+  contactDt = dt; hardHit = 0;
   F.set(0, -9.81 * M, 0); T.set(0, 0, 0);
   const q = VEH.q, up = _up.set(0, 1, 0).applyQuaternion(q), fw = _fw.set(0, 0, -1).applyQuaternion(q), rt = _rt.set(1, 0, 0).applyQuaternion(q);
   VEH.up.copy(up); VEH.fwd.copy(fw);
@@ -100,12 +133,11 @@ function step(dt) {
       if (t < SUS_LEN && t > -0.4) {
         W.contact = true; grounded++;
         const comp = SUS_LEN - Math.max(t, 0);
-        const cp = _v3.copy(A).addScaledVector(up, -t); // contact point
+        const cp = _cp.copy(A).addScaledVector(up, -t); // contact point
         const vel = pointVel(cp, _f);
         const n = normalAt(cp.x, cp.z, _n, cp.y + 0.5);
         const vn = vel.dot(up);
-        let fs = K_SUS * comp - C_SUS * vn;
-        if (t < 0) fs += K_HULL * 0.2 * -t; // bottomed out: bump stop
+        let fs = K_SUS * comp - Math.sign(vn) * Math.min(C_SUS * Math.abs(vn), effMass(cp, up) * Math.abs(vn) / dt * 0.08);
         fs = Math.max(0, fs);
         const fsv = _r.copy(up).multiplyScalar(fs);
         addForceAt(fsv, cp);
@@ -118,10 +150,11 @@ function step(dt) {
         // drive (4WD) + brakes
         let fl = c.throttle * 2600 * (Math.abs(vLong) < 9 ? 1 : 0.4);
         const brake = c.hand ? 1 : c.brake;
-        if (brake > 0) fl -= Math.sign(vLong) * Math.min(Math.abs(vLong) * M / 4 / dt * 0.5, brake * fmax);
+        const mL = effMass(cp, wf), mT = effMass(cp, wr);
+        if (brake > 0) fl -= Math.sign(vLong) * Math.min(Math.abs(vLong) * mL / dt * 0.08, brake * fmax);
         fl -= vLong * 18; // rolling resistance
         // lateral grip: cancel slip (impulse-style), limited by friction circle
-        let flat = -vLat * (M / 4) / dt * 0.35;
+        let flat = -vLat * mT / dt * 0.08;
         const mag = Math.hypot(fl, flat);
         if (mag > fmax) { fl *= fmax / mag; flat *= fmax / mag; }
         addForceAt(_f.copy(wf).multiplyScalar(fl).addScaledVector(wr, flat), cp);
@@ -129,23 +162,14 @@ function step(dt) {
       } else W.t = SUS_LEN;
     } else W.t = SUS_LEN;
   }
-  // ---- hull points vs ground
+  // ---- hull points vs ground (velocity-level impulses: unconditionally stable)
   let hard = 0;
   for (const lp of HP) {
     const p = localToWorld(lp, _v);
     const g = groundAt(p.x, p.z, p.y + 0.3);
     if (p.y < g) {
       const n = normalAt(p.x, p.z, _n, p.y + 0.3);
-      const pen = (g - p.y) * n.y;
-      const vel = pointVel(p, _v2), vn = vel.dot(n);
-      const fn = Math.max(0, K_HULL * pen - C_HULL * vn);
-      if (-vn > hard) hard = -vn;
-      const vt = _v3.copy(vel).addScaledVector(n, -vn);
-      const vtl = vt.length();
-      const ff = Math.min(MU_HULL * fn, vtl * M / HP.length / dt * 0.5);
-      _f.copy(n).multiplyScalar(fn);
-      if (vtl > 1e-4) _f.addScaledVector(vt, -ff / vtl);
-      addForceAt(_f, p);
+      contact(p, n, (g - p.y) * n.y, null, MU_HULL);
     }
   }
   // ---- trees / fixed colliders & movable obstacles vs hull box (in body local space)
@@ -168,20 +192,8 @@ function step(dt) {
     }
     const pen = r - d;
     const cpw = localToWorld(_v2.set(px, py, pz), _v2);
-    const nw = nl.applyQuaternion(q); // world normal: from box toward obstacle
-    const vel = pointVel(cpw, _f);
-    const ov = o ? o.v : null;
-    const rel = ov ? _r.copy(vel).sub(ov) : _r.copy(vel);
-    const vn = rel.dot(nw);           // >0 = box moving into obstacle
-    const k = o && !o.static ? K_HULL * 0.5 : K_HULL;
-    const fn = Math.max(0, k * pen + C_HULL * vn);
-    if (vn > hard) hard = vn;
-    const f = _v3.copy(nw).multiplyScalar(-fn);
-    // friction along the contact
-    const vt = rel.addScaledVector(nw, -vn), vtl = vt.length();
-    if (vtl > 1e-3) f.addScaledVector(vt, -Math.min(0.5 * fn, vtl * M / dt * 0.02) / vtl);
-    addForceAt(f, cpw);
-    if (o && !o.static) { o.v.addScaledVector(f, -dt / o.m); o.hitT = G.t; }
+    const nw = nl.applyQuaternion(q).negate(); // world normal pointing from obstacle into the box
+    contact(cpw, nw, pen, o, 0.5);
   };
   for (const cl of near) if (cl.r > 0.25) test(cl.x, VEH.pos.y, cl.z, cl.r, null);
   for (const o of VEH.obstacles) if (o.p.distanceToSquared(VEH.pos) < 64) test(o.p.x, o.p.y, o.p.z, o.r, o);
@@ -216,7 +228,7 @@ function step(dt) {
   const floor = heightAt(VEH.pos.x, VEH.pos.z) - 3;
   if (VEH.pos.y < floor) { VEH.pos.y = floor + 1; VEH.v.y = Math.max(0, VEH.v.y); } // tunnelling guard
   VEH.grounded = grounded;
-  return hard;
+  return hardHit;
 }
 
 // ---------------------------------------------------------------- movable obstacles
