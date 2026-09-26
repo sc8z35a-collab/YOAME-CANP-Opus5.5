@@ -164,6 +164,13 @@ function mapTex() {
     for (let i = 0; i < 2000; i++) { c.fillStyle = `rgba(90,60,30,${R() * 0.06})`; c.fillRect(R() * w, R() * h, 3, 3); }
   });
 }
+function blobShadowTex() {
+  return canvasTex(128, 256, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, h / 2);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.55, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.save(); c.scale(1, 1); c.fillStyle = g; c.fillRect(0, 0, w, h); c.restore();
+  }, false);
+}
 function clockTex() {
   return canvasTex(256, 256, () => {});
 }
@@ -256,6 +263,38 @@ export function buildCamper(scene) {
   g.add(bb(-XW + 0.05, 0.42, ZF + 0.2, XW - 0.05, 0.58, ZB - 0.1, darkPlastic, 0.02));
   // rounded front cap edges & roof trims
   g.add(bb(-XW - 0.01, ROOF - 0.02, ZF - 0.04, XW + 0.01, ROOF + 0.04, ZB + 0.02, paint, 0.03));
+  // rounded corner posts (hide the hard box corners of the extruded walls)
+  for (const [x, z] of [[-XW, ZF], [XW, ZF], [-XW, ZB], [XW, ZB]]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, ROOF - 0.55, 12), paint);
+    post.position.set(x, (ROOF + 0.55) / 2, z); post.castShadow = true; g.add(post);
+  }
+  for (const x of [-XW, XW]) { // roof edge rails
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, ZB - ZF, 12), paint);
+    rail.rotation.x = Math.PI / 2; rail.position.set(x, ROOF + 0.01, (ZF + ZB) / 2); g.add(rail);
+  }
+  // aluminium skirt trim & rain gutter
+  const alu = new THREE.MeshStandardMaterial({ color: 0xb9bec2, roughness: 0.35, metalness: 0.9 });
+  for (const sx of [-1, 1]) {
+    g.add(bb(sx * XW - 0.015, 0.56, ZF, sx * XW + 0.015, 0.62, ZB, alu, 0.01));
+    g.add(bb(sx * XW - 0.02, ROOF - 0.12, ZF + 0.1, sx * XW + 0.02, ROOF - 0.1, ZB - 0.05, alu, 0.005));
+  }
+  // rear: tail lights, ladder, spare tyre cover, bumper
+  const tailM = new THREE.MeshStandardMaterial({ color: 0x5a0808, emissive: 0xff1a0a, emissiveIntensity: 0.25, roughness: 0.2 });
+  C.tailMat = tailM;
+  for (const sx of [-1, 1]) g.add(rbox(0.12, 0.34, 0.04, tailM, sx * (XW - 0.12), 1.15, ZB + 0.02, 0.02));
+  g.add(rbox(2.3, 0.2, 0.22, darkPlastic, 0, 0.6, ZB + 0.08, 0.06));
+  const ladderM = alu;
+  for (const lx of [0.55, 0.9]) g.add(bb(lx - 0.015, 0.9, ZB + 0.04, lx + 0.015, ROOF + 0.25, ZB + 0.07, ladderM, 0.008));
+  for (let y = 1.0; y < ROOF + 0.2; y += 0.28) g.add(bb(0.55, y, ZB + 0.04, 0.9, y + 0.025, ZB + 0.07, ladderM, 0.008));
+  const spare = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.22, 28), new THREE.MeshStandardMaterial({ color: 0x1e3a30, roughness: 0.55 }));
+  spare.rotation.x = Math.PI / 2; spare.position.set(-0.45, 1.25, ZB + 0.13); spare.castShadow = true; g.add(spare);
+  // roof A/C unit & vent
+  g.add(rbox(0.7, 0.24, 0.9, new THREE.MeshStandardMaterial({ color: 0xdedbd2, roughness: 0.5 }), 0, ROOF + 0.14, -1.9 + 0.95, 0.08, 3));
+  // soft contact shadow under the chassis (blob; sells grounding on soft forest floor)
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 7.6), new THREE.MeshBasicMaterial({
+    alphaMap: blobShadowTex(), transparent: true, depthWrite: false, opacity: 0.75, color: 0x000000,
+    polygonOffset: true, polygonOffsetFactor: -2 }));
+  blob.rotation.x = -Math.PI / 2; blob.position.set(0, 0.02, (ZF + ZB) / 2 - 0.4); blob.renderOrder = 1; g.add(blob);
 
   // ---------- hood / cab front
   const hood = rbox(2.3, 0.85, 1.05, paint, 0, 0.98, ZF - 0.5, 0.18, 4);
