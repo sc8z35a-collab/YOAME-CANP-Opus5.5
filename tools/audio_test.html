@@ -1,0 +1,28 @@
+<!doctype html><html><body><script type="module">
+// Audio smoke test: init the procedural soundscape, drive every sfx and the per-frame updater
+// through all weather/threat states, and report exceptions + that the graph actually produces signal.
+import { G, bus } from '../js/core.js';
+import { initAudio, updateAudio, sfx, A } from '../js/audio.js';
+const out = { errors: [], sfx: {}, rms: 0 };
+window.addEventListener('error', e => out.errors.push(String(e.message)));
+try {
+  initAudio();
+  const an = A.ctx.createAnalyser(); A.master.connect(an);
+  G.camper = { position: { x: 0, y: 0, z: 0 } };
+  for (const n of ['growl', 'bearhit', 'thud', 'glass', 'crack', 'horn', 'switch', 'curtain', 'engine', 'powerdown', 'rumble', 'flood', 'kettle']) {
+    try { sfx(n, 1); out.sfx[n] = 'ok'; } catch (e) { out.sfx[n] = 'ERR ' + e.message; out.errors.push(n + ': ' + e.message); }
+  }
+  bus.emit('thunder', { dist: 60, delay: 0.1 });
+  bus.emit('animal', 'wolf');
+  let t = 0;
+  const states = [{ rain: 0, wind: 0.2 }, { rain: 0.7, wind: 0.6 }, { rain: 1, wind: 1.3 }];
+  const iv = setInterval(() => {
+    const s = states[Math.min(2, Math.floor(t / 10))];
+    G.rain = s.rain; G.wind = s.wind; G.night = 1; G.daylight = 0; G.waterLevel = -1;
+    try { updateAudio(0.1); } catch (e) { out.errors.push('update: ' + e.message); }
+    const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf);
+    out.rms = Math.max(out.rms, Math.sqrt(buf.reduce((a, v) => a + v * v, 0) / buf.length));
+    if (++t > 30) { clearInterval(iv); out.state = A.ctx.state; window.__audio = out; document.title = 'done'; }
+  }, 100);
+} catch (e) { out.errors.push('init: ' + e.message); window.__audio = out; document.title = 'done'; }
+</script></body></html>
