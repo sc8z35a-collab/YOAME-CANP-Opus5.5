@@ -1,0 +1,287 @@
+{
+ "scenes": {
+  "night_storm_bear": {
+   "shot": "build/shots/night_storm_bear.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [
+     {
+      "k": "bear",
+      "st": "sniff",
+      "vis": true,
+      "pos": [
+       -0.2,
+       0.3,
+       -10.2
+      ],
+      "ndc": [
+       0,
+       -0.18,
+       0.992
+      ]
+     }
+    ],
+    "cam": [
+     -0.55,
+     2,
+     -3.25,
+     0,
+     0,
+     0
+    ],
+    "exp": 1.0388772668977424,
+    "fogD": 0.027217500000000002,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 100,
+     "battery": 85.99580000000003,
+     "calm": 71.88399999999999,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": false,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 23,
+     "weather": "storm",
+     "water": -1.549998574796631
+    },
+    "frozen": true
+   }
+  },
+  "flood": {
+   "shot": "build/shots/flood.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [],
+    "cam": [
+     -0.62,
+     1.84,
+     0.05,
+     0,
+     0,
+     0
+    ],
+    "exp": 0.927429101790881,
+    "fogD": 0.0164175,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 99.83999999999997,
+     "battery": 85.94011199999994,
+     "calm": 71.69999999999993,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": false,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 15,
+     "weather": "rain",
+     "water": 0.62
+    },
+    "frozen": true
+   }
+  },
+  "landslide": {
+   "shot": "build/shots/landslide.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [],
+    "cam": [
+     59.17,
+     28.31,
+     -38.12,
+     58,
+     26.21,
+     -40
+    ],
+    "exp": 0.927429101790881,
+    "fogD": 0.023217500000000002,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 0,
+     "battery": 86,
+     "calm": 0,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": true,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 16,
+     "weather": "storm",
+     "water": -1.55
+    },
+    "frozen": true
+   }
+  },
+  "deer_morning": {
+   "shot": "build/shots/deer_morning.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [
+     {
+      "k": "deer",
+      "st": "graze",
+      "vis": true,
+      "pos": [
+       -7.8,
+       -0.1,
+       -7.4
+      ],
+      "ndc": [
+       -0.2,
+       -0.31,
+       0.994
+      ]
+     },
+     {
+      "k": "deer",
+      "st": "graze",
+      "vis": true,
+      "pos": [
+       -6.8,
+       0,
+       -9.4
+      ],
+      "ndc": [
+       -0.06,
+       -0.28,
+       0.995
+      ]
+     },
+     {
+      "k": "deer",
+      "st": "graze",
+      "vis": true,
+      "pos": [
+       -5.9,
+       0,
+       -11.4
+      ],
+      "ndc": [
+       0.05,
+       -0.25,
+       0.995
+      ]
+     },
+     {
+      "k": "fawn",
+      "st": "graze",
+      "vis": true,
+      "pos": [
+       -4.9,
+       0.2,
+       -13.5
+      ],
+      "ndc": [
+       0.15,
+       -0.21,
+       0.996
+      ]
+     }
+    ],
+    "cam": [
+     -0.62,
+     1.84,
+     0.05,
+     0,
+     0,
+     0
+    ],
+    "exp": 0.927429101790881,
+    "fogD": 0.0369575,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 100,
+     "battery": 86.00380800000002,
+     "calm": 72.02400000000003,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": false,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 7,
+     "weather": "fog",
+     "water": -1.55
+    },
+    "frozen": true
+   }
+  }
+ },
+ "ok": true,
+ "seconds": 948.3
+}

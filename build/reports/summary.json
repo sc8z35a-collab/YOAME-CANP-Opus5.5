@@ -1,5 +1,25 @@
 {
+ "architect": {
+  "ok": true,
+  "s": 1.1
+ },
  "assets": {
+  "ok": true,
+  "s": 0.1
+ },
+ "render": {
+  "ok": true,
+  "s": 149.0
+ },
+ "scenario": {
+  "ok": true,
+  "s": 948.3
+ },
+ "mobile": {
+  "ok": true,
+  "s": 512.5
+ },
+ "reviewer": {
   "ok": true,
   "s": 0.0
  }
