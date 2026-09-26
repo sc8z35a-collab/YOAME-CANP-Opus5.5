@@ -215,7 +215,7 @@ function loop(now) {
     const prev = G.hour;
     G.hour += dt * G.hoursPerSec * G.timeMul;
     if (G.hour >= 24) { G.hour -= 24; G.day++; }
-    if (prev < 6 && G.hour >= 6) { G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
+    if (prev < 6 && G.hour >= 6 && G.state.lastDawnDay !== G.day) { G.state.lastDawnDay = G.day; G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
   }
   updateDrive(dt);
   updateRock(dt);

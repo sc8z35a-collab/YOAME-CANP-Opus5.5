@@ -23,8 +23,9 @@ export const G = {
   quality: P.get('q') || 'h',
   state: {
     hull: 100, battery: 86, calm: 72,
-    lightsOn: true, curtains: false, hiding: false, spotOn: false, headOn: false,
-    smell: 0, noise: 0, over: false, nightsSurvived: 0,
+    lightsOn: true, curtainsClosed: false, hiding: false, spotOn: false, headOn: false,
+    cooking: 0, heater: false, generator: false, radio: false,
+    smell: 0, noise: 0, over: false, nightsSurvived: 0, lastDawnDay: 0,
   },
   lookDir: new THREE.Vector3(0, 0, -1),
 };
