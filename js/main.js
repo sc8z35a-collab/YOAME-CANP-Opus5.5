@@ -252,6 +252,11 @@ function loop(now) {
   if (fpsAcc > 1) { window.__QA.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   window.__QA.frames = qaFrames + 1;
   if (QA && ++qaFrames === (parseInt(P.get('frames')) || 6)) { window.__QA.ready = true; try { window.__QA.shot = canvas.toDataURL('image/jpeg', 0.9); } catch (e) { window.__QA.shotErr = String(e); }
+    // subject diagnostics: where are active animals on screen (NDC) and are they visible?
+    window.__QA.subjects = [...Z.deer, ...Z.fawns, Z.bear, ...Z.wolves].filter(a => a && a.active).map(a => {
+      const p = a.pos.clone(); p.y += 0.6; const n = p.clone().project(camera);
+      return { k: a.kind, st: a.state, vis: a.obj.visible, pos: a.pos.toArray().map(v => +v.toFixed(1)), ndc: [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(3)] };
+    });
     window.__QA.cam = camera.position.toArray().map(v => +v.toFixed(2)).concat(G.camper.position.toArray().map(v => +v.toFixed(2))); window.__QA.exp = renderer.toneMappingExposure; window.__QA.fogD = scene.fog.density; window.__QA.info = renderer.info.render;
     window.__QA.state = { ...G.state, hour: G.hour, weather: W.mode, water: G.waterLevel }; }
 }
