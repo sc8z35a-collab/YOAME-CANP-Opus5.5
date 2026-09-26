@@ -17,7 +17,7 @@ export function creekX(z) { return -14 + 6 * Math.sin(z * 0.028) + 3 * Math.sin(
 export const TRACK = [];
 {
   // two hairpin switchbacks climbing the east slope, then a traverse to the ridge pad
-  const ctrl = [[3, -8], [10, -18], [8, -34], [18, -44], [34, -40], [44, -26], [40, -12], [50, -6], [62, -14], [66, -28], [58, -36]];
+  const ctrl = [[0, -7], [2, -18], [8, -34], [18, -44], [34, -40], [44, -26], [40, -12], [50, -6], [62, -12], [64, -26], [58, -40]];
   const curve = new THREE.CatmullRomCurve3(ctrl.map(([x, z]) => new THREE.Vector3(x, 0, z)));
   for (const p of curve.getSpacedPoints(110)) TRACK.push(new THREE.Vector2(p.x, p.z));
 }
@@ -73,6 +73,11 @@ function rawHeight(x, z) {
 // Pad heights (computed once)
 const padH = {};
 for (const k in SPOTS) padH[k] = k === 'hollow' ? 0 : rawHeight(SPOTS[k].x, SPOTS[k].z) - 1.5;
+{ // ridge: park facing along the road's final direction (front = local -z)
+  const n = TRACK.length, a = TRACK[n - 6], b = TRACK[n - 1];
+  SPOTS.ridge.rot = Math.atan2(-(b.x - a.x), -(b.y - a.y));
+  SPOTS.ridge.x = b.x; SPOTS.ridge.z = b.y;
+}
 export function spotHeight(k) { return padH[k]; }
 
 function padBlend(x, z, h) {

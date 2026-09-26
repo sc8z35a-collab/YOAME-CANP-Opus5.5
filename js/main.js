@@ -114,11 +114,18 @@ const drive = { on: false, path: [], t: 0, len: 0, to: null };
 bus.on('driveTo', to => {
   if (to === G.camperSpot) return toast('もうここに停まっている', 'info');
   if (G.state.hull < 5) return toast('車が動かない…', 'danger');
-  const pts = [new THREE.Vector3(C.group.position.x, 0, C.group.position.z)];
+  // path: current spot -> nose-out lead-in -> road (in travel direction) -> lead-out -> target pad
   const tr = TRACK.map(p => new THREE.Vector3(p.x, 0, p.y));
-  (to === 'ridge' ? tr : tr.slice().reverse()).forEach(p => pts.push(p));
-  pts.push(new THREE.Vector3(SPOTS[to].x, 0, SPOTS[to].z));
-  drive.curve = new THREE.CatmullRomCurve3(pts); drive.len = drive.curve.getLength();
+  const road = to === 'ridge' ? tr : tr.slice().reverse();
+  const from = SPOTS[G.camperSpot], dest = SPOTS[to];
+  const pts = [new THREE.Vector3(C.group.position.x, 0, C.group.position.z)];
+  // pull forward 3m along the current heading first (front = local -z)
+  pts.push(new THREE.Vector3(from.x - Math.sin(C.group.rotation.y) * 3, 0, from.z - Math.cos(C.group.rotation.y) * 3));
+  road.forEach(p => pts.push(p));
+  // final approach so we stop facing the pad's parking heading
+  pts.push(new THREE.Vector3(dest.x + Math.sin(dest.rot) * 3, 0, dest.z + Math.cos(dest.rot) * 3));
+  pts.push(new THREE.Vector3(dest.x, 0, dest.z));
+  drive.curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'); drive.len = drive.curve.getLength();
   drive.t = 0; drive.on = true; drive.to = to; G.driving = true;
   G.state.noise = 1; sfx('engine');
   toast(`${SPOTS[to].name}へ移動する…`, 'info');
@@ -138,13 +145,17 @@ function updateDrive(dt) {
   const yaw = Math.atan2(-_a.x, -_a.z);
   let d = yaw - C.group.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
   C.group.rotation.y += d * Math.min(1, dt * 3);
-  // pitch/roll from terrain
+  // pitch from terrain: _a points forward; nose up (+rotation.x tilts local -z upward) when climbing
   const f = heightAt(_t.x + _a.x * 2, _t.z + _a.z * 2) - heightAt(_t.x - _a.x * 2, _t.z - _a.z * 2);
-  C.group.rotation.x = damp(C.group.rotation.x, Math.atan2(f, 4) , 3, dt);
+  drive.pitch = damp(drive.pitch || 0, Math.atan2(f, 4), 3, dt);
+  C.group.rotation.x = drive.pitch;
   G.shake = Math.max(G.shake, 0.12 + Math.random() * 0.05);
   if (drive.t >= 1) {
-    drive.on = false; G.driving = false;
-    placeCamper(drive.to);
+    drive.on = false; G.driving = false; drive.pitch = 0;
+    G.camperSpot = drive.to;
+    // settle smoothly: keep the heading we arrived with (close to the pad rot), level the body
+    C.group.position.y = spotHeight(drive.to);
+    SPOTS[drive.to].arrivedRot = C.group.rotation.y;
     toast(`${SPOTS[drive.to].name}に到着。エンジンを切った`, 'info');
     bus.emit('arrived', drive.to);
   }

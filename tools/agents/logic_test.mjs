@@ -62,5 +62,22 @@ for (let i = 0; i < TRACK.length; i++) {
 }
 ok(wet === 0, 'road never runs through the creek');
 ok(padHit === 0, 'road middle section avoids the parking pads');
-// camper can sit on road ends: grade at both ends gentle
+// drive path (mirrors main.js driveTo): heading must never jump (> 60deg in 1m) = no U-turn glitch
+const THREE = await import('../../js/lib/three.module.js');
+for (const [fromK, to] of [['hollow', 'ridge'], ['ridge', 'hollow']]) {
+  const tr = TRACK.map(p => new THREE.Vector3(p.x, 0, p.y));
+  const road = to === 'ridge' ? tr : tr.slice().reverse();
+  const from = SPOTS[fromK], dest = SPOTS[to];
+  const pts = [new THREE.Vector3(from.x, 0, from.z), new THREE.Vector3(from.x - Math.sin(from.rot) * 3, 0, from.z - Math.cos(from.rot) * 3)];
+  road.forEach(p => pts.push(p));
+  pts.push(new THREE.Vector3(dest.x + Math.sin(dest.rot) * 3, 0, dest.z + Math.cos(dest.rot) * 3), new THREE.Vector3(dest.x, 0, dest.z));
+  const c = new THREE.CatmullRomCurve3(pts, false, 'centripetal'); const L = c.getLength();
+  let worst = 0, prev = null; const a = new THREE.Vector3();
+  for (let d = 0; d < L; d += 1) {
+    c.getTangentAt(Math.min(d / L, 0.999), a); const y = Math.atan2(-a.x, -a.z);
+    if (prev !== null) { let dd = Math.abs(y - prev); dd = Math.min(dd, Math.PI * 2 - dd); worst = Math.max(worst, dd); }
+    prev = y;
+  }
+  ok(worst < Math.PI / 3, `${fromK}->${to}: path ${L.toFixed(0)}m, max heading change ${(worst * 180 / Math.PI).toFixed(0)}deg/m`);
+}
 process.exit(fail ? 1 : 0);
