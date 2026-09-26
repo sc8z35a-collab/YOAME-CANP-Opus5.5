@@ -75,6 +75,7 @@ npm test      # 地形/林道/洪水の設計不変条件・運転経路・各�
 python3 tools/agents/pipeline.py              # 6エージェント並列実行
 python3 tools/agents/pipeline.py --preflight  # LLM API 疎通のみ確認
 python3 tools/agents/pipeline.py --autosave   # 実行後に自動コミット&プッシュ
+python3 tools/agents/pipeline.py --autosave --deploy  # 全エージェント合格時のみ本番(gh-pages)へ反映
 tools/autosave.sh 240                         # 240秒ごとのWIP自動保存ループ
 ```
 | Agent | 役割 | LLM(オンライン時) |

@@ -204,7 +204,7 @@ def a_assets():
 SCENES = {
     "render": [("day_clear", "?qa=1&q=m&t=11&weather=clear&view=lounge"),
                ("dusk_cozy", "?qa=1&q=m&t=18.6&weather=cloudy&view=bed")],
-    "scenario": [("night_storm_bear", "?qa=1&q=m&t=23&weather=storm&event=bear&view=driver"),
+    "scenario": [("night_storm_bear", "?qa=1&q=m&t=23&weather=storm&event=bear&view=lounge"),
                  ("flood", "?qa=1&q=m&t=15&weather=rain&event=flood&view=lounge"),
                  ("landslide", "?qa=1&q=m&t=16&weather=storm&spot=ridge&event=landslide&view=rear"),
                  ("deer_morning", "?qa=1&q=m&t=7&weather=fog&event=deer&view=lounge")],
@@ -290,6 +290,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only"); ap.add_argument("--autosave", action="store_true")
     ap.add_argument("--preflight", action="store_true"); ap.add_argument("--offline", action="store_true")
+    ap.add_argument("--deploy", action="store_true", help="deploy to production (gh-pages) when all agents pass")
     a = ap.parse_args()
     REPORTS.mkdir(parents=True, exist_ok=True)
     online, detail = (False, "forced offline") if a.offline else preflight()
@@ -306,7 +307,16 @@ def main():
     print(json.dumps(summary, indent=1))
     if a.autosave:
         autosave("ci(agents): pipeline run " + " ".join(f"{n}={'ok' if v['ok'] else 'NG'}" for n, v in summary.items()))
-    sys.exit(0 if all(v["ok"] for v in summary.values()) else 1)
+    green = all(v["ok"] for v in summary.values())
+    if a.deploy:
+        if green:
+            r = subprocess.run(["bash", "tools/deploy_pages.sh"], cwd=ROOT, capture_output=True, text=True)
+            print(r.stdout[-1500:], r.stderr[-800:])
+            (REPORTS / "deploy.txt").write_text(r.stdout + r.stderr)
+            if r.returncode: sys.exit(2)
+        else:
+            print("NOT deploying: some agents failed")
+    sys.exit(0 if green else 1)
 
 if __name__ == "__main__":
     main()
