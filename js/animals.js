@@ -4,6 +4,7 @@ import { THREE, G, bus, clamp, rng } from './core.js';
 import { glb } from './assets.js';
 import { heightAt } from './terrain.js';
 import { colliders } from './forest.js';
+import { WINDOWS, windowLocal } from './camper.js';
 import * as SkeletonUtils from './lib/addons/SkeletonUtils.js';
 
 export const animals = [];
@@ -58,7 +59,10 @@ class Animal {
       _v.copy(this.pos); G.camper.worldToLocal(_v);
       const mx = 1.6 + this.radius, mz0 = -5.6 - this.radius, mz1 = 3.6 + this.radius;
       if (Math.abs(_v.x) < mx && _v.z > mz0 && _v.z < mz1) {
-        _v.x = Math.sign(_v.x || 1) * mx; G.camper.localToWorld(_v); this.pos.x = _v.x; this.pos.z = _v.z;
+        // push out along the axis of least penetration (side walls -> x, front/rear -> z)
+        const px = mx - Math.abs(_v.x), pf = _v.z - mz0, pb = mz1 - _v.z;
+        if (px <= pf && px <= pb) _v.x = Math.sign(_v.x || 1) * mx; else if (pf < pb) _v.z = mz0; else _v.z = mz1;
+        G.camper.localToWorld(_v); this.pos.x = _v.x; this.pos.z = _v.z;
       }
     }
     this.pos.y += (heightAt(this.pos.x, this.pos.z) - this.pos.y) * Math.min(1, dt * 10);
@@ -242,10 +246,19 @@ export function updateAnimals(dt) {
       else if (b.aggro > 0.75 || b.t > 60 && b.aggro > 0.45) { b.state = 'charge'; bus.emit('bearcharge'); }
       if (b.t > 70 && b.aggro < 0.3) { b.state = 'leave'; }
     } else if (b.state === 'sniff') {
-      if (!b.qaHold) b.steer(dt, c.x + 1.8, c.z - 1.0, 0.6);
-      if (!b.qaHold) b.rear += ((dist < 4 ? 1 : 0) - b.rear) * dt * 1.5;
+      // walk to ~1.3m outside the window nearest the player's seat, then rear up to peer in
+      if (!b.qaHold) {
+        if (!b.sniffAt) b.sniffAt = sniffTarget();
+        const r = b.steer(dt, b.sniffAt.x, b.sniffAt.z, r0(b) > 1.2 ? 0.9 : 0.25);
+        b.rear += ((r < 1.4 ? 1 : 0) - b.rear) * dt * 1.5;
+        if (r < 1.4) { // face the glass while reared
+          const want = Math.atan2(b.sniffAt.wx - b.pos.x, b.sniffAt.wz - b.pos.z);
+          b.heading += Math.atan2(Math.sin(want - b.heading), Math.cos(want - b.heading)) * Math.min(1, dt * 3);
+          b.obj.rotation.y = b.heading;
+        }
+      }
       if (G.state.hiding) b.aggro = Math.max(0, b.aggro - dt * 0.06);
-      if (b.t > 16) { b.state = b.aggro > 0.5 ? 'charge' : 'prowl'; b.t = 30; if (b.state === 'charge') bus.emit('bearcharge'); }
+      if (b.t > 16) { b.sniffAt = null; b.state = b.aggro > 0.5 ? 'charge' : 'prowl'; b.t = 30; if (b.state === 'charge') bus.emit('bearcharge'); }
     } else if (b.state === 'charge') {
       b.rear += (0 - b.rear) * dt * 4;
       const r = b.steer(dt, c.x, c.z, 5.5, 3);
@@ -286,6 +299,17 @@ export function updateAnimals(dt) {
     }
     w.anim(dt);
   }
+}
+
+const SEAT_WINDOW = { lounge: 'dinette', kitchen: 'kitchen', bed: 'bedL', rear: 'rear', driver: 'cabL', alcove: 'cabR', outside: 'dinette' };
+function r0(b) { return b.sniffAt ? Math.hypot(b.sniffAt.x - b.pos.x, b.sniffAt.z - b.pos.z) : 99; }
+function sniffTarget() {
+  const id = SEAT_WINDOW[G.viewKey] || 'dinette';
+  const w = WINDOWS.find(x => x.id === id), L = windowLocal(w);
+  const out = w.wall === 'B' ? 1.35 : w.wall === 'F' ? 2.3 : 1.35; // box margins: sides 2.5-1.2, rear 4.5-3.2, front -6.5+4.3
+  const stand = G.camper.localToWorld(L.p.clone().setY(0).addScaledVector(L.n, out));
+  const glass = G.camper.localToWorld(L.p.clone().setY(0));
+  return { x: stand.x, z: stand.z, wx: glass.x, wz: glass.z, id };
 }
 
 // Player actions that affect wildlife

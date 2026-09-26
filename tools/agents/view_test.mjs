@@ -31,4 +31,15 @@ for (const k in SPOTS) {
   const y = Math.max(p.y, heightAt(p.x, p.z) + 1.6); // mirrors view.js clamp
   ok(y - heightAt(p.x, p.z) >= 1.5, `outside@${k}: eye ${(y - heightAt(p.x, p.z)).toFixed(2)}m above ground`);
 }
+// staged bear (events.js QA: 7m along lounge yaw, reared head ~1.8m) must be seen through the dinette glass
+{
+  const v = VIEWS.lounge, eye = new THREE.Vector3(...v.pos);
+  const f = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, v.yaw, 0, 'YXZ'));
+  const base = eye.clone().addScaledVector(f, 7.0);
+  const w = WINDOWS.find(x => x.id === 'dinette'), L = windowLocal(w);
+  for (const [n, y] of [['head', 1.8], ['chest', 1.2]]) {
+    const p = new THREE.Vector3(base.x, y, base.z), d = p.clone().sub(eye), t = (L.p.x - eye.x) / d.x, hit = eye.clone().addScaledVector(d, t);
+    ok(Math.abs(hit.z - L.p.z) < w.w / 2 && Math.abs(hit.y - L.p.y) < w.h / 2, `staged bear ${n} visible through dinette window (y ${hit.y.toFixed(2)})`);
+  }
+}
 process.exit(fail ? 1 : 0);

@@ -69,6 +69,7 @@ export function initView(canvas) {
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _q = new THREE.Quaternion();
 export function updateView(dt, camera) {
   const v = VIEWS[V.cur];
+  G.viewKey = V.cur;
   const lim = v.limits;
   V.tyaw = clamp(V.tyaw, v.yaw + lim[0], v.yaw + lim[1]);
   V.tpitch = clamp(V.tpitch, -1.1, v.lie ? 1.35 : 1.0);

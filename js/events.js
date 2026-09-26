@@ -273,8 +273,10 @@ export function triggerEvent(name) {
     return { wp, face };
   };
   if (name === 'bear' && P.has('qa')) {
-    // bear reared up right outside the window, nose toward the glass (camper-exclusion clamps it to the wall)
-    spawnBear('prowl'); const b = Z.bear; const { wp, face } = stage(3.0, 0.15);
+    // Geometry (verified in tools/agents/view_test.mjs): floor is 0.72m up and the dinette sill is at
+    // 1.58m, so from the seat only ground >=3.9m from the wall is visible. Stage the reared bear
+    // 6m out on the seat's line of sight, looking at the lit window.
+    spawnBear('prowl'); const b = Z.bear; const { wp, face } = stage(7.0, 0.0);
     b.pos.copy(wp); b.heading = face; b.obj.rotation.y = b.heading; b.rear = 1; b.state = 'sniff'; b.t = 0; b.qaHold = true; return;
   }
   if (name === 'deer' && P.has('qa')) {
