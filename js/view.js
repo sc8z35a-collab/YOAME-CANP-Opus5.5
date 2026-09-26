@@ -10,7 +10,7 @@ const ROOFV = ROOF;
 // yaw/pitch are derived from the target so orientation can never be sign-flipped by hand.
 // Camper local: +x = right (kitchen/door side), -x = left (dinette side), -z = cab/front, +z = bed/rear.
 const RAW = {
-  lounge: { label: 'ソファ', pos: [-0.62, FLOOR + 1.12, 0.05], at: [-1.3, FLOOR + 1.2, -1.2], span: 3.2 },   // dinette window (left)
+  lounge: { label: 'ソファ', pos: [-0.45, FLOOR + 1.12, -0.05], at: [-1.3, FLOOR + 1.18, -1.15], span: 3.2 },   // dinette window (left)
   driver: { label: '運転席', pos: [-0.55, FLOOR + 1.28, -3.25], at: [-0.3, FLOOR + 1.05, -8], span: 1.7 },   // windshield
   bed: { label: 'ベッド', pos: [0.15, FLOOR + 1.02, 2.75], at: [0.0, ROOFV + 1.0, 2.2], span: 3.2, lie: true }, // skylight 2
   kitchen: { label: 'キッチン', pos: [0.1, FLOOR + 1.6, -0.75], at: [1.4, FLOOR + 1.3, -0.5], span: 3.2 },    // kitchen window (right)

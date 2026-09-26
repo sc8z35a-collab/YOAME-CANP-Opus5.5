@@ -40,6 +40,15 @@ class _FileLock:
 FLOCK = _FileLock()
 LOCK = threading.Lock()
 
+# source files each agent sends to its LLM (focused context instead of "first 6 files")
+AGENT_FILES = {
+    "architect": ["js/main.js", "js/core.js", "js/assets.js", "js/view.js"],
+    "assets": ["js/assets.js", "js/forest.js", "js/animals.js", "CREDITS.md"],
+    "render": ["js/main.js", "js/weather.js", "js/glass.js", "js/camper.js"],
+    "scenario": ["js/events.js", "js/animals.js", "js/terrain.js"],
+    "mobile": ["index.html", "css/style.css", "js/ui.js", "js/view.js"],
+    "reviewer": ["js/camper.js", "js/forest.js", "js/audio.js", "js/weather.js"],
+}
 AGENT_MODELS = {
     "architect": "gpt-5.3-codex", "assets": "gpt-5-mini", "render": "gpt-5.2",
     "scenario": "gpt-5.1", "mobile": "gpt-5", "reviewer": "gpt-5.2-codex",
@@ -261,7 +270,7 @@ def run_agent(name, online):
     f["seconds"] = round(time.time() - t0, 1)
     if online:
         try:
-            adv = llm_advise(name, f, [str(p.relative_to(ROOT)) for p in js_files()][:6])
+            adv = llm_advise(name, f, AGENT_FILES[name])
             (REPORTS / f"{name}.llm.md").write_text(adv or "")
             f["llm"] = f"build/reports/{name}.llm.md"
         except Exception as e:
