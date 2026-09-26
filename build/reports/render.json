@@ -1,0 +1,108 @@
+{
+ "scenes": {
+  "day_clear": {
+   "shot": "build/shots/day_clear.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [],
+    "cam": [
+     -0.62,
+     1.84,
+     0.05,
+     0,
+     0,
+     0
+    ],
+    "exp": 0.927429101790881,
+    "fogD": 0.0036768,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 100,
+     "battery": 86.009352,
+     "calm": 72.02400000000003,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": false,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 11,
+     "weather": "clear",
+     "water": -1.55
+    },
+    "frozen": true
+   }
+  },
+  "dusk_cozy": {
+   "shot": "build/shots/dusk_cozy.png",
+   "logs": [],
+   "errors": [],
+   "qa": {
+    "ready": true,
+    "fps": 0,
+    "frames": 6,
+    "subjects": [],
+    "cam": [
+     0.15,
+     1.74,
+     2.75,
+     0,
+     0,
+     0
+    ],
+    "exp": 1.0393211023275075,
+    "fogD": 0.009869002063002605,
+    "info": {
+     "frame": 160,
+     "calls": 1,
+     "triangles": 1,
+     "points": 0,
+     "lines": 0
+    },
+    "state": {
+     "hull": 100,
+     "battery": 85.99580000000003,
+     "calm": 72.02400000000003,
+     "lightsOn": true,
+     "curtainsClosed": false,
+     "hiding": false,
+     "spotOn": false,
+     "headOn": false,
+     "cooking": 0,
+     "heater": false,
+     "generator": false,
+     "radio": false,
+     "smell": 0,
+     "noise": 0,
+     "over": false,
+     "nightsSurvived": 0,
+     "lastDawnDay": 0,
+     "hour": 18.6,
+     "weather": "cloudy",
+     "water": -1.55
+    },
+    "frozen": true
+   }
+  }
+ },
+ "ok": true,
+ "seconds": 149.0
+}
