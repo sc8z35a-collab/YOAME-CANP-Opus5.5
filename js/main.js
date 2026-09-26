@@ -236,7 +236,7 @@ function loop(now) {
   envTimer -= dt; if (envTimer < 0) { envTimer = QA ? 1e9 : 4; updateEnv(); }
   // exposure: eye adapts inside vs night
   const inside = !VIEWS_out();
-  const target = lerp(1.35, 0.95, G.daylight) * (inside ? 1 : 1.0) + (G.state.lightsOn ? 0 : 0.35 * G.night);
+  const target = lerp(1.25, 0.72, G.daylight) * (inside ? 1 : 0.9) + (G.state.lightsOn ? 0 : 0.35 * G.night);
   renderer.toneMappingExposure = damp(renderer.toneMappingExposure, target, 1.5, dt);
   const gu = grade.uniforms;
   gu.uWarm.value = C.lightLevel * G.night * 0.6;

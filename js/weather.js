@@ -304,7 +304,7 @@ export function strike(near = false) {
 
 // ---------------------------------------------------------------- update
 const sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3();
-const cFogDay = new THREE.Color(0xa9b7b0), cFogNight = new THREE.Color(0x05080b), cFogStorm = new THREE.Color(0x4d5553), cFogDusk = new THREE.Color(0xc98a5a);
+const cFogDay = new THREE.Color(0x8fa197), cFogNight = new THREE.Color(0x05080b), cFogStorm = new THREE.Color(0x4d5553), cFogDusk = new THREE.Color(0xc98a5a);
 const tmpC = new THREE.Color();
 let splashTimer = 0;
 
@@ -362,7 +362,7 @@ export function updateWeather(dt, camera) {
   tmpC.copy(cFogNight).lerp(cFogDay, G.daylight).lerp(cFogStorm.clone().multiplyScalar(lerp(0.12, 1, G.daylight)), storm * 0.7).lerp(cFogDusk, dusk * 0.35 * (1 - storm));
   const scene = W.sun.parent;
   scene.fog.color.copy(tmpC);
-  scene.fog.density = lerp(0.004, 0.05, G.fog * G.fog) + G.rain * 0.006 + G.night * 0.004;
+  scene.fog.density = lerp(0.003, 0.05, G.fog * G.fog) + G.rain * 0.006 + G.night * 0.004;
   G.fogColor = tmpC;
   W.renderer?.setClearColor(tmpC);
 

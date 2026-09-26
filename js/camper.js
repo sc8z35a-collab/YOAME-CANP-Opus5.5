@@ -75,6 +75,14 @@ function wallPanel(outline, holes, depth, mat, axis, offset) {
   else if (axis === 'z') { g.translate(0, 0, offset); }
   else { g.rotateX(Math.PI / 2); g.translate(0, offset, 0); }
   g.computeVertexNormals();
+  // box-projected UVs in metres so textures keep a consistent real-world scale
+  const pp = g.attributes.position, nn = g.attributes.normal, uv = g.attributes.uv;
+  for (let i = 0; i < pp.count; i++) {
+    const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)), az = Math.abs(nn.getZ(i));
+    const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i);
+    if (ax >= ay && ax >= az) uv.setXY(i, z, y); else if (ay >= az) uv.setXY(i, x, z); else uv.setXY(i, x, y);
+  }
+  uv.needsUpdate = true;
   const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
   return m;
 }
@@ -191,7 +199,8 @@ export function buildCamper(scene) {
   const paint = paintMaterial();
   const rubber = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.8 });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2, metalness: 1 });
-  const panel = pbr('rough_linen', { arm: false, color: 0xe9dfcc, repeat: 1.2, normalScale: 0.5 });
+  const panel = pbr('oak_veneer_01', { color: 0xc99a6a, repeat: 0.55, normalScale: 0.8 });
+  const ceilM = pbr('rough_linen', { arm: false, color: 0xd9ccb4, repeat: 0.7, normalScale: 0.6 });
   const oak = pbr('oak_veneer_01', { repeat: 1, color: 0xd9b48a, normalScale: 0.6 });
   const oakDark = pbr('oak_veneer_01', { repeat: 1, color: 0x8a5a35, normalScale: 0.6 });
   const floorM = pbr('laminate_floor_02', { repeat: 1, normalScale: 0.7 });
@@ -235,7 +244,7 @@ export function buildCamper(scene) {
   // roof (skin + ceiling)
   const roofHoles = holes('T');
   const roof = wallPanel([-XW, ZF, XW, ZB], roofHoles, 0.03, paint, 'y', ROOF);
-  const ceil = wallPanel([-XW, ZF, XW, ZB], roofHoles, ROOF - 0.03 - CEIL, panel, 'y', ROOF - 0.03);
+  const ceil = wallPanel([-XW, ZF, XW, ZB], roofHoles, ROOF - 0.03 - CEIL, ceilM, 'y', ROOF - 0.03);
   g.add(roof); inner.add(ceil);
   for (const h of WINDOWS.filter(x => x.wall === 'T')) {
     const fr = frameRing(h.w + 0.08, h.h + 0.08, darkPlastic, 0.05);
