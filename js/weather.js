@@ -297,7 +297,7 @@ function makeBolt(from, to) {
 }
 export function strike(near = false) {
   const a = Math.random() * Math.PI * 2, d = near ? 40 + Math.random() * 30 : 150 + Math.random() * 250;
-  const c = G.camper ? G.camper.position : new THREE.Vector3();
+  const c = G.camper ? G.camper.position : _zero;
   const to = new THREE.Vector3(c.x + Math.cos(a) * d, heightAt(c.x + Math.cos(a) * d, c.z + Math.sin(a) * d), c.z + Math.sin(a) * d);
   const from = to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 60, 260, (Math.random() - 0.5) * 60));
   makeBolt(from, to);
@@ -310,7 +310,7 @@ export function strike(near = false) {
 // ---------------------------------------------------------------- update
 const sunDir = new THREE.Vector3(), moonDir = new THREE.Vector3();
 const cFogDay = new THREE.Color(0x8fa197), cFogNight = new THREE.Color(0x05080b), cFogStorm = new THREE.Color(0x4d5553), cFogDusk = new THREE.Color(0xc98a5a);
-const tmpC = new THREE.Color();
+const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), cDuskCloud = new THREE.Color(0.9, 0.55, 0.4), _zero = new THREE.Vector3();
 let splashTimer = 0;
 
 export function updateWeather(dt, camera) {
@@ -344,14 +344,14 @@ export function updateWeather(dt, camera) {
   W.domeMat.uniforms.uSun.value.copy(sunDir);
   W.domeMat.uniforms.uDay.value = G.daylight;
   tmpC.setRGB(0.62, 0.66, 0.7).multiplyScalar(lerp(0.06, 1, G.daylight) * lerp(1, 0.55, storm * storm));
-  tmpC.lerp(new THREE.Color(0.9, 0.55, 0.4), dusk * 0.5 * (1 - storm));
+  tmpC.lerp(cDuskCloud, dusk * 0.5 * (1 - storm));
   W.domeMat.uniforms.uCloudCol.value.copy(tmpC);
   W.starMat.uniforms.uNight.value = G.night; W.starMat.uniforms.uCloud.value = G.cloud;
 
   // sky follows the eye (infinite-distance look, no parallax / clipping)
   camera.getWorldPosition(W.sky.position); W.dome.position.copy(W.sky.position);
   // lights
-  const c = G.camper ? G.camper.position : new THREE.Vector3();
+  const c = G.camper ? G.camper.position : _zero;
   const moonUp = moonDir.y > 0 ? 1 : 0;
   const useMoon = G.night > 0.5;
   const L = useMoon ? moonDir : sunDir;
@@ -366,7 +366,7 @@ export function updateWeather(dt, camera) {
   W.hemi.color.setRGB(lerp(0.3, 0.72, G.daylight), lerp(0.35, 0.8, G.daylight), lerp(0.55, 0.95, G.daylight));
 
   // fog
-  tmpC.copy(cFogNight).lerp(cFogDay, G.daylight).lerp(cFogStorm.clone().multiplyScalar(lerp(0.12, 1, G.daylight)), storm * 0.7).lerp(cFogDusk, dusk * 0.35 * (1 - storm));
+  tmpC.copy(cFogNight).lerp(cFogDay, G.daylight).lerp(tmpC2.copy(cFogStorm).multiplyScalar(lerp(0.12, 1, G.daylight)), storm * 0.7).lerp(cFogDusk, dusk * 0.35 * (1 - storm));
   const scene = W.sun.parent;
   scene.fog.color.copy(tmpC);
   scene.fog.density = lerp(0.003, 0.05, G.fog * G.fog) + G.rain * 0.006 + G.night * 0.004;
@@ -375,7 +375,7 @@ export function updateWeather(dt, camera) {
 
   // rain drawing
   const rm = W.rain.material.uniforms;
-  rm.uCam.value.copy(camera.getWorldPosition(new THREE.Vector3()));
+  camera.getWorldPosition(rm.uCam.value);
   if (G.camper) rm.uCamperM.value.copy(G.camper.matrixWorld).invert();
   rm.uLight.value.setRGB(0.35, 0.38, 0.42).multiplyScalar(lerp(0.12, 1, G.daylight));
   W.rain.visible = G.rain > 0.02;

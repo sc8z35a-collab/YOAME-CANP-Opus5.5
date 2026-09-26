@@ -91,8 +91,7 @@ export function updateView(dt, camera) {
   G.shakeV.set((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   _p.copy(V.pos); _p.y += b + arc + V.crouch; _p.add(G.shakeV);
   const cam = G.camper;
-  if (v.out) { camera.position.copy(cam.localToWorld(_p.clone())); }
-  else camera.position.copy(cam.localToWorld(_p));
+  camera.position.copy(cam.localToWorld(_p)); // _p is scratch, safe to mutate
   // Euler YXZ: yaw about +Y (positive = turn left, three.js convention), then pitch about +X
   // (positive = look up). Camera looks down -z at yaw 0 = toward the cab.
   _e.set(V.pitch + Math.sin(V.breath * 0.5) * 0.004, V.yaw + (V.tilt || 0) * 0.3, (G.rockAngle || 0) * 0.5 + G.shakeV.x * 0.4);
