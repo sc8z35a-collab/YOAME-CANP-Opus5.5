@@ -265,6 +265,11 @@ export function buildCamper(scene) {
   g.add(bb(-XW + 0.05, 0.42, ZF + 0.2, XW - 0.05, 0.58, ZB - 0.1, darkPlastic, 0.02));
   // rounded front cap edges & roof trims
   g.add(bb(-XW - 0.01, ROOF - 0.02, ZF - 0.04, XW + 0.01, ROOF + 0.04, ZB + 0.02, paint, 0.03));
+  // cab-over nose: rounded bulge above the windshield gives the classic motorhome silhouette
+  const nose = rbox(2.36, 0.62, 0.7, paint, 0, 2.58, ZF - 0.28, 0.24, 5);
+  g.add(nose);
+  const noseWin = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.16), new THREE.MeshPhysicalMaterial({ color: 0x0b1116, roughness: 0.08, clearcoat: 1 }));
+  noseWin.position.set(0, 2.62, ZF - 0.635); noseWin.rotation.y = Math.PI; g.add(noseWin);
   // rounded corner posts (hide the hard box corners of the extruded walls)
   for (const [x, z] of [[-XW, ZF], [XW, ZF], [-XW, ZB], [XW, ZB]]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, ROOF - 0.55, 12), paint);

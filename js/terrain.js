@@ -231,7 +231,7 @@ export function buildTerrain(scene) {
         float wm = smoothstep(0.2, 0.6, vSplat.y + (br-0.5)*0.4);
         float wr = smoothstep(0.3, 0.7, vSplat.z + (br-0.5)*0.5);
         float wg = smoothstep(0.25, 0.7, vSplat.w + (br-0.5)*0.6);
-        vec3 col = mix(cG*vec3(0.62,0.58,0.5), cL*0.85, wl);
+        vec3 col = mix(cG*vec3(0.78,0.74,0.66), cL*0.92, wl);
         col = mix(col, cGr*vec3(0.95,1.05,0.8), wg*0.9);
         col = mix(col, cR, wr);
         col = mix(col, cM, wm);

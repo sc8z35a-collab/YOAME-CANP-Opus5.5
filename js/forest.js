@@ -250,7 +250,7 @@ async function buildUnderstory(scene, hi) {
   const rocks = place(Math.round(110 * k), 75, (x, z, R) => clearOf(x, z, 9, 3, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
   await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.5, maxDist: 120 });
   const small = place(Math.round(300 * k), 76, (x, z) => Math.abs(x - creekX(z)) < 5.5 || trackDist(x, z) < 4);
-  await instanceGLB(scene, 'rock_07', small, { scale: [1.5, 4.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
+  await instanceGLB(scene, 'rock_07', small, { scale: [0.8, 2.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
   const logs = place(40, 77, (x, z) => clearOf(x, z, 10, 3.5, 4));
   await instanceGLB(scene, 'dead_tree_trunk', logs, { scale: [1.2, 2.2], yOff: 0.05, tilt: 0.05, colliderR: 1 });
   await instanceGLB(scene, 'tree_stump_01', place(45, 78, (x, z) => clearOf(x, z, 8, 3, 4)), { scale: [0.8, 1.3], yOff: -0.05, colliderR: 0.8 });
