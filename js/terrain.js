@@ -53,6 +53,43 @@ function roadBed(s) {
 }
 export function trackLength() { return TRACK_LEN; }
 
+/**
+ * Drivable path between parking spots (single source of truth for main.js + tests).
+ * Camper front = local -z, heading vector f = (-sin rot, -cos rot).
+ * - hollow: road starts straight ahead of the pad; arriving there needs a turnaround loop
+ *   in the clearing (left side, away from the table/fire pit) to park nose-out again.
+ * - ridge: the road arrives nose-first; leaving needs a U-turn loop on the pad.
+ */
+export function drivePath(fromK, toK) {
+  const V = (x, z) => new THREE.Vector3(x, 0, z);
+  const road = TRACK.map(p => V(p.x, p.y));
+  const pts = [];
+  if (fromK === 'hollow') {
+    const h = SPOTS.hollow;
+    pts.push(V(h.x, h.z), V(h.x, h.z - 3.5));
+    road.forEach(p => pts.push(p));
+  } else {
+    const r = SPOTS.ridge, f = V(-Math.sin(r.rot), -Math.cos(r.rot)), rt = V(-f.z, f.x); // right = f rotated -90°
+    const c = V(r.x, r.z).addScaledVector(f, 3).addScaledVector(rt, 4.5);
+    pts.push(V(r.x, r.z), V(r.x, r.z).addScaledVector(f, 2));
+    for (let i = 0; i <= 8; i++) { // semicircle around c from -rt side through +f to +rt side
+      const t = i / 8 * Math.PI;
+      pts.push(c.clone().addScaledVector(rt, -Math.cos(t) * 4.5).addScaledVector(f, Math.sin(t) * 4.5));
+    }
+    // rejoin the road (reversed) a safe distance from the pad
+    const rev = road.slice().reverse();
+    const j = rev.findIndex(p => p.distanceTo(V(r.x, r.z)) > 13);
+    rev.slice(j).forEach(p => pts.push(p));
+  }
+  if (toK === 'hollow') {
+    // arrive heading +z from (0,-7): loop through the west side of the clearing, end nose-out
+    const h = SPOTS.hollow;
+    [[-2.5, -4.5], [-5.5, -1], [-5.5, 3.5], [-3, 6.5], [0, 5.5], [0, 2], [0, 0]].forEach(([x, z]) => pts.push(V(h.x + x, h.z + z)));
+  }
+  // de-duplicate near-coincident points (CatmullRom dislikes zero-length segments)
+  return pts.filter((p, i) => i === 0 || p.distanceTo(pts[i - 1]) > 0.5);
+}
+
 function rawHeight(x, z) {
   const dH = Math.hypot(x - SPOTS.hollow.x, z - SPOTS.hollow.z);
   const amp = smooth(10, 60, dH);

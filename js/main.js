@@ -1,7 +1,7 @@
 // Entry: renderer, post FX (bloom + cinematic grade/vignette/grain + rain lens), loop, driving.
 import { THREE, G, U, P, QA, bus, clamp, damp, lerp, smooth } from './core.js';
 import { setAniso, progress } from './assets.js';
-import { buildTerrain, heightAt, SPOTS, spotHeight, TRACK } from './terrain.js';
+import { buildTerrain, heightAt, SPOTS, spotHeight, drivePath } from './terrain.js';
 import { buildForest, camp, updateForest } from './forest.js';
 import { buildCamper, updateCamper, C } from './camper.js';
 import { buildWeather, updateWeather, W } from './weather.js';
@@ -114,17 +114,7 @@ const drive = { on: false, path: [], t: 0, len: 0, to: null };
 bus.on('driveTo', to => {
   if (to === G.camperSpot) return toast('もうここに停まっている', 'info');
   if (G.state.hull < 5) return toast('車が動かない…', 'danger');
-  // path: current spot -> nose-out lead-in -> road (in travel direction) -> lead-out -> target pad
-  const tr = TRACK.map(p => new THREE.Vector3(p.x, 0, p.y));
-  const road = to === 'ridge' ? tr : tr.slice().reverse();
-  const from = SPOTS[G.camperSpot], dest = SPOTS[to];
-  const pts = [new THREE.Vector3(C.group.position.x, 0, C.group.position.z)];
-  // pull forward 3m along the current heading first (front = local -z)
-  pts.push(new THREE.Vector3(from.x - Math.sin(C.group.rotation.y) * 3, 0, from.z - Math.cos(C.group.rotation.y) * 3));
-  road.forEach(p => pts.push(p));
-  // final approach so we stop facing the pad's parking heading
-  pts.push(new THREE.Vector3(dest.x + Math.sin(dest.rot) * 3, 0, dest.z + Math.cos(dest.rot) * 3));
-  pts.push(new THREE.Vector3(dest.x, 0, dest.z));
+  const pts = drivePath(G.camperSpot, to);
   drive.curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'); drive.len = drive.curve.getLength();
   drive.t = 0; drive.on = true; drive.to = to; G.driving = true;
   G.state.noise = 1; sfx('engine');
@@ -153,9 +143,7 @@ function updateDrive(dt) {
   if (drive.t >= 1) {
     drive.on = false; G.driving = false; drive.pitch = 0;
     G.camperSpot = drive.to;
-    // settle smoothly: keep the heading we arrived with (close to the pad rot), level the body
-    C.group.position.y = spotHeight(drive.to);
-    SPOTS[drive.to].arrivedRot = C.group.rotation.y;
+    placeCamper(drive.to); // path ends aligned with the pad heading, so this snap is sub-degree
     toast(`${SPOTS[drive.to].name}に到着。エンジンを切った`, 'info');
     bus.emit('arrived', drive.to);
   }

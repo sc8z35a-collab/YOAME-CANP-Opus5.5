@@ -270,8 +270,8 @@ async function buildProps(scene) {
   };
   camp.fire = await put('stone_fire_pit', 5.2, 3.2, 0.3);
   camp.table = await put('outdoor_table_chair_set_01', 3.6, -1.8, 1.3);
-  camp.generator = await put('portable_generator', -2.4, -4.2, 2.0);
-  await put('metal_jerrycan', -1.9, -4.9, 0.4);
+  camp.generator = await put('portable_generator', 2.7, 5.2, 2.0);
+  await put('metal_jerrycan', 3.3, 5.8, 0.4);
   colliders.push({ x: s.x + 5.2, z: s.z + 3.2, r: 0.9 }, { x: s.x + 3.6, z: s.z - 1.8, r: 1.0 });
   // embers / fire light (lit at night by events/ui)
   const fl = new THREE.PointLight(0xff7a2a, 0, 12, 1.6);

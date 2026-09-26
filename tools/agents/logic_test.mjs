@@ -1,6 +1,6 @@
 // Pure-logic tests (no WebGL): terrain design invariants that gameplay depends on.
 // Run: node tools/agents/logic_test.mjs
-import { heightAt, SPOTS, spotHeight, creekX, CREEK_BED, WATER_BASE, trackDist, slopeAt, TRACK } from '../../js/terrain.js';
+import { heightAt, SPOTS, spotHeight, creekX, CREEK_BED, WATER_BASE, trackDist, slopeAt, TRACK, drivePath } from '../../js/terrain.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
@@ -28,7 +28,7 @@ let upR = -1e9;
 for (let a = 0; a < 6.28; a += 0.3) upR = Math.max(upR, heightAt(SPOTS.ridge.x + Math.cos(a) * 30, SPOTS.ridge.z + Math.sin(a) * 30) - rH);
 ok(upR > 4, `ridge has a slope ${upR.toFixed(1)}m above it within 30m (landslide source)`);
 // track connects both spots
-ok(trackDist(SPOTS.hollow.x + 3, SPOTS.hollow.z - 8) < 1 && trackDist(SPOTS.ridge.x, SPOTS.ridge.z + 4) < 1, 'dirt track connects the spots');
+ok(Math.hypot(TRACK[0].x - SPOTS.hollow.x, TRACK[0].y - SPOTS.hollow.z) < 8 && Math.hypot(TRACK.at(-1).x - SPOTS.ridge.x, TRACK.at(-1).y - SPOTS.ridge.z) < 1, 'dirt track connects the spots');
 // track drivable: max slope along it
 let ms = 0;
 for (let t = 0; t <= 1; t += 0.02) {
@@ -65,12 +65,7 @@ ok(padHit === 0, 'road middle section avoids the parking pads');
 // drive path (mirrors main.js driveTo): heading must never jump (> 60deg in 1m) = no U-turn glitch
 const THREE = await import('../../js/lib/three.module.js');
 for (const [fromK, to] of [['hollow', 'ridge'], ['ridge', 'hollow']]) {
-  const tr = TRACK.map(p => new THREE.Vector3(p.x, 0, p.y));
-  const road = to === 'ridge' ? tr : tr.slice().reverse();
-  const from = SPOTS[fromK], dest = SPOTS[to];
-  const pts = [new THREE.Vector3(from.x, 0, from.z), new THREE.Vector3(from.x - Math.sin(from.rot) * 3, 0, from.z - Math.cos(from.rot) * 3)];
-  road.forEach(p => pts.push(p));
-  pts.push(new THREE.Vector3(dest.x + Math.sin(dest.rot) * 3, 0, dest.z + Math.cos(dest.rot) * 3), new THREE.Vector3(dest.x, 0, dest.z));
+  const pts = drivePath(fromK, to);
   const c = new THREE.CatmullRomCurve3(pts, false, 'centripetal'); const L = c.getLength();
   let worst = 0, prev = null; const a = new THREE.Vector3();
   for (let d = 0; d < L; d += 1) {
@@ -78,6 +73,13 @@ for (const [fromK, to] of [['hollow', 'ridge'], ['ridge', 'hollow']]) {
     if (prev !== null) { let dd = Math.abs(y - prev); dd = Math.min(dd, Math.PI * 2 - dd); worst = Math.max(worst, dd); }
     prev = y;
   }
+  // end heading must match the pad heading (no visible snap on arrival)
+  c.getTangentAt(0.999, a); let e = Math.abs(Math.atan2(-a.x, -a.z) - SPOTS[to].rot); e = Math.min(e, Math.PI * 2 - e);
+  ok(e < 0.35, `${fromK}->${to}: arrival heading error ${(e * 180 / Math.PI).toFixed(0)}deg`);
+  // loop must avoid camp props at the hollow (table, fire pit, generator)
+  let prop = 1e9;
+  for (let d = 0; d < L; d += 0.5) { const p = c.getPointAt(d / L); for (const [x, z] of [[3.6, -1.8], [5.2, 3.2], [2.7, 5.2]]) prop = Math.min(prop, Math.hypot(p.x - x, p.z - z)); }
+  ok(prop > 2.2, `${fromK}->${to}: clearance to camp props ${prop.toFixed(1)}m`);
   ok(worst < Math.PI / 3, `${fromK}->${to}: path ${L.toFixed(0)}m, max heading change ${(worst * 180 / Math.PI).toFixed(0)}deg/m`);
 }
 process.exit(fail ? 1 : 0);
