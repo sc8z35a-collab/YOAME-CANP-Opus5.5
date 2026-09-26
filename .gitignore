@@ -4,3 +4,4 @@ node_modules/
 /tmp/
 build/shots/
 __pycache__/
+dist/
