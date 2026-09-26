@@ -221,8 +221,7 @@ function loop(now) {
   updateRock(dt);
   C.group.updateMatrixWorld(true);
   updateWeather(dt, camera);
-  updateEvents(dt);
-  updateAnimals(dt);
+  if (!G.state.over) { updateEvents(dt); updateAnimals(dt); }
   updateCamper(dt);
   updateView(dt, camera);
   updateForest(camera.position);

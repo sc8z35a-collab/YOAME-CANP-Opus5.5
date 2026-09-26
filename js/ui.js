@@ -35,6 +35,9 @@ export function toast(msg, level = 'info', ms = 4000) {
   while (toastEl.children.length > 3) toastEl.firstChild.remove();
 }
 bus.on('toast', ({ msg, level, ms }) => toast(msg, level, ms));
+bus.on('bearsniff', () => toast('…窓のすぐ外で、荒い鼻息が聞こえる。明かりを消して息をひそめろ', 'danger', 5500));
+bus.on('bearscared', () => toast('クマが森の奥へ走り去った', 'info'));
+bus.on('bearleft', () => toast('足音が遠ざかっていく…', 'info'));
 
 function radioNews() {
   const m = W.mode, rs = G.rainAccum;

@@ -171,7 +171,7 @@ export function spawnBear(mode = 'prowl') {
   if (!Z.ready || Z.bear.active) return false;
   const b = Z.bear;
   const [x, z] = ringPoint(30, 36);
-  b.spawnAt(x, z); b.state = mode; b.t = 0; b.aggro = mode === 'charge' ? 1 : 0.2; b.hits = 0;
+  b.spawnAt(x, z); b.state = mode; b.t = 0; b.aggro = mode === 'charge' ? 1 : 0.2; b.hits = 0; b.sniffed = false;
   bus.emit('animal', 'bear');
   return true;
 }
@@ -231,12 +231,14 @@ export function updateAnimals(dt) {
       const ang = b.t * 0.12 + 1.0;
       const r = 14 - Math.min(8, b.t * 0.15);
       b.steer(dt, c.x + Math.cos(ang) * r, c.z + Math.sin(ang) * r, 1.1);
-      if (b.aggro > 0.75 || b.t > 60 && b.aggro > 0.45) { b.state = 'charge'; bus.emit('bearcharge'); }
+      if (!b.sniffed && b.t > 18 && dist < 9 && !G.state.hiding) { b.sniffed = true; b.state = 'sniff'; b.t = 0; bus.emit('bearsniff'); }
+      else if (b.aggro > 0.75 || b.t > 60 && b.aggro > 0.45) { b.state = 'charge'; bus.emit('bearcharge'); }
       if (b.t > 70 && b.aggro < 0.3) { b.state = 'leave'; }
     } else if (b.state === 'sniff') {
       b.steer(dt, c.x + 1.8, c.z - 1.0, 0.6);
       b.rear += ((dist < 4 ? 1 : 0) - b.rear) * dt * 1.5;
-      if (b.t > 16) b.state = b.aggro > 0.5 ? 'charge' : 'leave';
+      if (G.state.hiding) b.aggro = Math.max(0, b.aggro - dt * 0.06);
+      if (b.t > 16) { b.state = b.aggro > 0.5 ? 'charge' : 'prowl'; b.t = 30; if (b.state === 'charge') bus.emit('bearcharge'); }
     } else if (b.state === 'charge') {
       b.rear += (0 - b.rear) * dt * 4;
       const r = b.steer(dt, c.x, c.z, 5.5, 3);
