@@ -6,7 +6,7 @@ import { W, WEATHERS, setWeather } from './weather.js';
 import { Z, scareAll, nearestAnimal } from './animals.js';
 import { E, triggerEvent } from './events.js';
 import { SPOTS } from './terrain.js';
-import { sfx, initAudio } from './audio.js';
+import { sfx, initAudio, A } from './audio.js';
 
 const $ = s => document.querySelector(s);
 const h = (tag, attrs = {}, html = '') => { const e = document.createElement(tag); Object.assign(e, attrs); if (html) e.innerHTML = html; return e; };
@@ -66,10 +66,12 @@ export function buildUI() {
   <div id="menu" class="hidden">
     <div class="panel">
       <h2>森の奥のキャンプカー</h2>
+      <div class="row"><span>サウンド</span><div><button data-touch class="chip" id="sndBtn">🔊 オン</button><button data-touch class="chip" id="restartBtn">最初から</button></div></div>
+      <div class="row"><span>画質</span><div><button data-touch class="chip" data-q="u">ウルトラ</button><button data-touch class="chip" data-q="h">高</button><button data-touch class="chip" data-q="m">軽量</button></div></div>
+      <h3 class="sub">鑑賞モード（自由に天気・時間・出来事を起こせます）</h3>
       <div class="row"><span>天気</span><div id="wxBtns"></div></div>
       <div class="row"><span>時間</span><div><button data-touch class="chip" data-t="-3">−3h</button><button data-touch class="chip" data-t="3">+3h</button><button data-touch class="chip" id="ff">早送り</button></div></div>
-      <div class="row"><span>イベント</span><div id="evBtns"></div></div>
-      <div class="row"><span>画質</span><div><button data-touch class="chip" data-q="u">ウルトラ</button><button data-touch class="chip" data-q="h">高</button><button data-touch class="chip" data-q="m">軽量</button></div></div>
+      <div class="row"><span>出来事</span><div id="evBtns"></div></div>
       <button data-touch class="chip wide" id="closeMenu">閉じる</button>
     </div>
   </div>
@@ -96,6 +98,15 @@ export function buildUI() {
   $('#ff').onclick = () => { G.timeMul = G.timeMul > 1 ? 1 : 30; $('#ff').classList.toggle('on', G.timeMul > 1); };
   $('#menuBtn').onclick = () => { initAudio(); $('#menu').classList.toggle('hidden'); };
   $('#closeMenu').onclick = () => $('#menu').classList.add('hidden');
+  try { if (localStorage.getItem('fc3d_mute') === '1') $('#sndBtn').textContent = '🔇 オフ'; } catch (e) {}
+  $('#sndBtn').onclick = () => {
+    initAudio();
+    const on = A.master.gain.value < 0.01;
+    A.master.gain.setTargetAtTime(on ? 0.9 : 0, A.ctx.currentTime, 0.05);
+    $('#sndBtn').textContent = on ? '🔊 オン' : '🔇 オフ';
+    try { localStorage.setItem('fc3d_mute', on ? '0' : '1'); } catch (e) {}
+  };
+  $('#restartBtn').onclick = () => { if (confirm('最初からやり直しますか？')) location.reload(); };
   const sEl = $('#spotBtns');
   for (const [k, s] of Object.entries(SPOTS)) {
     const b = h('button', { className: 'chip wide' }, `${s.name}<br><small>${k === 'hollow' ? '風雨を避けられる / 増水に弱い' : '水は来ない / 土砂崩れ・倒木に注意'}</small>`); b.dataset.touch = 1;

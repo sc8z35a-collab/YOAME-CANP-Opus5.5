@@ -33,7 +33,9 @@ function loop(buf, dest, { type = 'lowpass', f = 1000, q = 0.7, gain = 0 } = {})
 export function initAudio() {
   if (A.ctx) { A.ctx.resume(); return; }
   const c = A.ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const master = A.master = c.createGain(); master.gain.value = 0.9;
+  const master = A.master = c.createGain();
+  let muted = false; try { muted = localStorage.getItem('fc3d_mute') === '1'; } catch (e) {}
+  master.gain.value = muted ? 0 : 0.9;
   const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
   // "inside the camper" filter: lowers highs of outside sounds when not driving door open
   const outside = c.createBiquadFilter(); outside.type = 'lowpass'; outside.frequency.value = 2400;

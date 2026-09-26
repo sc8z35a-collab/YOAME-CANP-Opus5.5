@@ -56,3 +56,4 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .intro ul{margin:0;padding-left:1.1em;font-size:13px;line-height:1.7}
 .intro b{color:#ffd9a0}
 #intro{z-index:15;background:rgba(0,0,0,.5)}
+.panel h3.sub{font-size:13px;color:#cdbb9a;margin:12px 0 4px;font-weight:600;border-top:1px solid var(--line);padding-top:10px}
