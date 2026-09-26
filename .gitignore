@@ -5,3 +5,4 @@ node_modules/
 build/shots/
 __pycache__/
 dist/
+.boot.log
