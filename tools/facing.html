@@ -1,0 +1,26 @@
+<!doctype html><html><body style="margin:0;background:#777"><script type="module">
+// Facing check: each model rendered from the side (camera on +X looking -X) exactly like the game
+// fits it (fitModel, same yaw). A red arrow marks +Z (= our "forward"). Head must be on the arrow side.
+import * as THREE from '../js/lib/three.module.js';
+import { GLTFLoader } from '../js/lib/addons/GLTFLoader.js';
+import * as SkeletonUtils from '../js/lib/addons/SkeletonUtils.js';
+const list = [['black_bear', 0], ['stag', 0], ['wolf', 0], ['fawn', 0]];
+const W = 360, H = 260;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W * list.length, H); document.body.appendChild(r.domElement); r.setScissorTest(true);
+const L = new GLTFLoader(); let done = 0;
+list.forEach(([name, yaw], i) => L.load(`../assets/models/${name}.glb`, g => {
+  const s = new THREE.Scene(); s.background = new THREE.Color(0x9ab0a0);
+  s.add(new THREE.HemisphereLight(0xffffff, 0x333333, 2.5));
+  const root = g.animations.length ? SkeletonUtils.clone(g.scene) : g.scene;
+  if (g.animations.length) { const mx = new THREE.AnimationMixer(root); const idle = g.animations.find(a => /Idle$/.test(a.name)) || g.animations[0]; mx.clipAction(idle).play(); mx.update(0.1); }
+  root.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(root), k = 1.2 / (b.max.y - b.min.y);
+  const inner = new THREE.Group(); inner.add(root); inner.scale.setScalar(k); inner.position.y = -b.min.y * k; inner.rotation.y = yaw;
+  s.add(inner);
+  s.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.05, 0), 1.6, 0xff0000, 0.3, 0.15));
+  const cam = new THREE.PerspectiveCamera(40, W / H, 0.01, 100); cam.position.set(5, 0.8, 0); cam.lookAt(0, 0.6, 0);
+  r.setViewport(i * W, 0, W, H); r.setScissor(i * W, 0, W, H); r.render(s, cam);
+  if (++done === list.length) { window.__shot = r.domElement.toDataURL('image/jpeg', 0.9); document.title = 'done'; }
+}, undefined, e => { console.log('ERR', name, e); if (++done === list.length) document.title = 'done'; }));
+</script></body></html>
