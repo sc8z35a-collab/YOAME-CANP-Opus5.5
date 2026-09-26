@@ -1,0 +1,25 @@
+{
+ "name": "森の奥のキャンプカー",
+ "short_name": "キャンプカー",
+ "display": "fullscreen",
+ "orientation": "landscape",
+ "background_color": "#050807",
+ "theme_color": "#050807",
+ "start_url": "./index.html",
+ "icons": [
+  {
+   "src": "assets/icons/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "assets/icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ],
+ "description": "森の奥のキャンプカーで夜を越える3Dゲーム",
+ "lang": "ja",
+ "scope": "./"
+}
