@@ -22,4 +22,13 @@ for (const [k, v] of Object.entries(VIEWS)) {
   const inside = t > 0 && Math.abs(u) < w.w / 2 && Math.abs(vv) < w.h / 2;
   ok(inside, `${k}: looks through '${want}' window (t=${t.toFixed(2)} off=${u.toFixed(2)},${vv.toFixed(2)})`);
 }
+// outside view keeps >=1.5m eye height above terrain at every parking spot
+const { heightAt, SPOTS, spotHeight } = await import('../../js/terrain.js');
+for (const k in SPOTS) {
+  const s = SPOTS[k], v = VIEWS.outside;
+  const m = new THREE.Matrix4().compose(new THREE.Vector3(s.x, spotHeight(k), s.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, s.rot, 0)), new THREE.Vector3(1, 1, 1));
+  const p = new THREE.Vector3(...v.pos).applyMatrix4(m);
+  const y = Math.max(p.y, heightAt(p.x, p.z) + 1.6); // mirrors view.js clamp
+  ok(y - heightAt(p.x, p.z) >= 1.5, `outside@${k}: eye ${(y - heightAt(p.x, p.z)).toFixed(2)}m above ground`);
+}
 process.exit(fail ? 1 : 0);

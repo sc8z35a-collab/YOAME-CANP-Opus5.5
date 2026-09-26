@@ -2,6 +2,7 @@
 // pinch to zoom, tap viewpoint buttons to glide between seats; "peek" leans toward a window.
 import { THREE, G, clamp, damp, lerp, P } from './core.js';
 import { FLOOR, ROOF } from './camper.js';
+import { heightAt } from './terrain.js';
 const ROOFV = ROOF;
 
 // local camper coords: eye position + default yaw (0 = looking toward -z/front), pitch
@@ -92,6 +93,8 @@ export function updateView(dt, camera) {
   _p.copy(V.pos); _p.y += b + arc + V.crouch; _p.add(G.shakeV);
   const cam = G.camper;
   camera.position.copy(cam.localToWorld(_p)); // _p is scratch, safe to mutate
+  // outside view: keep a real eye height above whatever terrain is under the camera
+  if (v.out) { const gy = heightAt(camera.position.x, camera.position.z) + 1.6; if (camera.position.y < gy) camera.position.y = gy; }
   // Euler YXZ: yaw about +Y (positive = turn left, three.js convention), then pitch about +X
   // (positive = look up). Camera looks down -z at yaw 0 = toward the cab.
   _e.set(V.pitch + Math.sin(V.breath * 0.5) * 0.004, V.yaw + (V.tilt || 0) * 0.3, (G.rockAngle || 0) * 0.5 + G.shakeV.x * 0.4);
