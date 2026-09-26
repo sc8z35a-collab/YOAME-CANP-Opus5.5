@@ -1,7 +1,7 @@
 {
  "architect": {
   "ok": true,
-  "s": 1.1
+  "s": 1.2
  },
  "assets": {
   "ok": true,
@@ -9,15 +9,15 @@
  },
  "render": {
   "ok": true,
-  "s": 149.0
+  "s": 145.5
  },
  "scenario": {
   "ok": true,
-  "s": 948.3
+  "s": 772.0
  },
  "mobile": {
   "ok": true,
-  "s": 512.5
+  "s": 525.3
  },
  "reviewer": {
   "ok": true,
