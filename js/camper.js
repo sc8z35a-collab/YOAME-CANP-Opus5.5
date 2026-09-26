@@ -561,6 +561,7 @@ function buildInterior(I, M) {
 // Interior is enclosed: hemisphere/env (unshadowed) light must be attenuated, otherwise the
 // van looks roofless. Patch every interior material's indirect term with a shared factor.
 export const uIntAmb = { value: 0.3 };
+const prevIds = new Map();
 function occludeInterior(root) {
   const done = new Set();
   root.traverse(o => {
@@ -572,7 +573,10 @@ function occludeInterior(root) {
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIntAmb;')
         .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= uIntAmb; reflectedLight.indirectSpecular *= uIntAmb;');
     };
-    m.customProgramCacheKey = () => 'int' + (prev ? prev.toString().length : 0);
+    // unique key per distinct pre-existing patch (string length could collide)
+    if (prev && !prevIds.has(prev)) prevIds.set(prev, prevIds.size + 1);
+    const key = 'int' + (prev ? prevIds.get(prev) : 0);
+    m.customProgramCacheKey = () => key;
     m.needsUpdate = true;
   });
 }
