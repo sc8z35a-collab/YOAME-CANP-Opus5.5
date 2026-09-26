@@ -16,6 +16,18 @@
   "js/view.js",
   "js/weather.js"
  ],
+ "exports": {
+  "ok": true,
+  "fails": []
+ },
+ "logic": {
+  "ok": true,
+  "fails": []
+ },
+ "views": {
+  "ok": true,
+  "fails": []
+ },
  "ok": true,
- "seconds": 0.9
+ "seconds": 6.5
 }

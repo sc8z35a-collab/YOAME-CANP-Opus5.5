@@ -1,18 +1,32 @@
 // First-person viewpoints inside the camper. Touch-drag (right side of screen) to look,
 // pinch to zoom, tap viewpoint buttons to glide between seats; "peek" leans toward a window.
 import { THREE, G, clamp, damp, lerp, P } from './core.js';
-import { FLOOR } from './camper.js';
+import { FLOOR, ROOF } from './camper.js';
+const ROOFV = ROOF;
 
 // local camper coords: eye position + default yaw (0 = looking toward -z/front), pitch
-export const VIEWS = {
-  lounge: { label: 'ソファ', pos: [-0.72, FLOOR + 1.12, 0.02], yaw: 0.45, pitch: -0.05, limits: [-3.2, 3.2] },
-  driver: { label: '運転席', pos: [-0.55, FLOOR + 1.28, -3.25], yaw: 0, pitch: -0.02, limits: [-1.7, 1.7] },
-  bed: { label: 'ベッド', pos: [0.15, FLOOR + 1.08, 2.7], yaw: 0.0, pitch: 0.55, limits: [-3.2, 3.2], lie: true },
-  kitchen: { label: 'キッチン', pos: [0.15, FLOOR + 1.6, -0.9], yaw: -1.35, pitch: -0.2, limits: [-3.2, 3.2] },
-  rear: { label: '後部窓', pos: [0.1, FLOOR + 1.35, 2.35], yaw: Math.PI, pitch: -0.05, limits: [-3.2, 3.2] },
-  alcove: { label: 'ロフト', pos: [0.2, 2.62, -3.3], yaw: Math.PI * 0.95, pitch: -0.25, limits: [-3.2, 3.2], lie: true },
-  outside: { label: '外', pos: [7.5, 1.7, -7.5], yaw: 2.36, pitch: -0.08, limits: [-9, 9], out: true },
+// Each viewpoint = eye position + look-at target (camper local coords, metres).
+// yaw/pitch are derived from the target so orientation can never be sign-flipped by hand.
+// Camper local: +x = right (kitchen/door side), -x = left (dinette side), -z = cab/front, +z = bed/rear.
+const RAW = {
+  lounge: { label: 'ソファ', pos: [-0.62, FLOOR + 1.12, 0.05], at: [-1.3, FLOOR + 1.2, -1.2], span: 3.2 },   // dinette window (left)
+  driver: { label: '運転席', pos: [-0.55, FLOOR + 1.28, -3.25], at: [-0.3, FLOOR + 1.05, -8], span: 1.7 },   // windshield
+  bed: { label: 'ベッド', pos: [0.15, FLOOR + 1.02, 2.75], at: [0.0, ROOFV + 1.0, 2.2], span: 3.2, lie: true }, // skylight 2
+  kitchen: { label: 'キッチン', pos: [0.1, FLOOR + 1.6, -0.75], at: [1.4, FLOOR + 1.3, -0.5], span: 3.2 },    // kitchen window (right)
+  rear: { label: '後部窓', pos: [0.1, FLOOR + 1.35, 2.2], at: [0.0, FLOOR + 1.2, 6], span: 3.2 },            // rear window
+  alcove: { label: 'ロフト', pos: [0.2, 2.62, -3.3], at: [0.3, 2.35, 1.5], span: 3.2, lie: true },           // look down the van
+  outside: { label: '外', pos: [7.5, 1.7, -7.5], at: [0, 1.4, -0.8], span: 9, out: true },
 };
+function dirToYawPitch(from, to) {
+  const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2];
+  // camera forward at yaw=0,pitch=0 is -z. yaw>0 turns toward -x (three.js right-handed Y rotation).
+  return { yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)) };
+}
+export const VIEWS = {};
+for (const [k, r] of Object.entries(RAW)) {
+  const { yaw, pitch } = dirToYawPitch(r.pos, r.at);
+  VIEWS[k] = { ...r, yaw, pitch, limits: [-r.span, r.span] };
+}
 
 export const V = { cur: 'lounge', pos: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0, fov: 62, tfov: 62, trans: 1, from: new THREE.Vector3(), breath: 0, peek: 0 };
 
@@ -34,6 +48,7 @@ export function initView(canvas) {
     const p = ptrs.get(e.pointerId); if (!p) return;
     if (ptrs.size === 1) {
       const k = 2.6 / window.innerHeight * (V.fov / 62);
+      // drag-the-world: moving the finger right pulls the view left (yaw+), down pulls it up (pitch+)
       V.tyaw += (e.clientX - p.x) * k; V.tpitch += (e.clientY - p.y) * k;
     } else if (ptrs.size === 2) {
       p.x = e.clientX; p.y = e.clientY;
@@ -78,9 +93,9 @@ export function updateView(dt, camera) {
   const cam = G.camper;
   if (v.out) { camera.position.copy(cam.localToWorld(_p.clone())); }
   else camera.position.copy(cam.localToWorld(_p));
-  _e.set(V.pitch * -1 + Math.sin(V.breath * 0.5) * 0.004, V.yaw + Math.PI + (V.tilt || 0) * 0.3, (G.rockAngle || 0) * 0.5 + G.shakeV.x * 0.4);
-  // camera looks toward -z at yaw 0; our convention yaw 0 = front (-z)
-  _e.y = V.yaw;
+  // Euler YXZ: yaw about +Y (positive = turn left, three.js convention), then pitch about +X
+  // (positive = look up). Camera looks down -z at yaw 0 = toward the cab.
+  _e.set(V.pitch + Math.sin(V.breath * 0.5) * 0.004, V.yaw + (V.tilt || 0) * 0.3, (G.rockAngle || 0) * 0.5 + G.shakeV.x * 0.4);
   _q.setFromEuler(_e);
   camera.quaternion.copy(cam.quaternion).multiply(_q);
   camera.fov = V.fov; camera.updateProjectionMatrix();

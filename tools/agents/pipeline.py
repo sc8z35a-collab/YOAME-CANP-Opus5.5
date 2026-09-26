@@ -160,7 +160,13 @@ def a_architect():
             tgt = (p.parent / m.group(1)).resolve()
             if not tgt.exists(): f["imports"].append(f"{p.relative_to(ROOT)} -> {m.group(1)} missing")
     f["modules"] = [str(p.relative_to(ROOT)) for p in js_files()]
-    f["ok"] = not f["syntax"] and not f["imports"]
+    # named import/export cross-check + logic & viewpoint tests (node, no WebGL)
+    for name, cmd in [("exports", ["node", "tools/agents/check_exports.mjs"]),
+                      ("logic", ["node", "tools/agents/logic_test.mjs"]),
+                      ("views", ["node", "tools/agents/view_test.mjs"])]:
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        f[name] = {"ok": r.returncode == 0, "fails": [l for l in r.stdout.splitlines() if l.startswith("FAIL") or "not exported" in l]}
+    f["ok"] = not f["syntax"] and not f["imports"] and all(f[k]["ok"] for k in ("exports", "logic", "views"))
     return f
 
 def a_assets():
