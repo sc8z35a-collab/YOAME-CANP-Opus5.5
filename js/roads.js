@@ -15,14 +15,14 @@ const DEF = [
   { id: 'west', name: '西の橋ルート', pts: [[8, 60], [-2, 61], [-12, 62], [-24, 63], [-36, 70], [-48, 84], [-62, 96], [-80, 100], [-96, 88], [-110, 72], [-130, 74], [-152, 86]], bridge: [1, 3] },
   { id: 'ford', name: '浅瀬の渡し', pts: [[5, -135], [-8, -124], [-18, -121], [-32, -120], [-52, -133], [-78, -140], [-100, -126], [-120, -110], [-142, -118]] },
   { id: 'ridgeW', name: '西尾根道', pts: [[-110, 72], [-104, 42], [-112, 4], [-105, -36], [-113, -78], [-120, -110]] },
-  { id: 'traverse', name: '中腹トラバース', pts: [[50, -6], [58, 18], [52, 50], [58, 82], [48, 112], [32, 146]] },
   { id: 'north', name: '北の森道', pts: [[9, 140], [32, 146], [52, 140], [72, 154], [92, 168]] },
+  { id: 'traverse', name: '中腹トラバース', pts: [[50, -6], [58, 18], [52, 50], [58, 82], [48, 112], [32, 146]] },
   { id: 'south', name: '南の伐採道', pts: [[10, -170], [30, -176], [54, -166], [76, -180], [98, -170]] },
 ];
 
 // Destinations (snapped to the nearest road sample; the pad is flattened there).
 const DEST = [
-  ['hollow', '沢沿いの窪地', 0, 0, 'キャンプ地。風雨を避けられる / 増水に弱い'],
+  ['hollow', '沢沿いの窪地', 0, 0, 'キャンプ地。風雨を避けられる / 増水に弱い', 'flip'],
   ['ridge', '林道脇の高台', 58, -40, '水は来ない / 土砂崩れ・倒木に注意'],
   ['creekS', '沢の南ほとり', 5, -65, 'せせらぎが近い。雨の日は増水注意'],
   ['creekN', '沢の北ほとり', 2, 25, '窪地のすぐ北。朝はシカが来る'],
@@ -72,9 +72,9 @@ function resample(pts) {
   return { s: c.getSpacedPoints(n).map(p => ({ x: p.x, z: p.z })), ctrlS };
 }
 
-function limitGrade(h, pinned) {
-  const n = h.length, g = GRADE_MAX * STEP * 0.97;
-  for (let it = 0; it < 6; it++) {
+function limitGrade(h, pinned, grade = GRADE_MAX) {
+  const n = h.length, g = grade * STEP * 0.97;
+  for (let it = 0; it < 30; it++) {
     for (let i = 1; i < n; i++) if (!pinned[i]) h[i] = clamp(h[i], h[i - 1] - g, h[i - 1] + g);
     for (let i = n - 2; i >= 0; i--) if (!pinned[i]) h[i] = clamp(h[i], h[i + 1] - g, h[i + 1] + g);
   }
@@ -113,15 +113,16 @@ for (const d of DEF) {
     for (let i = 1; i < n - 1; i++) if (!pinned[i]) nh[i] = (h[i - 1] + 2 * h[i] + h[i + 1]) / 4;
     h = nh;
   }
+  limitGrade(h, pinned, GRADE_MAX * 0.7); // leave slack so the flat pads below stay feasible
   // bridge span: straight deck between the bank samples
   if (d.bridge) {
     const a = ctrlS[d.bridge[0]], b = ctrlS[d.bridge[1]];
-    const ha = Math.max(h[a], rawHeight(s[a].x, s[a].z)), hb = Math.max(h[b], rawHeight(s[b].x, s[b].z)), top = Math.max(ha, hb, 0.2);
+    const top = Math.max(h[a], h[b], rawHeight(s[a].x, s[a].z), rawHeight(s[b].x, s[b].z), 0.2);
     for (let i = a; i <= b; i++) { h[i] = top; pinned[i] = true; s[i].bridge = true; }
     road.bridge = [a, b];
   }
-  // pads: flatten ±4 samples around the pad
-  for (const [, i] of pads) { const ph = h[i]; for (let k = -4; k <= 4; k++) if (h[i + k] !== undefined && !pinned[i + k]) { h[i + k] = ph; pinned[i + k] = true; } }
+  // pads: flatten ±4 samples around the pad (height taken from the already graded profile)
+  for (const [, i] of pads) { const ph = h[i]; for (let k = -3; k <= 3; k++) if (h[i + k] !== undefined && !pinned[i + k]) h[i + k] = ph; if (!pinned[i]) pinned[i] = true; }
   limitGrade(h, pinned);
   s.forEach((p, i) => { p.h = h[i]; p.fill = h[i] - rawHeight(p.x, p.z); });
   // arc length
@@ -133,7 +134,7 @@ for (const d of DEF) {
   road.joins = joins;
   for (const [id, i] of pads) {
     const def = DEST.find(x => x[0] === id), a = s[Math.max(0, i - 2)], b = s[Math.min(n - 1, i + 2)];
-    DESTS[id] = { id, name: def[1], desc: def[4], x: s[i].x, z: s[i].z, h: s[i].h, rot: Math.atan2(-(b.x - a.x), -(b.z - a.z)), road: road.id, i };
+    DESTS[id] = { id, name: def[1], desc: def[4], x: s[i].x, z: s[i].z, h: s[i].h, rot: Math.atan2(-(b.x - a.x), -(b.z - a.z)) + (def[5] === 'flip' ? Math.PI : 0), road: road.id, i };
   }
 }
 
