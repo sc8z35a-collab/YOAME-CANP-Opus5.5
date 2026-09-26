@@ -69,7 +69,7 @@ export function buildUI() {
       <div class="row"><span>天気</span><div id="wxBtns"></div></div>
       <div class="row"><span>時間</span><div><button data-touch class="chip" data-t="-3">−3h</button><button data-touch class="chip" data-t="3">+3h</button><button data-touch class="chip" id="ff">早送り</button></div></div>
       <div class="row"><span>イベント</span><div id="evBtns"></div></div>
-      <div class="row"><span>画質</span><div><button data-touch class="chip" data-q="h">最高</button><button data-touch class="chip" data-q="m">軽量</button></div></div>
+      <div class="row"><span>画質</span><div><button data-touch class="chip" data-q="u">ウルトラ</button><button data-touch class="chip" data-q="h">高</button><button data-touch class="chip" data-q="m">軽量</button></div></div>
       <button data-touch class="chip wide" id="closeMenu">閉じる</button>
     </div>
   </div>
@@ -92,7 +92,7 @@ export function buildUI() {
     const b = h('button', { className: 'chip' }, l); b.dataset.touch = 1; b.onclick = () => { triggerEvent(k); $('#menu').classList.add('hidden'); }; ev.appendChild(b);
   }
   root.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { G.hour = (G.hour + parseFloat(b.dataset.t) + 24) % 24; });
-  root.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const u = new URL(location); u.searchParams.set('q', b.dataset.q); location = u; });
+  root.querySelectorAll('[data-q]').forEach(b => { b.classList.toggle('on', b.dataset.q === G.quality); b.onclick = () => { try { localStorage.setItem('fc3d_q', b.dataset.q); } catch (e) {} const u = new URL(location); u.searchParams.delete('q'); location = u; }; });
   $('#ff').onclick = () => { G.timeMul = G.timeMul > 1 ? 1 : 30; $('#ff').classList.toggle('on', G.timeMul > 1); };
   $('#menuBtn').onclick = () => { initAudio(); $('#menu').classList.toggle('hidden'); };
   $('#closeMenu').onclick = () => $('#menu').classList.add('hidden');

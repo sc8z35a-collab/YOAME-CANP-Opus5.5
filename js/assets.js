@@ -11,7 +11,7 @@ const GL = new GLTFLoader(manager);
 const texCache = new Map();
 const glbCache = new Map();
 
-const dir = () => (G.quality === 'm' ? 'assets/tex_m/' : 'assets/tex/');
+const dir = () => ({ m: 'assets/tex_m/', u: 'assets/tex/' }[G.quality] || 'assets/tex_h/');
 let maxAniso = 8;
 export function setAniso(n) { maxAniso = n; }
 

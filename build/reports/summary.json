@@ -1,13 +1,5 @@
 {
- "architect": {
-  "ok": true,
-  "s": 7.7
- },
  "assets": {
-  "ok": true,
-  "s": 0.1
- },
- "reviewer": {
   "ok": true,
   "s": 0.0
  }

@@ -180,9 +180,11 @@ def a_assets():
         tex_names |= set(re.findall(r"""tex\(\s*['"]([\w\-]+)['"]""", p.read_text()))
     for r in sorted(refs):
         if not (ROOT / r).exists(): f["missing"].append(r)
+    # every referenced texture must exist in ALL three quality tiers
     for n in sorted(tex_names):
-        if not list((ROOT / "assets/tex").glob(n + "*")): f["missing"].append("tex:" + n)
-    for d in ("models", "tex", "tex_m"):
+        for tier in ("tex", "tex_h", "tex_m"):
+            if not (ROOT / "assets" / tier / (n + ".jpg")).exists(): f["missing"].append(f"{tier}:{n}")
+    for d in ("models", "tex", "tex_h", "tex_m"):
         f["bytes"][d] = sum(x.stat().st_size for x in (ROOT / "assets" / d).glob("*"))
     used_models = {Path(r).name for r in refs}
     f["unused"] = [x.name for x in (ROOT / "assets/models").glob("*.glb") if x.name not in used_models

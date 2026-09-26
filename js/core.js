@@ -20,7 +20,9 @@ export const G = {
   camper: null,                 // camper group (world transform of the vehicle)
   camperSpot: 'hollow',
   driving: false,
-  quality: P.get('q') || 'h',
+  // q: 'u' ultra (2K textures), 'h' high (1K textures, default), 'm' light (512px, cheaper FX).
+  // Persisted choice from the in-game menu wins over the default; URL ?q= wins over both.
+  quality: P.get('q') || (() => { try { return localStorage.getItem('fc3d_q'); } catch (e) { return null; } })() || 'h',
   state: {
     hull: 100, battery: 86, calm: 72,
     lightsOn: true, curtainsClosed: false, hiding: false, spotOn: false, headOn: false,

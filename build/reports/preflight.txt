@@ -1,9 +1,2 @@
 online=False
-{
- "gpt-5": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww",
- "gpt-5-mini": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww",
- "gpt-5.1": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww",
- "gpt-5.2": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww",
- "gpt-5.2-codex": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww",
- "gpt-5.3-codex": "REFUSED: Free-plan credits can't be used with the Genspark API / LLM proxy. Please visit https://ww"
-}
+forced offline
