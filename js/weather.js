@@ -81,7 +81,6 @@ function starDome() {
         gl_FragColor = vec4(vec3(0.85,0.9,1.0)*(0.5+vM*1.6), a*uNight*(1.-uCloud)*smoothstep(0.02,0.2,vY)); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
   });
-  m.depthTest = false;
   const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = -8;
   W.starMat = m;
   // milky way band + moon + cloud layer as a big sphere shader
@@ -126,8 +125,8 @@ function starDome() {
         gl_FragColor = vec4(col, clamp(a, 0., 1.)*smoothstep(-0.12, 0.02, d.y) + (d.y < 0. ? 0. : 0.));
       }`,
   });
+  // transparent => drawn after opaque geometry, so it MUST depth-test (radius 1500 < far 3000)
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), dm);
-  dm.depthTest = false;
   dome.frustumCulled = false; dome.renderOrder = -9;
   W.domeMat = dm;
   const grp = new THREE.Group(); grp.add(dome, pts);
