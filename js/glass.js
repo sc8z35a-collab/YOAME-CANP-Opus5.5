@@ -1,9 +1,8 @@
-// Window glass: physically based transmission + procedural raindrops (static + sliding),
-// condensation fog cleared by drop trails, and impact cracks. Drops refract the real scene
-// through the transmission pass.
+// Window glass: thin alpha glass + procedural raindrops (static + sliding), condensation
+// cleared by drop trails, and impact cracks. Drops bend the normal to catch env/lamp highlights.
 import { THREE, U } from './core.js';
 
-export const glassShared = { uFogGlass: { value: 0.0 }, uDirt: { value: 0.25 } };
+export const glassShared = { uFogGlass: { value: 0.0 }, uDirt: { value: 0.1 } };
 
 const GLSL = /* glsl */`
 uniform float uTime, uRain, uFogGlass, uDirt, uCrack, uFlash;
@@ -23,8 +22,9 @@ vec3 staticDrops(vec2 uv, float t, float amt){
   vec2 p = (n.xy - .5)*.7;
   float d = length(st - p);
   float life = fract(n.z*10. + t*0.08);
-  float r = mix(.08, .3, n.x*n.y) * smoothstep(1., .8, life) * step(n.z, amt);
-  float m = smoothstep(r, r*.55, d);
+  float on = step(n.z, amt) * smoothstep(1., .8, life);
+  float r = mix(.08, .3, n.x*n.y);
+  float m = smoothstep(r, r*.55, d) * on;
   vec2 off = (st - p) / max(r, 1e-3);
   return vec3(off * m, m);
 }
@@ -58,8 +58,8 @@ vec3 slideDrops(vec2 uv, float t, float amt, float scale){
   float trailFade = tr * on;
   // droplets left in the trail
   vec2 tuv = vec2(dv.x, fract((st.y)*grid.y*2.8) - .5);
-  float td = length(tuv*vec2(1., 1.));
-  float trailDrops = smoothstep(.22, .12, td) * trailFade * (1. - smoothstep(p.y, p.y + .5, st.y))*0. + smoothstep(.2,.1,td)*trailFade*.7;
+  float td = length(tuv);
+  float trailDrops = smoothstep(.2,.1,td)*trailFade*.7;
   vec2 off = dv/r * main + tuv*trailDrops*1.5;
   return vec3(off, max(main, trailDrops) + trailFade*.35);
 }
