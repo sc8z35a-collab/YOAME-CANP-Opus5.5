@@ -363,6 +363,17 @@ export function buildCamper(scene) {
   porchLamp.position.set(XW + 0.05, 2.5, 1.25); g.add(porchLamp);
   const porch = new THREE.PointLight(0xffa860, 3, 9, 1.8); porch.position.set(XW + 0.3, 2.45, 1.25);
   g.add(porch); C.porch = porch; C.emissives.push({ m: porchM, base: 2, kind: 'porch' });
+  // Window light spill: warm interior light falling out through the big windows onto the
+  // ground/undergrowth (what makes a lit camper at night read as a 'lantern in the woods',
+  // and silhouettes anything standing outside). Driven by interior light level * curtains.
+  C.spill = [];
+  for (const id of ['dinette', 'kitchen', 'rear']) {
+    const w = WINDOWS.find(x => x.id === id), L = windowLocal(w);
+    const sl = new THREE.SpotLight(0xffb070, 0, 16, 0.95, 0.9, 1.6);
+    sl.position.copy(L.p).addScaledVector(L.n, 0.05);
+    sl.target.position.copy(L.p).addScaledVector(L.n, 6); sl.target.position.y = 0;
+    g.add(sl, sl.target); C.spill.push({ l: sl, base: id === 'dinette' ? 18 : 10 });
+  }
 
   // ---------- glass
   for (const w of WINDOWS) {
@@ -700,6 +711,7 @@ export function updateCamper(dt) {
     e.m.emissiveIntensity = e.base * k;
   }
   C.porch.intensity = S.hiding ? 0 : 3 * G.night;
+  for (const sp of C.spill) sp.l.intensity = sp.base * C.lightLevel * (1 - C.curtainLevel * 0.85) * (0.25 + 0.75 * G.night);
   // spotlight & headlights
   C.spot.intensity = S.spotOn ? 900 : 0;
   const hk = S.headOn || G.driving ? 1 : 0;
