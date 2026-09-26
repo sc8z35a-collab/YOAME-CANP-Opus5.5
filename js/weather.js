@@ -27,8 +27,11 @@ export function setWeather(mode, instant = false) {
 
 export function buildWeather(scene, renderer) {
   // --- sky
-  const sky = new Sky(); sky.scale.setScalar(4500);
-  sky.material.depthWrite = false;
+  // Sky & overlay dome live well inside the far plane (3000) and follow the camera, so the
+  // horizon never clips into a visible circle. They are drawn first without depth.
+  const sky = new Sky(); sky.scale.setScalar(1800);
+  sky.material.depthWrite = false; sky.material.depthTest = false; sky.renderOrder = -10;
+  sky.frustumCulled = false;
   scene.add(sky); W.sky = sky;
   const su = sky.material.uniforms;
   su.turbidity.value = 6; su.rayleigh.value = 1.4; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.86;
@@ -71,14 +74,15 @@ function starDome() {
   const m = new THREE.ShaderMaterial({
     uniforms: { uNight: { value: 0 }, uCloud: { value: 0 }, uTime: U.uTime },
     vertexShader: `attribute float mag; varying float vM; varying float vY; uniform float uTime;
-      void main(){ vM = mag; vY = position.y; vec4 p = modelViewMatrix*vec4(position*3000., 1.);
+      void main(){ vM = mag; vY = position.y; vec4 p = modelViewMatrix*vec4(position*1400., 1.);
         gl_Position = projectionMatrix*p; gl_PointSize = (1.2 + mag*3.2) * (0.8 + 0.2*sin(uTime*3.0 + position.x*400.)); }`,
     fragmentShader: `varying float vM; varying float vY; uniform float uNight, uCloud;
       void main(){ float d = length(gl_PointCoord-0.5); float a = smoothstep(.5, .0, d);
         gl_FragColor = vec4(vec3(0.85,0.9,1.0)*(0.5+vM*1.6), a*uNight*(1.-uCloud)*smoothstep(0.02,0.2,vY)); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
   });
-  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = -1;
+  m.depthTest = false;
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = -8;
   W.starMat = m;
   // milky way band + moon + cloud layer as a big sphere shader
   const dm = new THREE.ShaderMaterial({
@@ -122,8 +126,9 @@ function starDome() {
         gl_FragColor = vec4(col, clamp(a, 0., 1.)*smoothstep(-0.12, 0.02, d.y) + (d.y < 0. ? 0. : 0.));
       }`,
   });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(3500, 48, 24), dm);
-  dome.frustumCulled = false; dome.renderOrder = -2;
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), dm);
+  dm.depthTest = false;
+  dome.frustumCulled = false; dome.renderOrder = -9;
   W.domeMat = dm;
   const grp = new THREE.Group(); grp.add(dome, pts);
   return grp;
@@ -343,6 +348,8 @@ export function updateWeather(dt, camera) {
   W.domeMat.uniforms.uCloudCol.value.copy(tmpC);
   W.starMat.uniforms.uNight.value = G.night; W.starMat.uniforms.uCloud.value = G.cloud;
 
+  // sky follows the eye (infinite-distance look, no parallax / clipping)
+  camera.getWorldPosition(W.sky.position); W.dome.position.copy(W.sky.position);
   // lights
   const c = G.camper ? G.camper.position : new THREE.Vector3();
   const moonUp = moonDir.y > 0 ? 1 : 0;
