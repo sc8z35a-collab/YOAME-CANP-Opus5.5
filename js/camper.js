@@ -215,7 +215,9 @@ export function buildCamper(scene) {
   const leather = pbr('leather_white', { color: 0x7a4a2a, repeat: 1, normalScale: 0.6 });
   const linen = pbr('rough_linen', { arm: false, color: 0xf4eee3, repeat: 1.5 });
   const fleece = pbr('knitted_fleece', { arm: false, color: 0xb8433a, repeat: 2 });
-  const tile = pbr('square_tiled_wall', { color: 0x9fb8b0, repeat: 1 });
+  // backsplash: pastel sage tiles at real ~10cm scale (0.33m wide panel -> repeat set on the mesh UVs)
+  const tile = pbr('square_tiled_wall', { color: 0xc9ddd2, repeat: 1, rough: 0.35 });
+  for (const t of [tile.map, tile.normalMap, tile.aoMap]) t.repeat.set(2.2, 0.7);
   const steel = pbr('metal_plate', { metal: 1, color: 0xd8dde0, rough: 0.5, repeat: 0.5 });
   const darkPlastic = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.6 });
   const dashM = new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.75 });
@@ -506,7 +508,7 @@ function buildInterior(I, M) {
   string(new THREE.Vector3(-1.02, 2.4, 2.15), new THREE.Vector3(-1.02, 2.3, 3.0), 10, 0.04);
   string(new THREE.Vector3(1.02, 2.4, 2.15), new THREE.Vector3(1.02, 2.3, 3.0), 10, 0.04);
   const fairyM = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffa040, emissiveIntensity: 2.6, toneMapped: true });
-  const fairy = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012, 8, 6), fairyM, pts.length);
+  const fairy = new THREE.InstancedMesh(new THREE.SphereGeometry(0.008, 10, 8), fairyM, pts.length);
   const d = new THREE.Object3D();
   pts.forEach((p, i) => { d.position.copy(p); d.updateMatrix(); fairy.setMatrixAt(i, d.matrix); });
   add(fairy); C.fairy = fairy; C.emissives.push({ m: fairyM, base: 2.6, kind: 'fairy' });
