@@ -93,8 +93,11 @@ export const BRIDGES = [];
 for (const r of ROADS) if (r.bridge) {
   const [a, b] = r.bridge; BRIDGES.push({ r, a: Math.max(0, a - 1), b: Math.min(r.s.length - 1, b + 1) });
 }
+for (const B of BRIDGES) { const s = B.r.s.slice(B.a, B.b + 1); B.box = [Math.min(...s.map(p => p.x)) - 4, Math.min(...s.map(p => p.z)) - 4, Math.max(...s.map(p => p.x)) + 4, Math.max(...s.map(p => p.z)) + 4]; }
 function deckAt(x, z) {
-  if (!BRIDGES.length) return -1e9;
+  let inBox = false;
+  for (const B of BRIDGES) if (x > B.box[0] && x < B.box[2] && z > B.box[1] && z < B.box[3]) inBox = true;
+  if (!inBox) return -1e9;
   const q = roadQuery(x, z);
   if (!q.road || !q.bridge || q.d > ROAD_HALF - 0.4) return -1e9;
   return q.h + 0.18;
