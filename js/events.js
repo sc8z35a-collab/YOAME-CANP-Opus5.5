@@ -273,8 +273,9 @@ export function triggerEvent(name) {
     return { wp, face };
   };
   if (name === 'bear' && P.has('qa')) {
-    spawnBear('prowl'); const b = Z.bear; const { wp, face } = stage(7.5, 0.6);
-    b.pos.copy(wp); b.heading = face + 0.5; b.obj.rotation.y = b.heading; b.rear = 0.85; b.state = 'sniff'; b.t = 0; return;
+    // bear reared up right outside the window, nose toward the glass (camper-exclusion clamps it to the wall)
+    spawnBear('prowl'); const b = Z.bear; const { wp, face } = stage(3.0, 0.15);
+    b.pos.copy(wp); b.heading = face; b.obj.rotation.y = b.heading; b.rear = 1; b.state = 'sniff'; b.t = 0; b.qaHold = true; return;
   }
   if (name === 'deer' && P.has('qa')) {
     spawnDeer();

@@ -242,8 +242,8 @@ export function updateAnimals(dt) {
       else if (b.aggro > 0.75 || b.t > 60 && b.aggro > 0.45) { b.state = 'charge'; bus.emit('bearcharge'); }
       if (b.t > 70 && b.aggro < 0.3) { b.state = 'leave'; }
     } else if (b.state === 'sniff') {
-      b.steer(dt, c.x + 1.8, c.z - 1.0, 0.6);
-      b.rear += ((dist < 4 ? 1 : 0) - b.rear) * dt * 1.5;
+      if (!b.qaHold) b.steer(dt, c.x + 1.8, c.z - 1.0, 0.6);
+      if (!b.qaHold) b.rear += ((dist < 4 ? 1 : 0) - b.rear) * dt * 1.5;
       if (G.state.hiding) b.aggro = Math.max(0, b.aggro - dt * 0.06);
       if (b.t > 16) { b.state = b.aggro > 0.5 ? 'charge' : 'prowl'; b.t = 30; if (b.state === 'charge') bus.emit('bearcharge'); }
     } else if (b.state === 'charge') {
