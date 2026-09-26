@@ -101,6 +101,7 @@ class Bear extends Animal {
     const obj = fitModel(root, 1.15, Math.PI / 2);
     super('bear', obj, { radius: 0.9, gaitRef: 1.2 });
     this.body = obj.children[0];
+    this.baseY = this.body.position.y; this.baseYaw = this.body.rotation.y; // keep fitModel foot offset / facing
     // fur tint, subtle sheen
     root.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.roughness = 0.95; o.material.color?.multiplyScalar(0.55); } });
     this.phase = 0; this.rear = 0; this.aggro = 0; this.hitCd = 0;
@@ -114,10 +115,10 @@ class Bear extends Animal {
   anim(dt) {
     this.phase += dt * (1.5 + this.speed * 3.2);
     const gait = clamp(this.speed / 2.5);
-    this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.06 * gait + this.rear * 0.55;
+    this.body.position.y = this.baseY + Math.abs(Math.sin(this.phase)) * 0.06 * gait + this.rear * 0.55;
     this.body.rotation.z = Math.sin(this.phase) * 0.04 * gait;
     this.body.rotation.x = -this.rear * 0.9 + Math.sin(this.phase * 2) * 0.02 * gait;
-    this.body.rotation.y = Math.PI / 2 + Math.sin(this.phase * 0.5) * 0.05;
+    this.body.rotation.y = this.baseYaw + Math.sin(this.phase * 0.5) * 0.05;
   }
 }
 
@@ -134,7 +135,8 @@ export async function buildAnimals(scene) {
   const fr = fawn.scene.clone(true);
   const fObj = fitModel(fr, 0.95, 0);
   const f = new Animal('fawn', fObj, { radius: 0.35, gaitRef: 1 });
-  f.anim = function (dt) { this.ph = (this.ph || 0) + dt * (2 + this.speed * 5); fObj.children[0].position.y = Math.abs(Math.sin(this.ph)) * 0.05 * clamp(this.speed); };
+  const fBase = fObj.children[0].position.y;
+  f.anim = function (dt) { this.ph = (this.ph || 0) + dt * (2 + this.speed * 5); fObj.children[0].position.y = fBase + Math.abs(Math.sin(this.ph)) * 0.05 * clamp(this.speed); };
   scene.add(fObj); animals.push(f); Z.fawns.push(f);
   Z.bear = new Bear(bear); scene.add(Z.bear.obj); animals.push(Z.bear);
   for (let i = 0; i < 3; i++) {
