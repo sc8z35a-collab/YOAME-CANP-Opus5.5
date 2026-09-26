@@ -577,12 +577,12 @@ function buildInterior(I, M) {
   }
 
   // ---- ceiling lamp & interior lights ----
-  const domeM = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 0.9 });
+  const domeM = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 0.45, roughness: 0.6 });
   for (const z of [-2.0, 0.9]) {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeM);
     dome.rotation.x = Math.PI; dome.position.set(0, CEIL, z); add(dome);
   }
-  C.emissives.push({ m: domeM, base: 0.9, kind: 'dome' });
+  C.emissives.push({ m: domeM, base: 0.45, kind: 'dome' });
   const main = new THREE.PointLight(0xffc88a, 1.8, 7, 1.6); main.position.set(0, CEIL - 0.2, -1.0);
     const bedL = new THREE.PointLight(0xffb070, 1.2, 4, 1.8); bedL.position.set(0.3, 2.35, 2.2);
   const cabL = new THREE.PointLight(0xffbb80, 0.5, 3, 2); cabL.position.set(0, 2.05, -3.3);

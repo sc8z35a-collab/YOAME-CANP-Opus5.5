@@ -13,7 +13,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .bar i{font-style:normal;font-size:14px}
 .bar b{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,#8fd18a,#e9f5b0);transition:width .4s;box-shadow:0 0 8px rgba(180,255,160,.35)}
 .bar b.low{background:linear-gradient(90deg,#ff5b3a,#ffb05e);box-shadow:0 0 10px rgba(255,90,60,.6)}
-#spot{margin-left:auto;font-size:12px;opacity:.75;white-space:nowrap}
+#spot{margin-left:auto;font-size:12px;white-space:nowrap;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;padding:5px 10px}
 .round{width:44px;height:44px;border-radius:50%;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);font-size:20px}
 #views{position:absolute;left:calc(10px + var(--safe-l));top:62px;display:flex;flex-direction:column;gap:6px}
 .vbtn{min-width:78px;height:44px;border-radius:12px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:13px;padding:0 10px;transition:.2s}
