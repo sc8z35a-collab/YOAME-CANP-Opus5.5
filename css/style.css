@@ -32,7 +32,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .toast.show{opacity:1;transform:none}
 .toast.warn{border-color:rgba(255,190,90,.6)}
 .toast.danger{border-color:rgba(255,90,60,.8);background:rgba(60,10,6,.7);font-weight:700}
-#menu,#drivePanel,#over{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);pointer-events:auto}
+#menu,#drivePanel,#over,#intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);pointer-events:auto}
 .hidden{display:none!important}
 .panel{background:rgba(16,20,18,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:20px;padding:16px 20px;max-height:92vh;overflow:auto;min-width:340px;max-width:80vw}
 .panel h2,.panel h3{margin:0 0 10px;font-size:18px;color:var(--amber)}
@@ -51,3 +51,8 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #rotate{display:none;position:fixed;inset:0;z-index:20;background:#050807;align-items:center;justify-content:center;text-align:center;font-size:22px;line-height:1.8}
 @media (orientation:portrait){#rotate{display:flex}}
 @media (max-height:380px){#actions{grid-template-columns:repeat(5,54px)}.abtn{width:54px;height:54px}.vbtn{height:40px;min-width:70px}#views{gap:4px;top:56px}}
+.intro{max-width:min(78vw,620px)}
+.intro p{margin:0 0 8px;line-height:1.6;opacity:.9}
+.intro ul{margin:0;padding-left:1.1em;font-size:13px;line-height:1.7}
+.intro b{color:#ffd9a0}
+#intro{z-index:15;background:rgba(0,0,0,.5)}

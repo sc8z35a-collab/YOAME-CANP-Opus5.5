@@ -189,7 +189,10 @@ async function init() {
   renderer.compile(scene, camera);
   loadEl.classList.add('done');
   setTimeout(() => loadEl.remove(), 1200);
-  if (!QA) toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
+  if (!QA) {
+    let seen = false; try { seen = localStorage.getItem('fc3d_intro') === '1'; } catch (e) {}
+    if (!seen) showIntro(); else toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
+  }
   // first gesture: audio + fullscreen landscape lock
   const first = async () => {
     initAudio();
@@ -251,6 +254,26 @@ function loop(now) {
   if (QA && ++qaFrames === (parseInt(P.get('frames')) || 6)) { window.__QA.ready = true; try { window.__QA.shot = canvas.toDataURL('image/jpeg', 0.9); } catch (e) { window.__QA.shotErr = String(e); }
     window.__QA.cam = camera.position.toArray().map(v => +v.toFixed(2)).concat(G.camper.position.toArray().map(v => +v.toFixed(2))); window.__QA.exp = renderer.toneMappingExposure; window.__QA.fogD = scene.fog.density; window.__QA.info = renderer.info.render;
     window.__QA.state = { ...G.state, hour: G.hour, weather: W.mode, water: G.waterLevel }; }
+}
+function showIntro() {
+  const el = document.getElementById('intro');
+  el.innerHTML = `<div class="panel intro">
+    <h2>森の奥のキャンプカー</h2>
+    <p>林道の先、沢沿いの窪地に車を停めた。<br>雨の音を聞きながら、夜を越えよう。</p>
+    <ul>
+      <li><b>ドラッグ</b>で見回す／<b>ピンチ</b>で窓の外を覗く</li>
+      <li>左のボタンで<b>席を移動</b>（ソファ・運転席・ベッド…）</li>
+      <li>夜は<b>クマ</b>が来る。料理の匂いと明かりに注意。<b>息をひそめる</b>か<b>投光器・クラクション</b>で追い払う</li>
+      <li>長雨は<b>洪水</b>・<b>土砂崩れ</b>を呼ぶ。窪地は水に弱く、高台は土砂に弱い。<b>🚐移動</b>で避難</li>
+      <li>🛻車体が0になったら終わり。🔋電気は太陽と発電機で回復</li>
+    </ul>
+    <button data-touch class="chip wide" id="introGo">はじめる</button></div>`;
+  el.classList.remove('hidden');
+  document.getElementById('introGo').onclick = () => {
+    el.classList.add('hidden');
+    try { localStorage.setItem('fc3d_intro', '1'); } catch (e) {}
+    toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
+  };
 }
 function VIEWS_out() { return V.cur === 'outside'; }
 
