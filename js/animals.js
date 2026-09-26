@@ -98,7 +98,9 @@ class Skinned extends Animal {
 class Bear extends Animal {
   constructor(gltf) {
     const root = gltf.scene.clone(true);
-    const obj = fitModel(root, 1.15, Math.PI / 2);
+    // GLB analysis: long axis = +z and the narrow snout end is +z, so the model already faces +z
+    // (our movement forward). No yaw offset. Shoulder height ~1.0m => overall ~1.15m incl. head.
+    const obj = fitModel(root, 1.15, 0);
     super('bear', obj, { radius: 0.9, gaitRef: 1.2 });
     this.body = obj.children[0];
     this.baseY = this.body.position.y; this.baseYaw = this.body.rotation.y; // keep fitModel foot offset / facing
@@ -109,8 +111,13 @@ class Bear extends Animal {
     const em = new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0 });
     const eg = new THREE.SphereGeometry(0.025, 6, 4);
     this.eyes = [new THREE.Mesh(eg, em), new THREE.Mesh(eg, em)];
-    this.eyes[0].position.set(-0.09, 0.92, 0.85); this.eyes[1].position.set(0.09, 0.92, 0.85);
-    obj.add(...this.eyes); this.eyeMat = em;
+    // place eyes from the fitted bounds: near the front (snout) end, ~80% height
+    obj.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3());
+    const ez = bb.max.z - sz.z * 0.1, ey = bb.min.y + sz.y * 0.8;
+    this.eyes[0].position.set(-sz.x * 0.09, ey, ez); this.eyes[1].position.set(sz.x * 0.09, ey, ez);
+    this.body.add(...this.eyes.map(e => { e.position.applyMatrix4(this.body.matrix.clone().invert()); return e; }));
+    this.eyeMat = em;
   }
   anim(dt) {
     this.phase += dt * (1.5 + this.speed * 3.2);
