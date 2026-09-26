@@ -32,6 +32,12 @@ REPORTS = ROOT / "build" / "reports"
 SHOTS = ROOT / "build" / "shots"
 PORT = 8123
 GPU = threading.Semaphore(1)          # headless chromium (swiftshader) is heavy
+import fcntl
+class _FileLock:
+    def __enter__(self):
+        self.f = open('/tmp/qa_browser.lock', 'w'); fcntl.flock(self.f, fcntl.LOCK_EX)
+    def __exit__(self, *a): fcntl.flock(self.f, fcntl.LOCK_UN); self.f.close()
+FLOCK = _FileLock()
 LOCK = threading.Lock()
 
 AGENT_MODELS = {
@@ -109,11 +115,11 @@ def start_server():
 def js_files():
     return sorted(p for p in (ROOT / "js").rglob("*.js") if "/lib/" not in str(p))
 
-def browser_run(url, out, w, h, wait_s=90, dpr=1, touch=True, extra_js=None):
+def browser_run(url, out, w, h, wait_s=300, dpr=1, touch=True, extra_js=None):
     """Load url in headless chromium, wait for window.__QA.ready, screenshot."""
     from playwright.sync_api import sync_playwright
     logs, errs, qa = [], [], {}
-    with GPU, sync_playwright() as p:
+    with GPU, FLOCK, sync_playwright() as p:
         b = p.chromium.launch(args=["--use-gl=angle", "--use-angle=swiftshader",
                                     "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist",
                                     "--autoplay-policy=no-user-gesture-required"])
@@ -131,9 +137,16 @@ def browser_run(url, out, w, h, wait_s=90, dpr=1, touch=True, extra_js=None):
             try: pg.evaluate(extra_js)
             except Exception as e: errs.append("extra_js: " + str(e)[:200])
         time.sleep(1.0)
-        try: qa = pg.evaluate("JSON.parse(JSON.stringify(window.__QA||{}))")
+        try: qa = pg.evaluate("JSON.parse(JSON.stringify(Object.assign({}, window.__QA||{}, {shot: undefined})))")
         except Exception: pass
-        pg.screenshot(path=str(out))
+        # canvas capture (page.screenshot hangs under swiftshader with a live WebGL loop)
+        try:
+            import base64
+            d = pg.evaluate("window.__QA && window.__QA.shot || ''")
+            if d: Path(str(out).replace('.png', '.jpg')).write_bytes(base64.b64decode(d.split(',')[1]))
+        except Exception as e: errs.append("canvas: " + str(e)[:120])
+        try: pg.screenshot(path=str(out).replace('.png', '_ui.png'), timeout=45000)  # DOM/HUD layer (loop frozen)
+        except Exception as e: errs.append("ui: " + str(e)[:80])
         b.close()
     return {"logs": logs[-40:], "errors": errs, "qa": qa}
 
