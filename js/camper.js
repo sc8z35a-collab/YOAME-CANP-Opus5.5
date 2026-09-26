@@ -264,7 +264,11 @@ export function buildCamper(scene) {
   inner.add(bb(-XW + 0.02, FLOOR - 0.04, ZF + 0.02, XW - 0.02, FLOOR, ZB - 0.02, floorM, 0.005));
   g.add(bb(-XW + 0.05, 0.42, ZF + 0.2, XW - 0.05, 0.58, ZB - 0.1, darkPlastic, 0.02));
   // rounded front cap edges & roof trims
-  g.add(bb(-XW - 0.01, ROOF - 0.02, ZF - 0.04, XW + 0.01, ROOF + 0.04, ZB + 0.02, paint, 0.03));
+  // (perimeter only: a full-roof slab here used to plug both skylights from above)
+  const TR = 0.09;
+  g.add(bb(-XW - 0.01, ROOF - 0.02, ZF - 0.04, XW + 0.01, ROOF + 0.04, ZF + TR, paint, 0.03));
+  g.add(bb(-XW - 0.01, ROOF - 0.02, ZB - TR, XW + 0.01, ROOF + 0.04, ZB + 0.02, paint, 0.03));
+  for (const s of [-1, 1]) g.add(bb(s < 0 ? -XW - 0.01 : XW - TR, ROOF - 0.02, ZF, s < 0 ? -XW + TR : XW + 0.01, ROOF + 0.04, ZB, paint, 0.03));
   // cab-over nose: rounded bulge above the windshield gives the classic motorhome silhouette
   const nose = rbox(2.36, 0.62, 0.7, paint, 0, 2.58, ZF - 0.28, 0.24, 5);
   g.add(nose);
