@@ -254,8 +254,11 @@ const lastRun = {};
 export function buildEvents(scene) {
   buildSlide(scene); buildFallingTree(scene);
   const forced = P.get('event');
-  if (forced) setTimeout(() => triggerEvent(forced), P.has('qa') ? 200 : 3000);
+  // QA: trigger synchronously after init (main.js calls startForcedEvent) so it is always in frame 1.
+  if (forced && !P.has('qa')) setTimeout(() => triggerEvent(forced), 3000);
 }
+
+export function startForcedEvent() { const f = P.get('event'); if (f && P.has('qa')) triggerEvent(f); }
 
 export function triggerEvent(name) {
   const e = EVENTS[name] || { run: { deer: spawnDeer }[name] };

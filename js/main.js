@@ -6,7 +6,7 @@ import { buildForest, camp, updateForest } from './forest.js';
 import { buildCamper, updateCamper, C } from './camper.js';
 import { buildWeather, updateWeather, W } from './weather.js';
 import { buildAnimals, updateAnimals, Z } from './animals.js';
-import { buildEvents, updateEvents, E } from './events.js';
+import { buildEvents, updateEvents, E, startForcedEvent } from './events.js';
 import { initView, updateView, V } from './view.js';
 import { buildUI, updateUI, toast } from './ui.js';
 import { initAudio, updateAudio, sfx } from './audio.js';
@@ -180,6 +180,8 @@ async function init() {
   await buildAnimals(scene);
   buildEvents(scene);
   initView(canvas);
+  C.group.updateMatrixWorld(true);
+  startForcedEvent(); // after camper placement + view (staging uses both)
   if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
   buildUI();
   resize();
