@@ -12,15 +12,23 @@ export const WATER_BASE = -1.55;
 
 export function creekX(z) { return -14 + 6 * Math.sin(z * 0.028) + 3 * Math.sin(z * 0.071 + 1.3); }
 
-// Dirt track from hollow to ridge (polyline)
+// Dirt forest road from hollow to ridge: a switchback polyline with its own smooth road-bed
+// profile (cut & fill), so the grade stays drivable regardless of the raw noise terrain.
 export const TRACK = [];
-for (let i = 0; i <= 40; i++) {
-  const t = i / 40;
-  const x = lerp(SPOTS.hollow.x + 3, SPOTS.ridge.x, t) + Math.sin(t * Math.PI * 2) * 9;
-  const z = lerp(SPOTS.hollow.z - 8, SPOTS.ridge.z + 4, t) + Math.sin(t * Math.PI) * -10;
-  TRACK.push(new THREE.Vector2(x, z));
+{
+  // two hairpin switchbacks climbing the east slope, then a traverse to the ridge pad
+  const ctrl = [[3, -8], [10, -18], [8, -34], [18, -44], [34, -40], [44, -26], [40, -12], [50, -6], [62, -14], [66, -28], [58, -36]];
+  const curve = new THREE.CatmullRomCurve3(ctrl.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+  for (const p of curve.getSpacedPoints(110)) TRACK.push(new THREE.Vector2(p.x, p.z));
 }
+const TRACK_S = [0];       // cumulative arc length per vertex
+for (let i = 1; i < TRACK.length; i++) TRACK_S.push(TRACK_S[i - 1] + TRACK[i].distanceTo(TRACK[i - 1]));
+const TRACK_LEN = TRACK_S[TRACK_S.length - 1];
+let TRACK_H = null;        // road-bed height per vertex (filled after pads are known)
+
 const _p = new THREE.Vector2();
+/** distance to road centreline; also writes arc position into trackHit.s */
+export const trackHit = { s: 0, i: 0 };
 export function trackDist(x, z) {
   let d = 1e9; _p.set(x, z);
   for (let i = 0; i < TRACK.length - 1; i++) {
@@ -28,10 +36,18 @@ export function trackDist(x, z) {
     const abx = b.x - a.x, abz = b.y - a.y;
     const t = clamp(((x - a.x) * abx + (z - a.y) * abz) / (abx * abx + abz * abz));
     const dx = x - (a.x + abx * t), dz = z - (a.y + abz * t);
-    d = Math.min(d, Math.hypot(dx, dz));
+    const dd = Math.hypot(dx, dz);
+    if (dd < d) { d = dd; trackHit.s = TRACK_S[i] + (TRACK_S[i + 1] - TRACK_S[i]) * t; trackHit.i = i; }
   }
   return d;
 }
+function roadBed(s) {
+  const n = TRACK_S.length - 1;
+  let i = 0; while (i < n - 1 && TRACK_S[i + 1] < s) i++;
+  const t = clamp((s - TRACK_S[i]) / (TRACK_S[i + 1] - TRACK_S[i]));
+  return lerp(TRACK_H[i], TRACK_H[i + 1], t);
+}
+export function trackLength() { return TRACK_LEN; }
 
 function rawHeight(x, z) {
   const dH = Math.hypot(x - SPOTS.hollow.x, z - SPOTS.hollow.z);
@@ -55,20 +71,42 @@ const padH = {};
 for (const k in SPOTS) padH[k] = k === 'hollow' ? 0 : rawHeight(SPOTS[k].x, SPOTS[k].z) - 1.5;
 export function spotHeight(k) { return padH[k]; }
 
-export function heightAt(x, z) {
-  let h = rawHeight(x, z);
-  // hollow must sit near creek level (for flooding): pull whole hollow down to 0
+function padBlend(x, z, h) {
   for (const k in SPOTS) {
     const s = SPOTS[k];
     const d = Math.hypot(x - s.x, z - s.z);
     const m = 1 - smooth(9, k === 'hollow' ? 22 : 16, d);
     h = lerp(h, padH[k] + noise2(x * 0.3, z * 0.3) * 0.05, m);
   }
-  // track: soften
+  return h;
+}
+
+// Road-bed profile: sample terrain along the road, then heavily smooth it and pin both ends
+// to the parking pads. Result is a gentle monotone-ish climb (cut into slopes / filled over dips).
+{
+  const n = TRACK.length;
+  let h = TRACK.map(p => padBlend(p.x, p.y, rawHeight(p.x, p.y)));
+  h[0] = padH.hollow; h[n - 1] = padH.ridge;
+  for (let it = 0; it < 400; it++) {
+    const nh = h.slice();
+    for (let i = 1; i < n - 1; i++) nh[i] = (h[i - 1] + h[i] * 2 + h[i + 1]) / 4;
+    nh[0] = padH.hollow; nh[n - 1] = padH.ridge; h = nh;
+  }
+  // blend toward a pure linear ramp so no segment exceeds the drivable grade
+  const lin = TRACK_S.map(s => lerp(padH.hollow, padH.ridge, s / TRACK_LEN));
+  TRACK_H = h.map((v, i) => lerp(v, lin[i], 0.85));
+}
+
+export function heightAt(x, z) {
+  let h = padBlend(x, z, rawHeight(x, z));
+  // road: flat 4.4m bed with 3m shoulders (cut & fill embankment)
   const td = trackDist(x, z);
-  if (td < 5) {
-    const m = 1 - smooth(2.2, 5, td);
-    h = lerp(h, h - 0.12, m);
+  if (td < 8) {
+    const bed = roadBed(trackHit.s) - 0.05;
+    // fade the road into pads at both ends
+    const endFade = smooth(0, 6, trackHit.s) * smooth(0, 6, TRACK_LEN - trackHit.s);
+    const m = (1 - smooth(2.2, 7.5, td)) * (0.35 + 0.65 * endFade);
+    h = lerp(h, bed, m);
   }
   return h;
 }

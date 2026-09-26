@@ -1,0 +1,10 @@
+{
+  "name": "forest-camper-3d",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "test": "node tools/agents/logic_test.mjs && node tools/agents/check_exports.mjs",
+    "pipeline": "python3 tools/agents/pipeline.py"
+  }
+}

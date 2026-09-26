@@ -2,7 +2,7 @@
 import * as THREE from './lib/three.module.js';
 export { THREE };
 
-export const P = new URLSearchParams(location.search);
+export const P = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 export const QA = P.has('qa');
 
 // Global game context (filled by main.js and modules)
