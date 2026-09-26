@@ -202,6 +202,7 @@ async function init() {
 const loadTick = setInterval(() => { if (progress.total) barEl.style.width = (100 * progress.loaded / progress.total) + '%'; }, 100);
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, qaFrames = 0;
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
 function loop(now) {
   if (QA && window.__QA.ready && !window.__QA.run) { window.__QA.frozen = true; return; }
   requestAnimationFrame(loop);

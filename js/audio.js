@@ -43,6 +43,7 @@ export function initAudio() {
   master.connect(comp).connect(c.destination);
   A.outside = outside; A.inside = master;
   const white = noiseBuffer(c, 4), pink = noiseBuffer(c, 5, 'pink'), brown = noiseBuffer(c, 6, 'brown');
+  A.brown = brown; A.white = noiseBuffer(c, 1);
   const N = A.nodes;
   // rain on the roof (inside, close, drum-like): pink band + drop ticks
   N.roof = loop(pink, master, { type: 'bandpass', f: 1400, q: 0.6 });
@@ -61,6 +62,10 @@ export function initAudio() {
   // ambient life
   setInterval(ambient, 1000);
   bus.on('sfx', (n, p) => sfx(n, p));
+  // phone: pause everything when the app is backgrounded / screen locked, resume on return
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { A.on = false; c.suspend(); } else { c.resume(); A.on = true; }
+  });
   bus.on('thunder', ({ dist, delay }) => setTimeout(() => thunder(dist), Math.min(delay, 4) * 1000));
   bus.on('bearcharge', () => sfx('growl', 1));
   bus.on('animal', k => { if (k === 'wolf') setTimeout(() => howl(), 1500); if (k === 'bear') setTimeout(() => sfx('growl', 0.5), 4000); });
@@ -95,7 +100,7 @@ function tick() { burst(A.inside, { f: 2500 + Math.random() * 3000, q: 4, d: 0.0
 function thunder(dist) {
   const near = clamp(1 - dist / 400);
   const c = A.ctx, t = c.currentTime;
-  const s = c.createBufferSource(); s.buffer = noiseBuffer(c, 6, 'brown');
+  const s = c.createBufferSource(); s.buffer = A.brown; // cached: no per-strike allocation
   const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(lerp(300, 1600, near), t); fl.frequency.exponentialRampToValueAtTime(80, t + 5);
   const g = c.createGain();
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(lerp(0.4, 1.6, near), t + (near > 0.7 ? 0.02 : 0.4));
