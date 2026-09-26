@@ -573,26 +573,53 @@ function buildInterior(I, M) {
   C.interiorLights = [{ l: main, base: 1.8 }, { l: bedL, base: 1.2 }, { l: cabL, base: 0.5 }];
 
   // ---- curtains ----
-  const curtainM = pbr('rough_linen', { arm: false, color: 0xcaa878, repeat: 2, extra: { side: THREE.DoubleSide } });
-  curtainM.transparent = false;
+  // Each panel is a plane anchored at the window edge (local x: 0 = edge, +x toward centre).
+  // C.uCurtain (0 open .. 1 closed) is fed to the vertex shader which *gathers* the cloth:
+  // x is compressed toward the anchor while fold depth grows, so an open curtain reads as a
+  // bunched fabric stack, not a thin plank. Hem sags, sways with the van and breathes slightly.
+  C.uCurtain = { value: 0 }; C.uSway = { value: 0 };
+  const curtainM = pbr('rough_linen', { arm: false, color: 0xc7a47a, repeat: 2.2, normalScale: 0.8, extra: { side: THREE.DoubleSide } });
   curtainM.onBeforeCompile = sh => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.z += sin(position.x*55.0)*0.012 + sin(uTime*1.3+position.y*3.)*0.002;');
-    sh.uniforms.uTime = U.uTime;
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uCurtain = C.uCurtain; sh.uniforms.uSway = C.uSway;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime, uCurtain, uSway; attribute float aW; varying float vFold;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        {
+          float gather = mix(0.16, 1.0, uCurtain);                 // fraction of full width used
+          float x = position.x * gather;                            // compress toward anchor (x=0)
+          float folds = 7.0 / aW;                                   // ~folds per metre of flat width
+          float depth = mix(0.035, 0.012, uCurtain);               // deeper folds when bunched
+          float ph = position.x * folds * 6.2832;
+          float hemY = (0.5 - uv.y);                                // 0 top .. 1 bottom
+          transformed.x = x;
+          transformed.z += sin(ph) * depth * (0.7 + 0.3 * hemY) + uSway * hemY * hemY * 0.03
+                         + sin(uTime * 1.3 + position.y * 3.0 + position.x * 5.0) * 0.002;
+          transformed.y -= hemY * hemY * 0.015 * (1.0 - uCurtain);   // soft hem sag when gathered
+          vFold = cos(ph);
+        }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vFold;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.78 + 0.22 * (vFold * 0.5 + 0.5); // cheap fold self-shadowing');
   };
+  curtainM.customProgramCacheKey = () => 'curtain';
   for (const w of WINDOWS) {
     const L = windowLocal(w);
-    const cw = w.w + 0.1, ch = w.h + 0.1;
+    const cw = w.w + 0.1, ch = w.h + 0.12;
     const pieces = w.wall === 'T' ? 1 : 2;
     for (let k = 0; k < pieces; k++) {
-      const geo = new THREE.PlaneGeometry(cw / pieces, ch, 40, 1);
-      geo.translate((k === 0 ? 1 : -1) * cw / pieces / 2, 0, 0);
-      const m = new THREE.Mesh(geo, curtainM); m.castShadow = true;
+      const pw = cw / pieces;
+      const geo = new THREE.PlaneGeometry(pw, ch, Math.max(24, Math.round(pw * 90)), 6);
+      // anchor at x=0 (window edge), extend toward the centre; mirror 2nd panel
+      geo.translate(pw / 2, 0, 0);
+      if (k === 1) geo.scale(-1, 1, 1);
+      geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(pw), 1));
+      const m = new THREE.Mesh(geo, curtainM); m.castShadow = true; m.receiveShadow = true;
+      m.frustumCulled = false; // vertex shader moves verts outside the static bounds
       const pivot = new THREE.Group();
       pivot.add(m);
       const inset = w.wall === 'T' ? (ROOF - CEIL) + 0.02 : 0.16;
       pivot.position.copy(L.p).addScaledVector(L.n, -inset);
-      // local x across window, anchored at the pane edge
+      // panel plane faces into the van; place anchor on the window's left (k=0) or right (k=1) edge
       const edge = (k === 0 ? -1 : 1) * cw / 2;
       if (w.wall === 'L') { pivot.rotation.y = Math.PI / 2; pivot.position.z += -edge; }
       else if (w.wall === 'R') { pivot.rotation.y = -Math.PI / 2; pivot.position.z += edge; }
@@ -602,6 +629,15 @@ function buildInterior(I, M) {
       pivot.userData = { pieces, win: w.id };
       I.add(pivot);
       C.curtains.push(pivot);
+    }
+    // curtain rail (thin brass rod) above each wall window
+    if (w.wall !== 'T') {
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, cw + 0.08, 8), M.chrome);
+      rod.rotation.z = Math.PI / 2;
+      const rp = new THREE.Group(); rp.add(rod);
+      rp.position.copy(L.p).addScaledVector(L.n, -0.16); rp.position.y += ch / 2 + 0.005;
+      if (w.wall === 'L' || w.wall === 'R') rp.rotation.y = Math.PI / 2;
+      I.add(rp);
     }
   }
   setCurtains(0, true);
@@ -625,7 +661,8 @@ function occludeInterior(root) {
     };
     // unique key per distinct pre-existing patch (string length could collide)
     if (prev && !prevIds.has(prev)) prevIds.set(prev, prevIds.size + 1);
-    const key = 'int' + (prev ? prevIds.get(prev) : 0);
+    const prevKey = m.customProgramCacheKey ? m.customProgramCacheKey() : '';
+    const key = 'int' + (prev ? prevIds.get(prev) : 0) + '|' + prevKey; // keep existing keys distinct
     m.customProgramCacheKey = () => key;
     m.needsUpdate = true;
   });
@@ -641,7 +678,8 @@ export function updateCamper(dt) {
   const S = G.state;
   // curtains
   C.curtainLevel += ((C.curtainTarget ?? 0) - C.curtainLevel) * Math.min(1, dt * 3);
-  for (const p of C.curtains) p.scale.x = 0.14 + 0.86 * C.curtainLevel;
+  C.uCurtain.value = C.curtainLevel;
+  if (C.uSway) C.uSway.value = (G.rockAngle || 0) * 8 + (G.shakeV ? G.shakeV.x * 4 : 0);
   // interior lighting level
   const target = S.lightsOn && !S.hiding ? 1 : 0;
   C.lightLevel += (target - C.lightLevel) * Math.min(1, dt * 6);
