@@ -441,8 +441,8 @@ function buildInterior(I, M) {
   add(rbox(0.16, 0.03, 0.22, new THREE.MeshStandardMaterial({ color: 0x2a4d6b, roughness: 0.7 }), 0.3, F + 0.84, 2.9, 0.005));
 
   // ---- overhead lockers (both sides) & LED strips ----
-  const ledM = new THREE.MeshStandardMaterial({ color: 0xffe0b0, emissive: 0xffc27a, emissiveIntensity: 3 });
-  C.emissives.push({ m: ledM, base: 3, kind: 'led' });
+  const ledM = new THREE.MeshStandardMaterial({ color: 0xffe0b0, emissive: 0xffc27a, emissiveIntensity: 1.1 });
+  C.emissives.push({ m: ledM, base: 1.1, kind: 'led' });
   const locker = (sgn, z0, z1) => {
     const x0 = sgn < 0 ? -xi : xi - 0.34, x1 = sgn < 0 ? -xi + 0.34 : xi;
     add(bb(x0, 2.4, z0, x1, CEIL, z1, M.oak, 0.01));
@@ -466,16 +466,16 @@ function buildInterior(I, M) {
   string(new THREE.Vector3(-1.0, 2.62, 1.55), new THREE.Vector3(1.0, 2.62, 1.55), 16, 0.12);
   string(new THREE.Vector3(-1.02, 2.4, 2.15), new THREE.Vector3(-1.02, 2.3, 3.0), 10, 0.04);
   string(new THREE.Vector3(1.02, 2.4, 2.15), new THREE.Vector3(1.02, 2.3, 3.0), 10, 0.04);
-  const fairyM = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffa040, emissiveIntensity: 4, toneMapped: true });
+  const fairyM = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffa040, emissiveIntensity: 2.6, toneMapped: true });
   const fairy = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012, 8, 6), fairyM, pts.length);
   const d = new THREE.Object3D();
   pts.forEach((p, i) => { d.position.copy(p); d.updateMatrix(); fairy.setMatrixAt(i, d.matrix); });
-  add(fairy); C.fairy = fairy; C.emissives.push({ m: fairyM, base: 4, kind: 'fairy' });
+  add(fairy); C.fairy = fairy; C.emissives.push({ m: fairyM, base: 2.6, kind: 'fairy' });
   // wire
   const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.slice(0, 22)), 60, 0.002, 4), M.darkPlastic); add(wire);
 
   // ---- lantern on the table ----
-  const lanternM = new THREE.MeshStandardMaterial({ color: 0xffe1a8, emissive: 0xff9a3a, emissiveIntensity: 5 });
+  const lanternM = new THREE.MeshStandardMaterial({ color: 0xffe1a8, emissive: 0xff9a3a, emissiveIntensity: 2.4 });
   const lg = new THREE.Group();
   lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 16), lanternM));
   const cage = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.13, 8, 1, true), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.4, wireframe: true }));
@@ -483,7 +483,7 @@ function buildInterior(I, M) {
   const top = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.04, 16), new THREE.MeshStandardMaterial({ color: 0x1b1b1b, metalness: 0.7, roughness: 0.4 }));
   top.position.y = 0.085; lg.add(top);
   lg.position.set(-0.95, F + 0.81, -1.35); add(lg);
-  C.emissives.push({ m: lanternM, base: 5, kind: 'lantern' });
+  C.emissives.push({ m: lanternM, base: 2.4, kind: 'lantern' });
   const lanternL = new THREE.PointLight(0xff9a45, 1.6, 4, 2); lanternL.position.set(-0.95, F + 0.85, -1.35);
   add(lanternL); C.lantern = lanternL;
   // mugs
@@ -519,17 +519,17 @@ function buildInterior(I, M) {
   }
 
   // ---- ceiling lamp & interior lights ----
-  const domeM = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 2.2 });
+  const domeM = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 0.9 });
   for (const z of [-2.0, 0.9]) {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeM);
     dome.rotation.x = Math.PI; dome.position.set(0, CEIL, z); add(dome);
   }
-  C.emissives.push({ m: domeM, base: 2.2, kind: 'dome' });
-  const main = new THREE.PointLight(0xffc88a, 2.4, 7, 1.6); main.position.set(0, CEIL - 0.2, -1.0);
+  C.emissives.push({ m: domeM, base: 0.9, kind: 'dome' });
+  const main = new THREE.PointLight(0xffc88a, 1.8, 7, 1.6); main.position.set(0, CEIL - 0.2, -1.0);
     const bedL = new THREE.PointLight(0xffb070, 1.2, 4, 1.8); bedL.position.set(0.3, 2.35, 2.2);
   const cabL = new THREE.PointLight(0xffbb80, 0.5, 3, 2); cabL.position.set(0, 2.05, -3.3);
   add(main, bedL, cabL);
-  C.interiorLights = [{ l: main, base: 2.4 }, { l: bedL, base: 1.2 }, { l: cabL, base: 0.5 }];
+  C.interiorLights = [{ l: main, base: 1.8 }, { l: bedL, base: 1.2 }, { l: cabL, base: 0.5 }];
 
   // ---- curtains ----
   const curtainM = pbr('rough_linen', { arm: false, color: 0xcaa878, repeat: 2, extra: { side: THREE.DoubleSide } });

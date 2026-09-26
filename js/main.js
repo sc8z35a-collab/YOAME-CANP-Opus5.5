@@ -56,10 +56,10 @@ function updateEnv() {
 // ---------------------------------------------------------------- post
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: G.quality === 'm' ? 0 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.6, 0.85);
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.35, 0.45, 0.92);
 composer.addPass(bloom);
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, uTime: U.uTime, uVig: { value: 0.35 }, uGrain: { value: 0.035 }, uRed: { value: 0 },
+  uniforms: { tDiffuse: { value: null }, uTime: U.uTime, uVig: { value: 0.35 }, uGrain: { value: 0.018 }, uRed: { value: 0 },
     uWarm: { value: 0 }, uLens: { value: 0 }, uAspect: { value: 1.7 }, uDark: { value: 0 }, uSub: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }`,
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uVig, uGrain, uRed, uWarm, uLens, uAspect, uDark, uSub; varying vec2 vUv;
@@ -236,14 +236,14 @@ function loop(now) {
   envTimer -= dt; if (envTimer < 0) { envTimer = QA ? 1e9 : 4; updateEnv(); }
   // exposure: eye adapts inside vs night
   const inside = !VIEWS_out();
-  const target = lerp(1.25, 0.72, G.daylight) * (inside ? 1 : 0.9) + (G.state.lightsOn ? 0 : 0.35 * G.night);
+  const target = lerp(1.25, 0.72, G.daylight) * (inside ? 1 : 0.9) + (G.state.lightsOn ? -0.1 * G.night : 0.35 * G.night);
   renderer.toneMappingExposure = damp(renderer.toneMappingExposure, target, 1.5, dt);
   const gu = grade.uniforms;
-  gu.uWarm.value = C.lightLevel * G.night * 0.6;
+  gu.uWarm.value = C.lightLevel * G.night * 0.25;
   gu.uRed.value = damp(gu.uRed.value, Z.bear?.state === 'charge' || G.state.hull < 25 ? 0.35 : 0, 3, dt);
   gu.uDark.value = G.state.hiding ? 1 : 0;
   gu.uSub.value = clamp((G.submerge || 0) - 0.5);
-  bloom.strength = 0.45 + G.night * 0.35 + G.flash * 0.6;
+  bloom.strength = 0.28 + G.night * 0.14 + G.flash * 0.5;
   if (P.has('nopost')) renderer.render(scene, camera); else composer.render(dt);
   // fps
   fpsAcc += dt; fpsN++;
