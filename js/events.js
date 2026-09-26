@@ -7,6 +7,8 @@ import { C, WINDOWS, windowLocal } from './camper.js';
 import { Z, spawnBear, spawnDeer, spawnWolves } from './animals.js';
 import { glassShared } from './glass.js';
 import { tex } from './assets.js';
+import { VIEWS } from './view.js';
+const QAview = () => VIEWS[P.get('view') || 'lounge'] || {};
 import { treeKit } from './forest.js';
 
 export const E = { active: null, cooldown: 25, log: [], slide: null, flood: { t: 0, on: false, peak: 0 }, fallen: null };
@@ -257,8 +259,25 @@ export function buildEvents(scene) {
 
 export function triggerEvent(name) {
   const e = EVENTS[name] || { run: { deer: spawnDeer }[name] };
-  if (name === 'bear' && P.has('qa')) { spawnBear('prowl'); const b = Z.bear; const c = G.camper.position; b.pos.set(c.x - 5, 0, c.z - 6); b.pos.y = heightAt(b.pos.x, b.pos.z); b.heading = 0.6; b.rear = 0.8; b.state = 'sniff'; return; }
-  if (name === 'deer' && P.has('qa')) { spawnDeer(); Z.deer.concat(Z.fawns).forEach((d, i) => { const c = G.camper.position; d.pos.set(c.x - 8 - i * 1.4, 0, c.z - 3 + i * 1.6); d.pos.y = heightAt(d.pos.x, d.pos.z); d.target.copy(d.pos); d.state = 'graze'; d.heading = 1.9 + i * 0.4; }); return; }
+  // QA staging: put subjects on the current seat's line of sight (camper-local -> world),
+  // so screenshots are deterministic and actually show the event.
+  const stage = (dist, lateral = 0) => {
+    const e = new THREE.Euler(0, (QAview().yaw || 0), 0, 'YXZ');
+    const f = new THREE.Vector3(0, 0, -1).applyEuler(e), r = new THREE.Vector3(1, 0, 0).applyEuler(e);
+    const lp = new THREE.Vector3(...(QAview().pos || [0, 0, 0])).addScaledVector(f, dist).addScaledVector(r, lateral);
+    const wp = G.camper.localToWorld(lp); wp.y = heightAt(wp.x, wp.z);
+    const face = Math.atan2(G.camper.position.x - wp.x, G.camper.position.z - wp.z); // look at the van
+    return { wp, face };
+  };
+  if (name === 'bear' && P.has('qa')) {
+    spawnBear('prowl'); const b = Z.bear; const { wp, face } = stage(7.5, 0.6);
+    b.pos.copy(wp); b.heading = face + 0.5; b.obj.rotation.y = b.heading; b.rear = 0.85; b.state = 'sniff'; b.t = 0; return;
+  }
+  if (name === 'deer' && P.has('qa')) {
+    spawnDeer();
+    Z.deer.concat(Z.fawns).forEach((d, i) => { const { wp, face } = stage(10 + i * 1.3, (i - 1.5) * 1.8); d.pos.copy(wp); d.target.copy(wp); d.state = 'graze'; d.heading = face + 1.2 + i * 0.5; d.obj.rotation.y = d.heading; });
+    return;
+  }
   if (name === 'flood' && P.has('qa')) { startFlood(); E.flood.t = 40; G.waterLevel = E.flood.peak; return; }
   if (name === 'landslide' && P.has('qa')) { startLandslide(); for (let i = 0; i < 60; i++) updateSlide(0.1); return; }
   e.run && e.run();
