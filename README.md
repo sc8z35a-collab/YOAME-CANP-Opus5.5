@@ -60,6 +60,16 @@ js/ui.js        HUD・アクション・メニュー
 js/main.js      レンダラ・ポストFX（Bloom/グレーディング/グレイン）・運転・ループ
 ```
 
+## テスト（WebGL不要・node）
+```bash
+npm test      # 地形/林道/洪水の設計不変条件・運転経路・各席の視線が窓を通るか・import/export整合
+```
+- `tools/agents/logic_test.mjs` … 駐車場の平坦性、高台と窪地の高低差、洪水ピークが高台に届かない、林道の最大勾配(23%)、沢を横切らない、往復経路の連続性・到着向き・小物との離隔
+- `tools/agents/view_test.mjs` … 全視点の目線が意図した窓（ダイネット窓・フロントガラス・天窓・キッチン窓・後部窓）を通過すること
+- `tools/facing.html` … 動物モデルの向き(+Z)目視チェック
+- `tools/qa_shot.py` / `tools/qa_batch.sh` … 決定論フレームの画面撮影（1ブラウザずつロック実行）
+- `tools/bootstrap.sh` … サンドボックスリセット後の環境再構築
+
 ## 6エージェント自動ビルドパイプライン
 ```bash
 python3 tools/agents/pipeline.py              # 6エージェント並列実行
