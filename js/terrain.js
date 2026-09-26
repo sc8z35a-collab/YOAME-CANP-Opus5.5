@@ -29,7 +29,11 @@ let TRACK_H = null;        // road-bed height per vertex (filled after pads are 
 const _p = new THREE.Vector2();
 /** distance to road centreline; also writes arc position into trackHit.s */
 export const trackHit = { s: 0, i: 0 };
+let TB = null; // road bounding box for a cheap early-out (heightAt is hot)
 export function trackDist(x, z) {
+  if (!TB) { TB = [1e9, 1e9, -1e9, -1e9]; for (const p of TRACK) { TB[0] = Math.min(TB[0], p.x); TB[1] = Math.min(TB[1], p.y); TB[2] = Math.max(TB[2], p.x); TB[3] = Math.max(TB[3], p.y); } }
+  const ox = Math.max(TB[0] - x, 0, x - TB[2]), oz = Math.max(TB[1] - z, 0, z - TB[3]);
+  if (ox > 12 || oz > 12) return Math.hypot(ox, oz);
   let d = 1e9; _p.set(x, z);
   for (let i = 0; i < TRACK.length - 1; i++) {
     const a = TRACK[i], b = TRACK[i + 1];
