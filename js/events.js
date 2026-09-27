@@ -226,34 +226,51 @@ function buildFallingTree(scene) {
   treeMesh.visible = false; scene.add(treeMesh);
 }
 export function startTreeFall() {
-  if (!treeMesh || E.fallen) return false;
+  if (!treeMesh || (E.fallen && !E.fallen.done)) return false;
+  removeObstacles('tree');
   const c = G.camper.position, a = G.camper.rotation.y;
+  // while driving, the tree comes down across the road AHEAD (a road block the autopilot must handle)
+  const ahead = G.driving && VEH.speed > 1;
   const side = R() < 0.5 ? -1 : 1;
-  const base = new THREE.Vector3(c.x + Math.cos(a) * 9 * side, 0, c.z - Math.sin(a) * 9 * side);
+  const fwd = new THREE.Vector3(VEH.fwd.x, 0, VEH.fwd.z).normalize();
+  const base = ahead
+    ? new THREE.Vector3(c.x + fwd.x * 22 - fwd.z * 7 * side, 0, c.z + fwd.z * 22 + fwd.x * 7 * side)
+    : new THREE.Vector3(c.x + Math.cos(a) * 9 * side, 0, c.z - Math.sin(a) * 9 * side);
   base.y = heightAt(base.x, base.z) - 0.2;
-  treeMesh.position.copy(base); treeMesh.rotation.set(0, 0, 0); treeMesh.visible = true;
-  // camper local +x in world = (cos a, 0, -sin a); local +z = (sin a, 0, cos a).
-  // Rotating +Y about +Z by +θ moves the top toward -X, so axis = localZ * side tips toward the van.
-  // Contact: trunk reaches roof edge (|x|=XW) at height above base = roofTop - baseY.
+  treeMesh.position.copy(base); treeMesh.rotation.set(0, 0, 0); treeMesh.quaternion.identity(); treeMesh.visible = true;
+  // falling direction (horizontal unit vector toward the van / across the road)
+  const dir = ahead ? new THREE.Vector3(fwd.z * side, 0, -fwd.x * side) : new THREE.Vector3(-Math.cos(a) * side, 0, Math.sin(a) * side);
+  const axis = new THREE.Vector3(0, 1, 0).cross(dir).normalize(); // rotating +Y about axis tips the top toward dir
+  // rest angle: on the camper roof edge (parked) or flat on the ground (road block)
   const rise = c.y + 2.95 - base.y, run = 9 - 1.2;
-  E.fallen = { t: 0, axis: new THREE.Vector3(Math.sin(a), 0, Math.cos(a)).multiplyScalar(side), hit: false, ang: 0, v: 0, maxA: Math.atan2(run, rise) };
+  E.fallen = { t: 0, axis, dir, hit: false, ang: 0, v: 0, maxA: ahead ? Math.PI / 2 - 0.06 : Math.atan2(run, rise), ahead, base: base.clone() };
   strike(true);
-  warn('バキバキッ…！ 木が倒れてくる！', 'danger', 3500);
+  warn(ahead ? 'バキバキッ…！ 前方に木が倒れてくる！' : 'バキバキッ…！ 木が倒れてくる！', 'danger', 3500);
   bus.emit('sfx', 'crack', 1);
   return true;
 }
 function updateTree(dt) {
-  const f = E.fallen; if (!f) return;
+  const f = E.fallen; if (!f || f.done) return;
   f.t += dt;
   if (f.t < 1.2) { treeMesh.rotation.z = Math.sin(f.t * 30) * 0.004; return; }
-  const maxA = f.maxA; // resting on the camper roof edge
-  if (f.ang < maxA) { f.v += dt * 1.6 * Math.sin(f.ang + 0.15); f.ang = Math.min(maxA, f.ang + f.v * dt); }
+  if (f.ang < f.maxA) { f.v += dt * 1.6 * Math.sin(f.ang + 0.15); f.ang = Math.min(f.maxA, f.ang + f.v * dt); }
   else if (!f.hit) {
     f.hit = true; f.v = 0;
-    bus.emit('impact', { from: new THREE.Vector3(0, 1, 0), power: 1.2, source: 'tree' });
-    const u = C.glass.sky1?.material.userData.u; if (u) u.uCrack.value = 1;
+    if (f.ahead) {
+      // the trunk becomes a row of heavy log segments lying across the road
+      for (let k = 2; k < 15; k += 1.2) addObstacle(f.base.clone().addScaledVector(f.dir, k).setY(heightAt(f.base.x + f.dir.x * k, f.base.z + f.dir.z * k) + 0.35), 0.38, { tag: 'tree', m: 450 });
+      G.shake = Math.max(G.shake, 0.6); bus.emit('sfx', 'thud', 0.8);
+    } else {
+      bus.emit('impact', { from: new THREE.Vector3(0, 1, 0), power: 1.2, source: 'tree' });
+      const u = C.glass.sky1?.material.userData.u; if (u) u.uCrack.value = 1;
+      applyImpulse(G.camper.position.clone().setY(G.camper.position.y + 2.9), f.dir.clone().multiplyScalar(2600).setY(-6000));
+    }
   }
   treeMesh.quaternion.setFromAxisAngle(f.axis, f.ang);
+  // parked hit: once the van drives away the tree slides off the roof and ends up on the ground
+  if (f.hit && !f.ahead && G.camper.position.distanceTo(f.base) > 11) { f.maxA = Math.PI / 2 - 0.06; f.ahead = true; f.hit = false; }
+  // clean up long after (so another tree can fall later)
+  if (f.t > 400) { f.done = true; treeMesh.visible = false; removeObstacles('tree'); }
 }
 
 // ---------------------------------------------------------------- power
