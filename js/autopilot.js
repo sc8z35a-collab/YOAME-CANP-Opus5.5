@@ -218,6 +218,9 @@ export function updateAutopilot(dt) {
   let remain = 0; for (let i = AP.idx; i < path.length - 1; i++) remain += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   AP.remain = remain + bd;
   let vt = Math.min(AP.cruise, vcurve, 1.2 + Math.sqrt(2 * 1.6 * Math.max(0, remain - 1)));
+  // don't accelerate while still turning, or while off the planned line
+  vt = Math.min(vt, Math.max(1.4, Math.sqrt(2.0 * WB / Math.max(Math.tan(Math.abs(VEH.steer)), 1e-3))));
+  if (bd > 1.2) vt = Math.min(vt, Math.max(1.4, 6 - bd * 1.5));
   if (AP.slow) vt = Math.min(vt, 2.6);
   if (VEH.submerged > 0.15) vt = Math.min(vt, 2);
   if (G.rain > 0.6) vt *= 0.85;

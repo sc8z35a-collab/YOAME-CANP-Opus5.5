@@ -37,7 +37,7 @@ export const VEH = {
 
 // ---------------------------------------------------------------- collider grid (trees etc.)
 const CG = new Map(), CC = 8;
-let cgReady = 0;
+let cgReady = -1;
 function buildColliderGrid() {
   CG.clear();
   for (const c of colliders.concat(RAILS)) {
