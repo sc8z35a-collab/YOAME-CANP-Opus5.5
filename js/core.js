@@ -76,6 +76,7 @@ export function fbm(x, y, oct = 5) {
 
 // Hour helpers
 export const fmtTime = h => {
+  h = ((h % 24) + 24) % 24;
   const hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 60);
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 };

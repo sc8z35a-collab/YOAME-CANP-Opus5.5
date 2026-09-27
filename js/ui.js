@@ -34,7 +34,8 @@ function distBear() { return Math.hypot(Z.bear.pos.x - G.camper.position.x, Z.be
 let toastEl, hud = {};
 export function toast(msg, level = 'info', ms = 4000) {
   if (!toastEl) return;
-  const t = h('div', { className: 'toast ' + level }, msg);
+  if (toastEl.lastChild && toastEl.lastChild.dataset.msg === msg) return; // de-dupe spam
+  const t = h('div', { className: 'toast ' + level }, msg); t.dataset.msg = msg;
   toastEl.appendChild(t);
   requestAnimationFrame(() => t.classList.add('show'));
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 600); }, ms);
@@ -101,7 +102,7 @@ export function buildUI() {
   for (const [k, l] of [['deer', 'シカ'], ['bear', 'クマ'], ['wolves', 'オオカミ'], ['landslide', '土砂崩れ'], ['flood', '洪水'], ['tree', '倒木']]) {
     const b = h('button', { className: 'chip' }, l); b.dataset.touch = 1; b.onclick = () => { triggerEvent(k); $('#menu').classList.add('hidden'); }; ev.appendChild(b);
   }
-  root.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { G.hour = (G.hour + parseFloat(b.dataset.t) + 24) % 24; });
+  root.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { const h = G.hour + parseFloat(b.dataset.t); if (h >= 24) G.day++; if (h < 0 && G.day > 1) G.day--; G.hour = (h + 24) % 24; });
   root.querySelectorAll('[data-q]').forEach(b => { b.classList.toggle('on', b.dataset.q === G.quality); b.onclick = () => { try { localStorage.setItem('fc3d_q', b.dataset.q); } catch (e) {} const u = new URL(location); u.searchParams.delete('q'); location = u; }; });
   $('#ff').onclick = () => { G.timeMul = G.timeMul > 1 ? 1 : 30; $('#ff').classList.toggle('on', G.timeMul > 1); };
   $('#menuBtn').onclick = () => { initAudio(); $('#menu').classList.toggle('hidden'); };

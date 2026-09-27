@@ -350,7 +350,7 @@ export function updateWeather(dt, camera) {
   // sky follows the eye (infinite-distance look, no parallax / clipping)
   camera.getWorldPosition(W.sky.position); W.dome.position.copy(W.sky.position);
   // lights
-  const c = G.camper ? G.camper.position : _zero;
+  const c = camera.position;
   const moonUp = moonDir.y > 0 ? 1 : 0;
   const useMoon = G.night > 0.5;
   const L = useMoon ? moonDir : sunDir;
@@ -402,8 +402,9 @@ export function updateWeather(dt, camera) {
   // water
   W.water.position.y = G.waterLevel;
   W.uMud && (W.uMud.value = clamp(0.25 + (G.waterLevel - CREEK_BED - 0.9) * 0.4 + G.rain * 0.2));
-  W.uFlow && (W.uFlow.value = 1 + (G.waterLevel + 1.55) * 1.5 + G.rain);
+  W.uFlow && (W.uFlow.value = 1 + Math.max(0, G.waterLevel + 2.05) * 1.5 + G.rain);
 
   // fireflies on clear warm nights
+  if (G.camper) { W.fireflies.position.set(0, 0, Math.round((G.camper.position.z) / 60) * 60); W.fireflies.position.y = 0; }
   W.fireflies.material.uniforms.uAmt.value = damp(W.fireflies.material.uniforms.uAmt.value, G.night * (1 - G.rain) * (1 - G.cloud * 0.6), 0.5, dt);
 }

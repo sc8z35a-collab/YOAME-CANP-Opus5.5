@@ -220,7 +220,7 @@ function loop(now) {
   updateAudio(dt);
   updateUI();
   // campfire at dusk/night when calm
-  camp.fireLight.intensity = G.night > 0.4 && G.rain < 0.3 ? 6 * (0.8 + Math.sin(G.t * 11) * 0.1 + Math.sin(G.t * 23) * 0.08) : 0;
+  camp.fireLight.intensity = G.night > 0.4 && G.rain < 0.3 && G.waterLevel < -0.6 ? 6 * (0.8 + Math.sin(G.t * 11) * 0.1 + Math.sin(G.t * 23) * 0.08) : 0;
   // glass condensation: rises with cold + heater/cooking inside
   glassShared.uFogGlass.value = damp(glassShared.uFogGlass.value, clamp(G.rain * 0.35 + (G.state.cooking > 0 ? 0.5 : 0) + G.night * 0.1), 0.1, dt);
   // env map refresh (sky changes slowly)

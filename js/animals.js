@@ -212,6 +212,7 @@ export function updateAnimals(dt) {
   if (!Z.ready) return;
   const st = stimulus();
   const c = camperPos();
+  if (G.driving && Math.abs(G.driveSpeed || 0) > 3) st.noise = Math.max(st.noise, 0.7); // engine noise scares wildlife
   // deer
   for (const d of [...Z.deer, ...Z.fawns]) {
     if (!d.active) continue;
@@ -307,7 +308,7 @@ export function updateAnimals(dt) {
   }
 }
 
-const SEAT_WINDOW = { lounge: 'dinette', kitchen: 'kitchen', bed: 'bedL', rear: 'rear', driver: 'cabL', alcove: 'cabR', outside: 'dinette' };
+const SEAT_WINDOW = { lounge: 'dinette', lounge2: 'dinette', kitchen: 'kitchen', bed: 'bedL', rear: 'rear', driver: 'cabL', passenger: 'cabR', alcove: 'cabR', outside: 'dinette', walk: 'dinette' };
 function r0(b) { return b.sniffAt ? Math.hypot(b.sniffAt.x - b.pos.x, b.sniffAt.z - b.pos.z) : 99; }
 function sniffTarget() {
   const id = SEAT_WINDOW[G.viewKey] || 'dinette';

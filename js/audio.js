@@ -4,6 +4,8 @@
 import { G, bus, clamp, lerp } from './core.js';
 import { E } from './events.js';
 import { Z } from './animals.js';
+import { creekX } from './relief.js';
+import { VEH } from './vehicle.js';
 
 export const A = { ctx: null, on: false, master: null, nodes: {} };
 
@@ -58,12 +60,14 @@ export function initAudio() {
   N.hiss = loop(white, master, { type: 'bandpass', f: 3500, q: 2 });
   N.hum = osc(55, 'sawtooth', master, 0);
   N.heater = loop(pink, master, { type: 'lowpass', f: 600 });
+  N.engine = osc(40, 'sawtooth', master, 0); const ef = c.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 260; N.engine.g.disconnect(); N.engine.g.connect(ef).connect(master);
+  N.gravel = loop(brown, A.outside, { type: 'bandpass', f: 700, q: 0.6 });
   A.on = true;
   // drip ticks on roof
   setInterval(() => { if (G.rain > 0.1 && A.on) for (let i = 0; i < 1 + G.rain * 5; i++) setTimeout(tick, Math.random() * 250); }, 250);
   // ambient life
   setInterval(ambient, 1000);
-  bus.on('sfx', (n, p) => sfx(n, p));
+  if (!A.busBound) { A.busBound = true; bus.on('sfx', (n, p) => sfx(n, p)); }
   // phone: pause everything when the app is backgrounded / screen locked, resume on return
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { A.on = false; c.suspend(); } else { c.resume(); A.on = true; }
@@ -166,6 +170,16 @@ export function sfx(name, p = 1) {
       const f = c.createBiquadFilter(); f.frequency.value = 300; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
       o.connect(f).connect(g).connect(M); o.start(t); o.stop(t + 2.6); break;
     }
+    case 'crash':
+      tone(M, 90, 30, 0.7, 'sine', Math.min(1, 0.6 * p + 0.3), 0.003);
+      burst(M, { f: 300, type: 'lowpass', d: 0.6, peak: Math.min(1, 0.8 * p) });
+      burst(M, { f: 1800, q: 1.5, d: 0.25, peak: 0.3 * p });
+      for (let i = 0; i < 5; i++) setTimeout(() => burst(M, { f: 2500 + Math.random() * 3000, q: 3, d: 0.05, peak: 0.08 * p }), 60 + i * 55);
+      break;
+    case 'door': burst(M, { f: 900, q: 1.2, d: 0.12, peak: 0.3 }); setTimeout(() => tone(M, 160, 60, 0.2, 'sine', 0.35, 0.003), 90); break;
+    case 'step': burst(M, { f: 220 + Math.random() * 80, type: 'lowpass', d: 0.06, peak: 0.06 }); break;
+    case 'stepOut': burst(A.outside, { f: 1400 + Math.random() * 600, q: 0.8, d: 0.08, peak: 0.05 }); break;
+    case 'tablet': tone(M, 880, 1320, 0.08, 'sine', 0.05); break;
     case 'powerdown': tone(M, 220, 40, 0.8, 'sawtooth', 0.1); break;
     case 'rumble': A.rumbleT = 12; break;
     case 'flood': A.floodT = 1; break;
@@ -203,16 +217,20 @@ export function updateAudio(dt) {
   set(N.roofLow.g.gain, r * 0.18);
   set(N.rainOut.g.gain, r * 0.05);
   set(N.wind.g.gain, clamp(G.wind * 0.12 + Math.max(0, G.wind - 0.7) * 0.2)); set(N.wind.f.frequency, 300 + G.wind * 500, 0.8);
-  const cd = G.camper ? Math.abs(G.camper.position.x - (-14)) : 20;
+  const cd = G.camper ? Math.abs(G.camper.position.x - creekX(G.camper.position.z)) + Math.max(0, G.camper.position.y - G.waterLevel) * 2 : 20;
   const creek = clamp(1 - cd / 40) * 0.05 * (1 + (G.waterLevel + 1.55) * 2);
   set(N.creek.g.gain, creek);
   A.floodT = E.flood.on ? 1 : 0;
-  set(N.flood.g.gain, A.floodT * 0.5 * clamp((G.waterLevel + 1.5) / 2), 1.5);
+  set(N.flood.g.gain, A.floodT * 0.5 * clamp((G.waterLevel + 2.05) / 2), 1.5);
   A.rumbleT = Math.max(0, (A.rumbleT || 0) - dt);
   set(N.rumble.g.gain, clamp(A.rumbleT / 6) * 0.9, 0.5);
   set(N.hiss.g.gain, S.radio ? 0.012 : 0);
   set(N.hum.g.gain, S.generator ? 0.03 : 0);
   set(N.heater.g.gain, S.heater ? 0.04 : 0);
+  // engine: idles while the autopilot is engaged, revs with wheel speed; gravel crunch from tyres
+  const sp = Math.abs(VEH.fwdSpeed || 0), eng = G.driving ? 1 : 0;
+  set(N.engine.g.gain, eng * (0.05 + Math.min(sp, 8) * 0.012), 0.2); set(N.engine.o.frequency, 34 + sp * 7 + (VEH.ctrl.throttle || 0) * 14, 0.15);
+  set(N.gravel.g.gain, VEH.grounded ? Math.min(sp, 8) * 0.012 : 0, 0.15);
   A.kettleT = Math.max(0, (A.kettleT || 0) - dt);
   if (A.kettleT > 0 && A.kettleT < 6 && Math.random() < 0.3) tone(A.inside, 2400 + Math.random() * 200, 2600, 0.2, 'sine', 0.02 * (6 - A.kettleT) / 6);
   // hiding: outside gets quieter/muffled when curtains closed
