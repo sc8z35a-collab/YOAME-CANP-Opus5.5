@@ -67,18 +67,22 @@ export function standUp() {
   if (!PL.seat) return;
   const s = PL.seat; PL.seat = null;
   PL.from = PL.pos.clone(); PL.to = new THREE.Vector3(s.at[0], FLOOR + EYE, s.at[1]); PL.trans = 0;
+  collide(PL.to);
   G.viewKey = 'walk';
 }
+const _hd = new THREE.Vector3();
+function headingOf(camper) { _hd.set(0, 0, -1).applyQuaternion(camper.quaternion); return Math.atan2(-_hd.x, -_hd.z); }
 export function goOutside(camper) {
   // step out of the side door onto the ground next to the van
+  if (camper.matrixWorld.elements[5] < 0.6) { bus.emit('toast', { msg: '車が傾いていてドアが開かない', level: 'warn', ms: 2500 }); return; }
   const p = new THREE.Vector3(XW + 1.1, 0, 0.72); camper.localToWorld(p);
   p.y = groundAt(p.x, p.z) + EYE;
   PL.inside = false; PL.seat = null; PL.world.copy(p); PL.wvel.set(0, 0, 0);
-  PL.yaw += camper.rotation.y; G.viewKey = 'outside';
+  PL.yaw += headingOf(camper); PL.pitch = 0; G.viewKey = 'outside';
   bus.emit('sfx', 'door');
 }
 export function goInside(camper) {
-  PL.inside = true; PL.pos.set(0.75, FLOOR + EYE, 0.72); PL.yaw -= camper.rotation.y; G.viewKey = 'walk';
+  PL.inside = true; PL.seat = null; PL.to = null; PL.pos.set(0.75, FLOOR + EYE, 0.72); PL.yaw -= headingOf(camper); G.viewKey = 'walk';
   bus.emit('sfx', 'door');
 }
 
@@ -94,7 +98,7 @@ export function focusSpot(camper) {
   return best;
 }
 
-const _f = new THREE.Vector3(), _r = new THREE.Vector3();
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _l = new THREE.Vector3();
 export function updatePlayer(dt, camper, driving) {
   const m = PL.move, S = G.state;
   PL.crouch = damp(PL.crouch, S.hiding && !PL.seat ? 1 : 0, 5, dt);
@@ -104,10 +108,10 @@ export function updatePlayer(dt, camper, driving) {
       const t = PL.trans * PL.trans * (3 - 2 * PL.trans);
       PL.pos.lerpVectors(PL.from || PL.to, PL.to, t);
       PL.pos.y += Math.sin(t * Math.PI) * 0.12;
-      if (Math.hypot(m.x, m.y) > 0.6 && PL.trans >= 1) standUp();
+      if (Math.hypot(m.x, m.y) > 0.6 && PL.trans >= 1 && !(driving && Math.abs(G.driveSpeed || 0) > 4)) standUp();
     } else {
-      if (PL.to && PL.trans < 1) { PL.trans = Math.min(1, PL.trans + dt * 2.2); PL.pos.lerpVectors(PL.from, PL.to, PL.trans); }
-      const sp = (PL.run ? 2.2 : 1.35) * (1 - PL.crouch * 0.5);
+      if (PL.to && PL.trans < 1) { PL.trans = Math.min(1, PL.trans + dt * 2.2); PL.pos.lerpVectors(PL.from, PL.to, PL.trans); if (PL.trans < 1) return; PL.to = null; }
+      const sp = (PL.run ? 2.2 : 1.35) * (1 - PL.crouch * 0.5) * (camper.matrixWorld.elements[5] < 0.5 ? 0.3 : 1);
       _f.set(-Math.sin(PL.yaw), 0, -Math.cos(PL.yaw)); _r.set(-_f.z, 0, _f.x);
       const tx = (_f.x * m.y + _r.x * m.x) * sp, tz = (_f.z * m.y + _r.z * m.x) * sp;
       PL.vel.x = damp(PL.vel.x, tx, 10, dt); PL.vel.z = damp(PL.vel.z, tz, 10, dt);
@@ -130,7 +134,7 @@ export function updatePlayer(dt, camper, driving) {
     PL.wvel.y -= 9.8 * dt;
     PL.world.addScaledVector(PL.wvel, dt);
     // can't walk through the van (local box push-out)
-    const l = camper.worldToLocal(PL.world.clone());
+    const l = camper.worldToLocal(_l.copy(PL.world));
     if (Math.abs(l.x) < XW + 0.3 && l.z > ZF - 1.3 && l.z < ZB + 0.3 && l.y < 3.3) {
       const px = XW + 0.3 - Math.abs(l.x), pf = l.z - (ZF - 1.3), pb = ZB + 0.3 - l.z;
       if (px < pf && px < pb) l.x = Math.sign(l.x || 1) * (XW + 0.3); else if (pf < pb) l.z = ZF - 1.3; else l.z = ZB + 0.3;

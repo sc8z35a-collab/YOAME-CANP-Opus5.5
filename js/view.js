@@ -58,6 +58,7 @@ export function initView(canvas) {
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _t = new THREE.Vector3();
 export function updateView(dt, camera) {
   const cam = G.camper;
+  if (Math.hypot(PL.move.x, PL.move.y) > 0.3 && V.tfov < 70) V.tfov = damp(V.tfov, 70, 2, dt); // walking relaxes the zoom
   V.fov = damp(V.fov, V.tfov, 8, dt);
   V.breath += dt * (1.1 + (1 - G.state.calm / 100) * 1.4);
   G.shake = Math.max(0, G.shake - dt * 1.6);

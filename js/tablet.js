@@ -9,8 +9,8 @@ import { heightAt } from './terrain.js';
 import { AP, engage, disengage } from './autopilot.js';
 import { VEH, originOf } from './vehicle.js';
 
-export const TAB = { mesh: null, tex: null, canvas: null, open: false, sel: null, base: null, zoom: 1, cx: 0, cz: 0 };
-const MAP = 1024;
+export const TAB = { mesh: null, tex: null, canvas: null, open: false, sel: null, base: null, zoom: 1, cu: 512, cv: 512 };
+const MAP = 1024, _tp = new THREE.Vector3();
 // north (+z, where 林道の北端 is) is up on the map
 const toMap = (x, z) => [(x - WORLD.x0) / WORLD.size * MAP, (WORLD.z1 - z) / WORLD.size * MAP];
 const fromMap = (u, v) => [WORLD.x0 + u / MAP * WORLD.size, WORLD.z1 - v / MAP * WORLD.size];
@@ -56,7 +56,7 @@ function bakeBase() {
 // ---------------------------------------------------------------- live render
 function draw(ctx, W, H, full) {
   ctx.fillStyle = '#0b100d'; ctx.fillRect(0, 0, W, H);
-  const p = originOf(new THREE.Vector3());
+  const p = originOf(_tp);
   const z = full ? TAB.zoom : 1.8;
   const [pu, pv] = toMap(p.x, p.z);
   const [cu, cv] = full ? [TAB.cu ?? pu, TAB.cv ?? pv] : [pu, pv];
@@ -164,10 +164,10 @@ function refreshPanel() {
   document.getElementById('tabStop').classList.toggle('hidden', !AP.on);
   const list = document.getElementById('tabList');
   if (!list.childElementCount) for (const d of Object.values(DESTS)) {
-    const b = document.createElement('button'); b.className = 'tli'; b.dataset.touch = 1; b.textContent = d.name;
+    const b = document.createElement('button'); b.className = 'tli'; b.dataset.touch = 1; b.dataset.id = d.id; b.textContent = d.name;
     b.onclick = () => { TAB.sel = d.id; [TAB.cu, TAB.cv] = toMap(d.x, d.z); refreshPanel(); }; list.appendChild(b);
   }
-  list.querySelectorAll('.tli').forEach((b, i) => b.classList.toggle('on', Object.keys(DESTS)[i] === TAB.sel));
+  list.querySelectorAll('.tli').forEach(b => b.classList.toggle('on', b.dataset.id === TAB.sel));
 }
 export function initTabletUI(root) {
   const el = document.createElement('div'); el.id = 'tablet'; el.className = 'hidden';
@@ -189,10 +189,10 @@ export function initTabletUI(root) {
     const sc = Math.min(c.clientWidth, c.clientHeight) / MAP * TAB.zoom;
     if (pts.size === 1) { TAB.cu -= (e.clientX - p.x) / sc; TAB.cv -= (e.clientY - p.y) / sc; moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); }
     p.x = e.clientX; p.y = e.clientY;
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; TAB.zoom = clamp(zoom0 * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(pinch0, 1), 0.8, 6); moved = 99; }
+    if (pts.size === 2) { TAB.pinched = true; const [a, b] = [...pts.values()]; TAB.zoom = clamp(zoom0 * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(pinch0, 1), 0.8, 6); moved = 99; }
   });
   c.addEventListener('pointerup', e => {
-    const wasTap = pts.size === 1 && moved < 10; pts.delete(e.pointerId);
+    const wasTap = pts.size === 1 && moved < 10 && !TAB.pinched; pts.delete(e.pointerId); if (!pts.size) TAB.pinched = false;
     if (!wasTap) return;
     const r = c.getBoundingClientRect(), sc = Math.min(r.width, r.height) / MAP * TAB.zoom;
     const u = TAB.cu + (e.clientX - r.left - r.width / 2) / sc, v = TAB.cv + (e.clientY - r.top - r.height / 2) / sc;
