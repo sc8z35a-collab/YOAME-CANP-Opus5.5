@@ -42,11 +42,11 @@ LOCK = threading.Lock()
 
 # source files each agent sends to its LLM (focused context instead of "first 6 files")
 AGENT_FILES = {
-    "architect": ["js/main.js", "js/core.js", "js/assets.js", "js/view.js"],
+    "architect": ["js/main.js", "js/core.js", "js/vehicle.js", "js/autopilot.js"],
     "assets": ["js/assets.js", "js/forest.js", "js/animals.js", "CREDITS.md"],
     "render": ["js/main.js", "js/weather.js", "js/glass.js", "js/camper.js"],
-    "scenario": ["js/events.js", "js/animals.js", "js/terrain.js"],
-    "mobile": ["index.html", "css/style.css", "js/ui.js", "js/view.js"],
+    "scenario": ["js/events.js", "js/autopilot.js", "js/roads.js"],
+    "mobile": ["index.html", "css/style.css", "js/ui.js", "js/tablet.js", "js/player.js"],
     "reviewer": ["js/camper.js", "js/forest.js", "js/audio.js", "js/weather.js"],
 }
 AGENT_MODELS = {
@@ -203,10 +203,13 @@ def a_assets():
 
 SCENES = {
     "render": [("day_clear", "?qa=1&q=m&t=11&weather=clear&view=lounge"),
-               ("dusk_cozy", "?qa=1&q=m&t=18.6&weather=cloudy&view=bed")],
+               ("dusk_cozy", "?qa=1&q=m&t=18.6&weather=cloudy&view=bed"),
+               ("chase_drive", "?qa=1&q=m&t=16&weather=cloudy&dest=ridge&sim=25&cam=chase"),
+               ("tablet_map", "?qa=1&q=m&t=20&weather=rain&tablet=1&sel=summit")],
     "scenario": [("night_storm_bear", "?qa=1&q=m&t=23&weather=storm&event=bear&view=lounge"),
                  ("flood", "?qa=1&q=m&t=15&weather=rain&event=flood&view=lounge"),
                  ("landslide", "?qa=1&q=m&t=16&weather=storm&spot=ridge&event=landslide&view=rear"),
+                 ("fall_cliff", "?qa=1&q=m&t=15&weather=clear&spot=cliff&dest=hollow&sim=6&cam=chase"),
                  ("deer_morning", "?qa=1&q=m&t=7&weather=fog&event=deer&view=lounge")],
 }
 
@@ -221,7 +224,24 @@ def _shots(name):
     return {"scenes": res, "ok": all(not v["errors"] for v in res.values())}
 
 def a_render(): return _shots("render")
-def a_scenario(): return _shots("scenario")
+
+def _node(cmd, timeout=900, env=None):
+    e = dict(os.environ, **(env or {}))
+    try:
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout, env=e)
+        return {"ok": r.returncode == 0, "out": [l for l in r.stdout.splitlines() if l.startswith(("PASS", "FAIL", "after"))][-20:]}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "out": ["TIMEOUT"]}
+
+def a_scenario():
+    # headless physics suites run concurrently with the (GPU-serialised) browser shots
+    with cf.ThreadPoolExecutor(3) as ex:
+        fd = ex.submit(_node, ["node", "tools/agents/drive_test.mjs", "-q"], 1500, {"LIM": "500"})
+        ff = [ex.submit(_node, ["node", "tools/agents/fall_test.mjs", s, "hollow"], 600, {"SHOVE": "18"}) for s in ("cliff", "pass")]
+        shots = _shots("scenario")
+        drive, falls = fd.result(), [f.result() for f in ff]
+    log("scenario", f"drive={drive['ok']} falls={[f['ok'] for f in falls]}")
+    return {**shots, "drive": drive, "falls": falls, "ok": shots["ok"] and drive["ok"] and all(f["ok"] for f in falls)}
 
 def a_mobile():
     SHOTS.mkdir(parents=True, exist_ok=True)
