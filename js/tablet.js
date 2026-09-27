@@ -11,8 +11,9 @@ import { VEH, originOf } from './vehicle.js';
 
 export const TAB = { mesh: null, tex: null, canvas: null, open: false, sel: null, base: null, zoom: 1, cx: 0, cz: 0 };
 const MAP = 1024;
-const toMap = (x, z) => [(x - WORLD.x0) / WORLD.size * MAP, (z - WORLD.z0) / WORLD.size * MAP];
-const fromMap = (u, v) => [WORLD.x0 + u / MAP * WORLD.size, WORLD.z0 + v / MAP * WORLD.size];
+// north (+z, where 林道の北端 is) is up on the map
+const toMap = (x, z) => [(x - WORLD.x0) / WORLD.size * MAP, (WORLD.z1 - z) / WORLD.size * MAP];
+const fromMap = (u, v) => [WORLD.x0 + u / MAP * WORLD.size, WORLD.z1 - v / MAP * WORLD.size];
 
 // ---------------------------------------------------------------- base map (baked once)
 function bakeBase() {
@@ -22,7 +23,7 @@ function bakeBase() {
   for (let j = 0; j < MAP; j += S) for (let i = 0; i < MAP; i += S) {
     const [wx, wz] = fromMap(i + 1, j + 1);
     const h = heightAt(wx, wz), hx = heightAt(wx + 1.5, wz) - h, hz = heightAt(wx, wz + 1.5) - h;
-    const shade = clamp(0.62 - hx * 0.35 - hz * 0.22, 0.15, 1);
+    const shade = clamp(0.62 - hx * 0.35 + hz * 0.22, 0.15, 1); // light from the north-west
     const band = (Math.floor(h / 4) % 2) ? 0.97 : 1;          // contour banding (every 4m)
     let r = 70 + h * 1.1, g = 96 + h * 0.8, b = 62 + h * 0.4;  // forest green -> brownish heights
     const cd = Math.abs(wx - creekX(wz));
@@ -64,7 +65,7 @@ function draw(ctx, W, H, full) {
   ctx.translate(W / 2, H / 2); ctx.scale(sc, sc); ctx.translate(-cu, -cv);
   ctx.drawImage(TAB.base, 0, 0);
   // flood / water level (low areas shown in blue when the creek rises)
-  if (G.waterLevel > -1.6) { ctx.fillStyle = `rgba(60,120,200,${clamp((G.waterLevel + 1.6) * 0.3, 0, 0.45)})`; for (let zz = WORLD.z0; zz < WORLD.z1; zz += 4) { const [u, v] = toMap(creekX(zz), zz); ctx.fillRect(u - 12 - (G.waterLevel + 1.6) * 8, v, 24 + (G.waterLevel + 1.6) * 16, 9); } }
+  if (G.waterLevel > -1.6) { ctx.fillStyle = `rgba(60,120,200,${clamp((G.waterLevel + 1.6) * 0.3, 0, 0.45)})`; for (let zz = WORLD.z0; zz < WORLD.z1; zz += 4) { const [u, v] = toMap(creekX(zz), zz); ctx.fillRect(u - 12 - (G.waterLevel + 1.6) * 8, v - 9, 24 + (G.waterLevel + 1.6) * 16, 9); } }
   // route
   if (AP.on && AP.path.length) {
     ctx.strokeStyle = '#4fd1ff'; ctx.lineWidth = 7 / Math.sqrt(z); ctx.setLineDash([14, 8]); ctx.beginPath();
@@ -87,7 +88,7 @@ function draw(ctx, W, H, full) {
   }
   // camper arrow
   const yaw = Math.atan2(VEH.fwd.x, VEH.fwd.z);
-  ctx.translate(pu, pv); ctx.rotate(-yaw + Math.PI);
+  ctx.translate(pu, pv); ctx.rotate(yaw);
   ctx.fillStyle = VEH.up.y < 0.6 ? '#ff5b3a' : '#ffd24a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3 / z;
   const k = 1 / Math.sqrt(z) * 1.2;
   ctx.beginPath(); ctx.moveTo(0, -16 * k); ctx.lineTo(10 * k, 12 * k); ctx.lineTo(0, 6 * k); ctx.lineTo(-10 * k, 12 * k); ctx.closePath(); ctx.fill(); ctx.stroke();
