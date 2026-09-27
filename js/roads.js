@@ -134,7 +134,7 @@ for (const d of DEF) {
   road.joins = joins;
   for (const [id, i] of pads) {
     const def = DEST.find(x => x[0] === id), a = s[Math.max(0, i - 2)], b = s[Math.min(n - 1, i + 2)];
-    DESTS[id] = { id, name: def[1], desc: def[4], x: s[i].x, z: s[i].z, h: s[i].h, rot: Math.atan2(-(b.x - a.x), -(b.z - a.z)) + (def[5] === 'flip' ? Math.PI : 0), road: road.id, i };
+    DESTS[id] = { id, name: def[1], desc: def[4], x: s[i].x, z: s[i].z, h: s[i].h, rot: Math.atan2(-(b.x - a.x), -(b.z - a.z)) + (def[5] === 'flip' ? Math.PI : 0), road: road.id, i, end: i < 3 || i > n - 4 };
   }
 }
 

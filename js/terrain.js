@@ -48,22 +48,20 @@ export function trackDist(x, z) { return roadQuery(x, z).d; }
 const DLIST = Object.values(DESTS);
 function composeHeight(x, z) {
   let h = rawHeight(x, z);
+  // 1) parking pads (flat clearings beside the road; road ends get a big turning circle)
+  for (const d of DLIST) {
+    const dd = Math.hypot(x - d.x, z - d.z), R0 = d.end ? 10 : 6.5;
+    if (dd > R0 + 7) continue;
+    h = lerp(h, d.h - 0.04 + noise2(x * 0.3, z * 0.3) * 0.03, 1 - smooth(R0, R0 + 7, dd));
+  }
+  // 2) road beds win over pads (cut & fill; shoulder grows with the height difference ≈1:1.3)
   const r = roadQuery(x, z);
   if (r.road && !r.bridge) {
-    // cut & fill embankment: shoulder width grows with the height difference (≈1:1.3 slope)
-    const diff = Math.abs(r.fill);
-    const shoulder = clamp(1.5 + diff * 1.3, 2, 9);
-    const m = 1 - smooth(ROAD_HALF, ROAD_HALF + shoulder, r.d);
-    h = lerp(h, r.h - 0.04, m);
-  } else if (r.road && r.bridge && r.d < ROAD_HALF + 1) {
-    // under a bridge the creek stays open; abutments are handled by the road ends
-  }
-  // parking pads (wide flat clearings at every destination)
-  for (const d of DLIST) {
-    const dd = Math.hypot(x - d.x, z - d.z);
-    if (dd > 14) continue;
-    const m = 1 - smooth(7, 14, dd);
-    h = lerp(h, d.h - 0.04 + noise2(x * 0.3, z * 0.3) * 0.03, m);
+    const shoulder = clamp(1.5 + Math.abs(h - r.h) * 1.3, 2, 9);
+    h = lerp(h, r.h - 0.04, 1 - smooth(ROAD_HALF, ROAD_HALF + shoulder, r.d));
+  } else if (r.road && r.bridge && h > r.h - 1.2) {
+    // abutments: raise the banks at both ends of a bridge flush with the deck (creek stays open)
+    h = lerp(h, Math.max(h, r.h), 1 - smooth(ROAD_HALF, ROAD_HALF + 3, r.d));
   }
   return h;
 }
@@ -100,7 +98,7 @@ function deckAt(x, z) {
   if (!inBox) return -1e9;
   const q = roadQuery(x, z);
   if (!q.road || !q.bridge || q.d > ROAD_HALF - 0.4) return -1e9;
-  return q.h + 0.18;
+  return q.h + 0.02;
 }
 /** Ground for vehicles/people: terrain or bridge deck, whichever is higher (deck only near its top). */
 export function groundAt(x, z, fromY = 1e9) {
@@ -240,7 +238,7 @@ function buildBridges(scene) {
       const p = B.r.s[i], q = B.r.s[i + 1];
       const L = Math.hypot(q.x - p.x, q.z - p.z), yaw = Math.atan2(q.x - p.x, q.z - p.z);
       const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 - 0.6, 0.18, L + 0.05), plank);
-      deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 + 0.09, (p.z + q.z) / 2); deck.rotation.y = yaw;
+      deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 - 0.07, (p.z + q.z) / 2); deck.rotation.y = yaw;
       deck.castShadow = deck.receiveShadow = true; g.add(deck);
       for (const s of [-1, 1]) { // side rails
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, L + 0.05), beam);

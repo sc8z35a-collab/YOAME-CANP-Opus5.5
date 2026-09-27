@@ -8,5 +8,5 @@ from playwright.sync_api import sync_playwright
 with sync_playwright() as p: p.chromium.launch().close()
 PY
 pgrep -f "http.server 8080" >/dev/null || nohup python3 -m http.server 8080 >/tmp/http.log 2>&1 &
-pgrep -f autosave.sh >/dev/null || nohup tools/autosave.sh 240 >/tmp/autosave.log 2>&1 &
+pgrep -f autosave.sh >/dev/null || nohup tools/autosave.sh 60 >/tmp/autosave.log 2>&1 &
 echo BOOTSTRAP_DONE
