@@ -88,8 +88,13 @@ export function heightAt(x, z) {
 
 // Bridges (decks are separate meshes; physics sees them via groundAt)
 export const BRIDGES = [];
+export const RAILS = [];   // bridge guard-rail colliders (posts every 1m) used by vehicle physics
 for (const r of ROADS) if (r.bridge) {
   const [a, b] = r.bridge; BRIDGES.push({ r, a: Math.max(0, a - 1), b: Math.min(r.s.length - 1, b + 1) });
+}
+for (const B of BRIDGES) for (let i = B.a; i < B.b; i++) {
+  const p = B.r.s[i], q = B.r.s[i + 1], L = Math.hypot(q.x - p.x, q.z - p.z), nx = -(q.z - p.z) / L, nz = (q.x - p.x) / L;
+  for (let k = 0; k < L; k += 1) for (const sd of [-1, 1]) { const x = p.x + (q.x - p.x) * k / L + nx * sd * (ROAD_HALF + 0.35), z = p.z + (q.z - p.z) * k / L + nz * sd * (ROAD_HALF + 0.35); RAILS.push({ x, z, r: 0.3, rail: true }); }
 }
 for (const B of BRIDGES) { const s = B.r.s.slice(B.a, B.b + 1); B.box = [Math.min(...s.map(p => p.x)) - 4, Math.min(...s.map(p => p.z)) - 4, Math.max(...s.map(p => p.x)) + 4, Math.max(...s.map(p => p.z)) + 4]; }
 function deckAt(x, z) {
@@ -97,7 +102,7 @@ function deckAt(x, z) {
   for (const B of BRIDGES) if (x > B.box[0] && x < B.box[2] && z > B.box[1] && z < B.box[3]) inBox = true;
   if (!inBox) return -1e9;
   const q = roadQuery(x, z);
-  if (!q.road || !q.bridge || q.d > ROAD_HALF - 0.4) return -1e9;
+  if (!q.road || !q.bridge || q.d > ROAD_HALF + 0.2) return -1e9;
   return q.h + 0.02;
 }
 /** Ground for vehicles/people: terrain or bridge deck, whichever is higher (deck only near its top). */
@@ -237,12 +242,12 @@ function buildBridges(scene) {
     for (let i = B.a; i < B.b; i++) {
       const p = B.r.s[i], q = B.r.s[i + 1];
       const L = Math.hypot(q.x - p.x, q.z - p.z), yaw = Math.atan2(q.x - p.x, q.z - p.z);
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 - 0.6, 0.18, L + 0.05), plank);
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 + 0.4, 0.18, L + 0.05), plank);
       deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 - 0.07, (p.z + q.z) / 2); deck.rotation.y = yaw;
       deck.castShadow = deck.receiveShadow = true; g.add(deck);
       for (const s of [-1, 1]) { // side rails
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, L + 0.05), beam);
-        rail.position.copy(deck.position).add(new THREE.Vector3(Math.cos(yaw) * s * (ROAD_HALF - 0.35), 0.75, -Math.sin(yaw) * s * (ROAD_HALF - 0.35)));
+        rail.position.copy(deck.position).add(new THREE.Vector3(Math.cos(yaw) * s * (ROAD_HALF + 0.15), 0.75, -Math.sin(yaw) * s * (ROAD_HALF + 0.15)));
         rail.rotation.y = yaw; rail.castShadow = true; g.add(rail);
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), beam);
         post.position.copy(rail.position); post.position.y -= 0.38; g.add(post);

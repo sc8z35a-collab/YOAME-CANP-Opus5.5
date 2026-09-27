@@ -3,7 +3,7 @@
 // obstacles (boulders, log segments). Water drag + buoyancy + flood current.
 // Nothing is scripted: if the van leaves the road bed on a cliff it tumbles down for real.
 import { THREE, G, bus, clamp } from './core.js';
-import { groundAt, normalAt, heightAt, WORLD } from './terrain.js';
+import { groundAt, normalAt, heightAt, WORLD, RAILS } from './terrain.js';
 import { colliders } from './forest.js';
 
 const M = 3400;                                     // kg
@@ -40,7 +40,7 @@ const CG = new Map(), CC = 8;
 let cgReady = 0;
 function buildColliderGrid() {
   CG.clear();
-  for (const c of colliders) {
+  for (const c of colliders.concat(RAILS)) {
     const k = Math.floor(c.x / CC) * 4096 + Math.floor(c.z / CC);
     (CG.get(k) || CG.set(k, []).get(k)).push(c);
   }

@@ -147,10 +147,12 @@ export function updateAutopilot(dt) {
   const p = originOf(_o), up = VEH.up.y;
   if (AP.mode === 'winch') return winch(dt, p);
   // ---- airborne / upset: physics only, then recover
-  if (VEH.airT > 0.25 || (up < 0.55 && AP.mode !== 'right')) {
+  if (AP.mode !== 'right' && (VEH.airT > 0.25 || up < 0.55)) {
     c.throttle = 0; c.brake = 0; c.hand = false;
     if (VEH.airT > 0.6 && !AP.fallWarn) { AP.fallWarn = true; say('うわっ…！ 落ちる！', 'danger', 2500); bus.emit('fall'); }
-    if (VEH.speed < 1.2 && up < 0.55) { AP.mode = 'right'; AP.rightT = 0; }
+    // settled (lying on its side / roof, or wheels dangling over a ledge): start recovery
+    AP.restT = VEH.speed < 1.0 ? (AP.restT || 0) + dt : 0;
+    if (AP.restT > 2) { AP.restT = 0; AP.mode = 'right'; AP.rightT = 0; say('止まった…体勢を立て直す', 'warn'); }
     return;
   }
   AP.fallWarn = false;
