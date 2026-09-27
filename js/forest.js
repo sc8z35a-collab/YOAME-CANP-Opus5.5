@@ -2,7 +2,7 @@
 // instanced photo-scanned understory, rocks, deadwood and camp props.
 import { THREE, G, U, rng, clamp, smooth, fbm } from './core.js';
 import { tex, pbr, glbParts, glb } from './assets.js';
-import { heightAt, slopeAt, creekX, trackDist, SPOTS } from './terrain.js';
+import { heightAt, slopeAt, creekX, trackDist, SPOTS, WORLD } from './terrain.js';
 import * as BGU from './lib/addons/BufferGeometryUtils.js';
 
 // twig atlas regions (u0, vTop0, u1, vTop1) measured from alpha map (image-space y from top)
@@ -128,7 +128,7 @@ function place(n, seed, test, minD = 0) {
   let tries = 0;
   while (out.length < n && tries < n * 30) {
     tries++;
-    const x = -150 + R() * 340, z = -190 + R() * 330;
+    const x = WORLD.x0 + 8 + R() * (WORLD.size - 16), z = WORLD.z0 + 8 + R() * (WORLD.size - 16);
     if (!test(x, z, R)) continue;
     if (minD && out.some(o => (o.x - x) ** 2 + (o.z - z) ** 2 < minD * minD)) continue;
     out.push({ x, z, r: R(), y: heightAt(x, z) });
@@ -136,7 +136,7 @@ function place(n, seed, test, minD = 0) {
   return out;
 }
 
-function clearOf(x, z, spotR = 11, trackR = 4, creekR = 4.5) {
+function clearOf(x, z, spotR = 11, trackR = 5, creekR = 4.5) {
   for (const k in SPOTS) if (Math.hypot(x - SPOTS[k].x, z - SPOTS[k].z) < spotR) return false;
   if (trackDist(x, z) < trackR) return false;
   if (Math.abs(x - creekX(z)) < creekR) return false;
@@ -159,15 +159,15 @@ export async function buildForest(scene) {
   // expose one full-quality tree (same template/materials) for the falling-tree event
   treeKit.trunk = templates[1].trunk; treeKit.cards = templates[1].cards; treeKit.H = templates[1].H;
   treeKit.bark = barkF; treeKit.needles = needleMat;
-  const pts = place(hi ? 950 : 650, 5, (x, z, R) => {
+  const pts = place(hi ? 1900 : 1250, 5, (x, z, R) => {
     if (!clearOf(x, z)) return false;
     const d = Math.hypot(x, z);
     const dens = 0.55 + fbm(x * 0.02, z * 0.02, 3) * 0.8;
     return R() < dens * (d < 30 ? 1.2 : 1);
   }, 3.2);
   // hand placed "close" trees framing the camper windows
-  const framing = [[-7, -12], [9, -13], [12, 6], [-9, 10], [3, 15], [-12, -2], [13, -3], [-3, -16]];
-  for (const [x, z] of framing) pts.push({ x, z, r: Math.random(), y: heightAt(x, z) });
+  const framing = [[-9, -12], [11, -13], [12, 6], [-9, 10], [-12, -2], [13, -3]];
+  for (const [x, z] of framing) if (clearOf(x, z, 8, 5, 3)) pts.push({ x, z, r: Math.random(), y: heightAt(x, z) });
 
   const perT = templates.map(() => []);
   pts.forEach((p, i) => perT[i % templates.length].push(p));

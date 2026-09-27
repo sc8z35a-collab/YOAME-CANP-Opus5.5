@@ -3,7 +3,9 @@ import fs from 'fs'; import path from 'path';
 const files = fs.readdirSync('js').filter(f => f.endsWith('.js')).map(f => 'js/' + f);
 let bad = 0;
 const exportsOf = f => { const t = fs.readFileSync(f, 'utf8'); const s = new Set();
-  for (const m of t.matchAll(/export\s+(?:async\s+)?(?:const|let|function|class)\s+(\w+)/g)) s.add(m[1]);
+  for (const m of t.matchAll(/export\s+(?:async\s+)?(?:function|class)\s+(\w+)/g)) s.add(m[1]);
+  // const/let may declare several names on one line: export const A = 1, B = 2;
+  for (const m of t.matchAll(/export\s+(?:const|let)\s+([^;\n]+)/g)) for (const d of m[1].split(',')) { const n = d.trim().match(/^(\w+)\s*=/); if (n) s.add(n[1]); }
   for (const m of t.matchAll(/export\s*\{([^}]+)\}/g)) m[1].split(',').forEach(x => s.add(x.trim().split(/\s+as\s+/).pop()));
   return s; };
 for (const f of files) {
