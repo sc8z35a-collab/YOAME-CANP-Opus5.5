@@ -200,15 +200,22 @@ export function updateAutopilot(dt) {
   }
   c.steer = -clamp(Math.atan(2 * WB * lat / (Ld * Ld)), -LOCK, LOCK); // steer>0 = left
   // ---- speed plan
-  let kmax = 0;
-  for (let i = AP.idx + 1; i < Math.min(path.length - 1, AP.idx + 14); i++) {
-    const a = path[i - 1], b = path[i], d = path[i + 1];
-    let dh = Math.abs(Math.atan2(d.x - b.x, d.z - b.z) - Math.atan2(b.x - a.x, b.z - a.z)); dh = Math.min(dh, Math.PI * 2 - dh);
-    kmax = Math.max(kmax, dh / Math.max(1, Math.hypot(b.x - a.x, b.z - a.z)));
+  // curvature ahead: heading change over ~6m windows, speed limited by the distance to it
+  let vcurve = AP.cruise, dist = 0;
+  for (let i = AP.idx; i < Math.min(path.length - 2, AP.idx + 30); i++) {
+    const a = path[i], b = path[Math.min(path.length - 1, i + 3)], cc = path[Math.min(path.length - 1, i + 6)];
+    const l1 = Math.hypot(b.x - a.x, b.z - a.z), l2 = Math.hypot(cc.x - b.x, cc.z - b.z);
+    if (l1 > 0.5 && l2 > 0.5) {
+      let dh = Math.abs(Math.atan2(cc.x - b.x, cc.z - b.z) - Math.atan2(b.x - a.x, b.z - a.z)); dh = Math.min(dh, Math.PI * 2 - dh);
+      const k = dh / ((l1 + l2) / 2);
+      const vk = Math.max(1.3, Math.sqrt(2.0 / Math.max(k, 1e-3)));
+      vcurve = Math.min(vcurve, Math.sqrt(vk * vk + 2 * 1.4 * dist));
+    }
+    dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   }
   let remain = 0; for (let i = AP.idx; i < path.length - 1; i++) remain += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   AP.remain = remain + bd;
-  let vt = Math.min(AP.cruise, Math.sqrt(2.2 / Math.max(kmax, 1e-3)), 1.2 + Math.sqrt(2 * 1.6 * Math.max(0, remain - 1)));
+  let vt = Math.min(AP.cruise, vcurve, 1.2 + Math.sqrt(2 * 1.6 * Math.max(0, remain - 1)));
   if (AP.slow) vt = Math.min(vt, 2.6);
   if (VEH.submerged > 0.15) vt = Math.min(vt, 2);
   if (G.rain > 0.6) vt *= 0.85;
