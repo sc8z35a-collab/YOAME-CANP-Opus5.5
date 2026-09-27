@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 *.log
 /tmp/
+build/shots/
+__pycache__/
+dist/
+.boot.log

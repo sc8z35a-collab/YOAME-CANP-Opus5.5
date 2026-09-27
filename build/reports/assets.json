@@ -1,0 +1,12 @@
+{
+ "missing": [],
+ "unused": [],
+ "bytes": {
+  "models": 7135732,
+  "tex": 56567297,
+  "tex_h": 13202235,
+  "tex_m": 3395754
+ },
+ "ok": true,
+ "seconds": 0.1
+}

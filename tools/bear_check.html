@@ -1,0 +1,28 @@
+<!doctype html><html><body style="margin:0;background:#000"><script type="module">
+// Isolation test: build ONLY the bear exactly as the game does (Bear class via buildAnimals),
+// place it with the QA staging math, and render from the lounge eye with a plain white light.
+// If the bear is visible here but not in-game, the problem is lighting/occlusion, not placement.
+import * as THREE from '../js/lib/three.module.js';
+import { G } from '../js/core.js';
+import { buildAnimals, Z } from '../js/animals.js';
+import { VIEWS } from '../js/view.js';
+const r = new THREE.WebGLRenderer({ preserveDrawingBuffer: true }); r.setSize(640, 300); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x335577);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.5));
+const cam = new THREE.PerspectiveCamera(62, 640 / 300, 0.03, 500);
+G.camper = new THREE.Group(); scene.add(G.camper); G.camper.updateMatrixWorld(true);
+const grid = new THREE.GridHelper(40, 40); scene.add(grid);
+await buildAnimals(scene);
+const v = VIEWS.lounge, e = new THREE.Euler(v.pitch, v.yaw, 0, 'YXZ');
+cam.position.set(...v.pos); cam.quaternion.setFromEuler(e);
+const f = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, v.yaw, 0, 'YXZ'));
+const b = Z.bear; b.spawnAt(0, 0);
+b.pos.copy(cam.position).addScaledVector(f, 7); b.pos.y = 0; b.rear = 1; b.heading = Math.atan2(-f.x, -f.z); b.obj.rotation.y = b.heading;
+b.anim(0.016); b.obj.updateMatrixWorld(true);
+const box = new THREE.Box3().setFromObject(b.obj);
+scene.add(new THREE.Box3Helper(box, 0xff0000));
+r.render(scene, cam);
+window.__r = { box: [box.min.toArray(), box.max.toArray()].map(a => a.map(x => +x.toFixed(2))), pos: b.pos.toArray().map(x => +x.toFixed(2)),
+  visible: b.obj.visible, shot: r.domElement.toDataURL('image/jpeg', 0.85) };
+document.title = 'done';
+</script></body></html>
