@@ -303,7 +303,7 @@ export function buildEvents(scene) {
   if (forced && !P.has('qa')) setTimeout(() => triggerEvent(forced), 3000);
 }
 
-export function startForcedEvent() { const f = P.get('event'); if (f && P.has('qa')) triggerEvent(f); }
+export function startForcedEvent(name) { const f = name || P.get('event'); if (f && (P.has('qa') || name)) triggerEvent(f); }
 
 export function triggerEvent(name) {
   const e = EVENTS[name] || { run: { deer: spawnDeer }[name] };

@@ -160,6 +160,15 @@ async function init() {
   startForcedEvent(); // after camper placement + view (staging uses both)
   if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
   buildUI();
+  // QA: pre-simulate autopilot driving (?dest=<id>&sim=<seconds>), chase cam (?cam=chase), open tablet (?tablet=1)
+  if (P.has('dest')) {
+    engage(P.get('dest'));
+    const n = Math.round((parseFloat(P.get('sim')) || 0) * 30);
+    for (let i = 0; i < n; i++) { G.t += 1 / 30; updateDrive(1 / 30); if (P.has('event2') && i === Math.round(n * 0.5)) startForcedEvent(P.get('event2')); }
+    C.group.updateMatrixWorld(true);
+  }
+  if (P.get('cam') === 'chase') { const m = await import('./view.js'); m.setView('chase'); if (P.has('cyaw')) m.V.chase.yaw = parseFloat(P.get('cyaw')); }
+  if (P.has('tablet')) { const m = await import('./tablet.js'); m.openTablet(); if (P.has('sel')) { m.TAB.sel = P.get('sel'); } }
   resize();
   updateWeather(0.016, camera);
   updateEnv();

@@ -23,7 +23,7 @@ export const VIEWS = {};
 for (const [k, r] of Object.entries(RAW)) { const { yaw, pitch } = dirToYawPitch(r.pos, r.at); VIEWS[k] = { ...r, yaw, pitch, limits: [-r.span, r.span] }; }
 
 export const V = { cur: 'walk', fov: 70, tfov: 70, breath: 0, cam: 'fp', chase: { yaw: 0, dist: 11 } };
-export function setView(k) { if (k === 'chase') V.cam = V.cam === 'chase' ? 'fp' : 'chase'; }
+export function setView(k) { if (k === 'chase') { V.cam = V.cam === 'chase' ? 'fp' : 'chase'; V.chaseInit = false; V.chase.yaw = (G.camper ? G.camper.rotation.y : 0); } }
 
 export function initView(canvas) {
   if (P.has('yaw')) PL.yaw = parseFloat(P.get('yaw'));
@@ -69,6 +69,7 @@ export function updateView(dt, camera) {
     _t.set(c.x, c.y + 1.6, c.z);
     _p.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(V.chase.dist).add(_t);
     _p.y = Math.max(_p.y, heightAt(_p.x, _p.z) + 1.2);
+    if (!V.chaseInit) { camera.position.copy(_p); V.chaseInit = true; }
     camera.position.lerp(_p, 1 - Math.exp(-dt * 6)); camera.position.add(G.shakeV);
     camera.lookAt(_t); camera.fov = 60; camera.updateProjectionMatrix();
     camera.getWorldDirection(G.lookDir); G.camInside = false;

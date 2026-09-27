@@ -166,7 +166,8 @@ export function refresh() {
 }
 
 export function updateUI() {
-  if (!hud.tm || G.frame % 6) return;
+  if (!hud.tm || (G.frame % 6 && hud.init)) return;
+  hud.init = true;
   hud.tm.textContent = `${G.day}日目 ${fmtTime(G.hour)}`;
   hud.wx.textContent = ' ' + (WEATHERS[W.mode]?.label || '');
   const S = G.state, th = [];
