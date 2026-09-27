@@ -196,7 +196,10 @@ export function updateAutopilot(dt) {
       if (K.t < 0.5) { c.throttle = 0; c.brake = 1; }
       else { c.brake = 0; c.throttle = K.dir * clamp(0.35 + (1.6 - spd * K.dir) * 0.4, 0, 0.8); }
       K.dist += Math.abs(spd) * dt;
-      if (K.t > 0.5 && (K.dist > 5.5 || (K.t > 3 && Math.abs(spd) < 0.2))) { K.dir = -K.dir; K.t = 0; K.dist = 0; K.n++; }
+      if (K.t > 0.5 && (K.dist > 5.5 || (K.t > 3 && Math.abs(spd) < 0.2))) { K.dir = -K.dir; K.t = 0; K.dist = 0; K.n++; if (K.dist < 0.5 && K.t > 3) K.blocked = (K.blocked || 0) + 1; }
+      // K-turn going nowhere (wheels off an edge / wedged): hand over to the stuck -> winch logic
+      K.idle = Math.abs(spd) < 0.15 ? (K.idle || 0) + dt : 0;
+      if (K.idle > 6) { AP.kturn = null; AP.stuckN = (AP.stuckN || 0) + 1; if (AP.stuckN > 1) return startWinch(); plan(true); return; }
       AP.speedT = 1.6; AP.stuckT = 0;
       return;
     }
