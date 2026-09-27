@@ -330,11 +330,12 @@ export function buildCamper(scene) {
   const tireG = new THREE.CylinderGeometry(0.42, 0.42, 0.28, 32); tireG.rotateZ(Math.PI / 2);
   const rimG = new THREE.CylinderGeometry(0.24, 0.24, 0.3, 20); rimG.rotateZ(Math.PI / 2);
   C.wheels = [];
-  for (const [x, z] of [[-1.02, ZF - 0.35], [1.02, ZF - 0.35], [-1.02, 1.9], [1.02, 1.9]]) {
+  for (const [x, z] of [[-1.02, ZF - 0.35], [1.02, ZF - 0.35], [-1.02, 1.9], [1.02, 1.9]]) { // must match vehicle.js WHEELS
     const w = new THREE.Group();
     const t = new THREE.Mesh(tireG, rubber); t.castShadow = true;
     const r = new THREE.Mesh(rimG, chrome);
     w.add(t, r); w.position.set(x, 0.42, z); g.add(w); C.wheels.push(w);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.31, 6), rubber); hub.rotation.z = Math.PI / 2; hub.position.x = 0.01; w.add(hub); // lug nut ring: makes the spin visible
     // wheel arch
     g.add(rbox(0.1, 0.12, 1.05, darkPlastic, x * 1.14, 0.9, z, 0.04));
   }
@@ -399,6 +400,7 @@ export function buildCamper(scene) {
     C.glass[w.id] = m;
   }
 
+  g.userData.wheels = C.wheels;
   buildInterior(inner, { oak, oakDark, leather, linen, fleece, tile, steel, darkPlastic, dashM, panel, chrome });
   scene.add(g);
   return g;
@@ -727,6 +729,4 @@ export function updateCamper(dt) {
   C.stove.forEach(m => m.emissiveIntensity = cook * (1.5 + Math.sin(G.t * 9) * 0.2));
   // clock
   if (G.frame % 30 === 0) drawClock();
-  // wheel spin when driving
-  if (C.wheels && G.driveSpeed) C.wheels.forEach(w => w.children.forEach(c => c.rotation.x -= G.driveSpeed * dt / 0.42));
 }

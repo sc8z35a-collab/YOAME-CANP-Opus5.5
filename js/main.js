@@ -1,7 +1,12 @@
 // Entry: renderer, post FX (bloom + cinematic grade/vignette/grain + rain lens), loop, driving.
 import { THREE, G, U, P, QA, bus, clamp, damp, lerp, smooth } from './core.js';
 import { setAniso, progress } from './assets.js';
-import { buildTerrain, heightAt, SPOTS, spotHeight, drivePath } from './terrain.js';
+import { buildTerrain, heightAt, SPOTS, spotHeight } from './terrain.js';
+import { VEH, setPose, updateVehicle, originOf } from './vehicle.js';
+import { AP, updateAutopilot, engage } from './autopilot.js';
+import { PL, initPlayer, updatePlayer, goOutside } from './player.js';
+import { buildTablet, updateTablet } from './tablet.js';
+import { FLOOR, ZF } from './camper.js';
 import { buildForest, camp, updateForest } from './forest.js';
 import { buildCamper, updateCamper, C } from './camper.js';
 import { buildWeather, updateWeather, W } from './weather.js';
@@ -104,63 +109,32 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-// ---------------------------------------------------------------- camper placement & driving
+// ---------------------------------------------------------------- camper placement & physics
 function placeCamper(spot) {
-  const s = SPOTS[spot]; G.camperSpot = spot;
-  C.group.position.set(s.x, spotHeight(spot), s.z);
-  C.group.rotation.set(0, s.rot, 0);
+  const s = SPOTS[spot] || SPOTS.hollow; G.camperSpot = s.id;
+  setPose(s.x, s.z, s.rot, 0.05);
+  updateVehicle(0, C.group);
 }
-const drive = { on: false, path: [], t: 0, len: 0, to: null };
-bus.on('driveTo', to => {
-  if (to === G.camperSpot) return toast('もうここに停まっている', 'info');
-  if (G.state.hull < 5) return toast('車が動かない…', 'danger');
-  const pts = drivePath(G.camperSpot, to);
-  drive.curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'); drive.len = drive.curve.getLength();
-  drive.t = 0; drive.on = true; drive.to = to; G.driving = true;
-  G.state.noise = 1; sfx('engine');
-  toast(`${SPOTS[to].name}へ移動する…`, 'info');
-  import('./view.js').then(m => m.setView('driver'));
-});
-const _t = new THREE.Vector3(), _a = new THREE.Vector3();
+bus.on('driveTo', to => engage(to)); // legacy event name (menus, QA)
+// vehicle acceleration in camper-local space (sways the walking player & curtains)
+const _pv = new THREE.Vector3(), _qa = new THREE.Quaternion();
+G.vehAccL = new THREE.Vector3();
 function updateDrive(dt) {
-  if (!drive.on) { G.driveSpeed = 0; return; }
-  const bogged = G.submerge > 0.5 ? 0.35 : 1;
-  const sp = 5.5 * bogged * smooth(0, 0.06, drive.t) * (1 - smooth(0.9, 1, drive.t) * 0.8);
-  G.driveSpeed = sp;
-  drive.t = Math.min(1, drive.t + sp * dt / drive.len + (sp < 0.3 ? dt * 0.002 : 0));
-  drive.curve.getPointAt(drive.t, _t);
-  drive.curve.getTangentAt(Math.min(drive.t, 0.999), _a);
-  const y = heightAt(_t.x, _t.z);
-  C.group.position.set(_t.x, y, _t.z);
-  const yaw = Math.atan2(-_a.x, -_a.z);
-  let d = yaw - C.group.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
-  C.group.rotation.y += d * Math.min(1, dt * 3);
-  // pitch from terrain: _a points forward; nose up (+rotation.x tilts local -z upward) when climbing
-  const f = heightAt(_t.x + _a.x * 2, _t.z + _a.z * 2) - heightAt(_t.x - _a.x * 2, _t.z - _a.z * 2);
-  drive.pitch = damp(drive.pitch || 0, Math.atan2(f, 4), 3, dt);
-  C.group.rotation.x = drive.pitch;
-  G.shake = Math.max(G.shake, 0.12 + Math.random() * 0.05);
-  if (drive.t >= 1) {
-    drive.on = false; G.driving = false; drive.pitch = 0;
-    G.camperSpot = drive.to;
-    placeCamper(drive.to); // path ends aligned with the pad heading, so this snap is sub-degree
-    toast(`${SPOTS[drive.to].name}に到着。エンジンを切った`, 'info');
-    bus.emit('arrived', drive.to);
-  }
+  updateAutopilot(dt);
+  _pv.copy(VEH.v);
+  updateVehicle(dt, C.group);
+  if (dt > 0) G.vehAccL.copy(VEH.v).sub(_pv).divideScalar(dt).applyQuaternion(_qa.copy(VEH.q).invert());
+  G.driveSpeed = VEH.fwdSpeed;
+  G.submerge = VEH.submerged * 1.6;
+  // road rumble & wind gusts rock the van a little (camera shake is felt, not scripted)
+  if (G.driving && VEH.speed > 1) G.shake = Math.max(G.shake, 0.05 + VEH.speed * 0.008);
 }
-
-// camper rocking (spring) from impacts & wind
+// wind: gust force on the tall flat side of the van (can topple it on a cliff edge in a storm)
 function updateRock(dt) {
-  G.rockAngle = G.rockAngle || 0; G.rockV = G.rockV || 0;
-  const windF = (G.wind > 0.7 ? Math.sin(G.t * 1.7) * Math.sin(G.t * 0.63) * 0.004 * G.wind : 0);
-  G.rockV = (G.rockV || 0) + (-G.rockAngle * 60 - G.rockV * 6) * dt + windF;
-  G.rockAngle += G.rockV * dt;
-  if (!drive.on) {
-    C.group.rotation.z = G.rockAngle;
-    const sub = G.submerge || 0;
-    // floating/bobbing when water gets high
-    C.group.rotation.x = damp(C.group.rotation.x, sub > 0.6 ? Math.sin(G.t * 0.8) * 0.015 : 0, 2, dt);
-  }
+  const gust = G.wind > 0.7 ? Math.max(0, Math.sin(G.t * 0.9) * Math.sin(G.t * 0.37)) * (G.wind - 0.6) : 0;
+  G.windPush = G.windPush || new THREE.Vector3();
+  G.windPush.set(-0.5, 0, 0.8).multiplyScalar(gust * 5200);
+  G.rockAngle = C.group.rotation.z;
 }
 
 bus.on('gameover', src => {
@@ -175,11 +149,13 @@ async function init() {
   buildWeather(scene, renderer); W.renderer = renderer;
   buildTerrain(scene);
   buildCamper(scene);
-  placeCamper(P.get('spot') || 'hollow');
+  placeCamper(P.get('spot') || (() => { try { return localStorage.getItem('fc3d_spot'); } catch (e) { return null; } })() || 'hollow');
+  buildTablet(C.group, FLOOR, ZF);
   await buildForest(scene);
   await buildAnimals(scene);
   buildEvents(scene);
-  initView(canvas);
+  initPlayer(); initView(canvas);
+  if (PL.pendingOutside) goOutside(C.group);
   C.group.updateMatrixWorld(true);
   startForcedEvent(); // after camper placement + view (staging uses both)
   if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
@@ -222,9 +198,11 @@ function loop(now) {
     if (G.hour >= 24) { G.hour -= 24; G.day++; }
     if (prev < 6 && G.hour >= 6 && G.state.lastDawnDay !== G.day) { G.state.lastDawnDay = G.day; G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
   }
-  updateDrive(dt);
+  if (!G.state.over) updateDrive(dt);
   updateRock(dt);
   C.group.updateMatrixWorld(true);
+  updatePlayer(dt, C.group, G.driving);
+  updateTablet(dt);
   updateWeather(dt, camera);
   if (!G.state.over) { updateEvents(dt); updateAnimals(dt); }
   updateCamper(dt);
@@ -282,6 +260,6 @@ function showIntro() {
     toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
   };
 }
-function VIEWS_out() { return V.cur === 'outside'; }
+function VIEWS_out() { return !G.camInside; }
 
 init().catch(e => { console.error(e); loadEl.innerHTML = '<p style="color:#f88">読み込みエラー: ' + e.message + '</p>'; window.__QA.error = String(e); window.__QA.ready = true; });

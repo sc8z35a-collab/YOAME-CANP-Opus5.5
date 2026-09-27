@@ -13,7 +13,7 @@ const I = new THREE.Vector3(                        // principal inertia of a bo
   M / 12 * ((HB.y1 - HB.y0) ** 2 + (HB.z1 - HB.z0) ** 2) * 0.8,
   M / 12 * ((2 * HB.x) ** 2 + (HB.z1 - HB.z0) ** 2) * 0.8,
   M / 12 * ((2 * HB.x) ** 2 + (HB.y1 - HB.y0) ** 2) * 0.8);
-export const WHEELS = [[-1.02, -4.65, true], [1.02, -4.65, true], [-1.02, 1.9, false], [1.02, 1.9, false]];
+export const WHEELS = [[-1.02, -4.65, true], [1.02, -4.65, true], [-1.02, 1.9, false], [1.02, 1.9, false]]; // = camper.js wheel layout (ZF-0.35 = -4.65)
 export const WHEEL_R = 0.42;
 const ANCHOR_Y = 0.95, SUS_LEN = 1.09;              // ray from anchor, contact when t < SUS_LEN
 const K_SUS = 62000, C_SUS = 7800, MU = 0.95;
@@ -271,7 +271,7 @@ export function updateVehicle(dt, group) {
   }
   if (group) {
     originOf(group.position); group.quaternion.copy(VEH.q);
-    group.children.length && WHEEL_MESHES(group);
+    WHEEL_MESHES(group);
   }
 }
 function WHEEL_MESHES(group) {
