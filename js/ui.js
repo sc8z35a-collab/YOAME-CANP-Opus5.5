@@ -1,11 +1,16 @@
 // HUD & actions (landscape phone layout). All touch targets >= 44px.
 import { G, bus, fmtTime, clamp } from './core.js';
 import { VIEWS, V, setView } from './view.js';
+import { PL, focusSpot, sitAt, standUp, goOutside, goInside } from './player.js';
+import { openTablet, closeTablet, TAB, initTabletUI } from './tablet.js';
+import { AP, disengage, parkedAt, nearestDest } from './autopilot.js';
+import { VEH } from './vehicle.js';
+import { DESTS } from './roads.js';
 import { C, setCurtains, drawRadio } from './camper.js';
 import { W, WEATHERS, setWeather } from './weather.js';
 import { Z, scareAll, nearestAnimal } from './animals.js';
 import { E, triggerEvent } from './events.js';
-import { SPOTS } from './terrain.js';
+
 import { sfx, initAudio, A } from './audio.js';
 
 const $ = s => document.querySelector(s);
@@ -21,7 +26,8 @@ export const ACTIONS = [
   { id: 'heater', icon: '🔥', label: 'ヒーター', on: () => G.state.heater, act: () => { G.state.heater = !G.state.heater; sfx('switch'); } },
   { id: 'gen', icon: '⚡', label: '発電機', on: () => G.state.generator, act: () => { G.state.generator = !G.state.generator; G.state.noise = Math.max(G.state.noise, 0.3); toast(G.state.generator ? '発電機を回した（音で動物が警戒する）' : '発電機を止めた', 'info'); } },
   { id: 'radio', icon: '📻', label: 'ラジオ', on: () => G.state.radio, act: () => { G.state.radio = !G.state.radio; radioNews(); } },
-  { id: 'drive', icon: '🚐', label: '移動', act: () => bus.emit('drive') },
+  { id: 'tablet', icon: '🗺', label: '地図/自動運転', act: () => openTablet() },
+  { id: 'head', icon: '🚨', label: 'ライト', on: () => G.state.headOn, act: () => { G.state.headOn = !G.state.headOn; sfx('switch'); } },
 ];
 function distBear() { return Math.hypot(Z.bear.pos.x - G.camper.position.x, Z.bear.pos.z - G.camper.position.z); }
 
@@ -57,10 +63,15 @@ export function buildUI() {
       <div class="bar" title="安心度"><i>💗</i><b id="b-calm"></b></div>
     </div>
     <div id="spot"></div>
+    <button id="camBtn" data-touch class="round" title="視点">🎥</button>
     <button id="menuBtn" data-touch class="round">☰</button>
   </div>
-  <div id="views"></div>
-  <div id="actions"></div>
+  <div id="apHud" class="hidden"><div id="apDest"></div><div id="apBar"><i></i></div><div id="apSub"></div><button data-touch class="chip" id="apStop">■ 停車</button></div>
+  <div id="joy"><div id="joyKnob"></div></div>
+  <button id="runBtn" data-touch class="round small">🏃</button>
+  <button id="ctxBtn" data-touch class="ctx hidden"></button>
+  <button id="actToggle" data-touch class="round">🧰</button>
+  <div id="actions" class="hidden"></div>
   <div id="threat"></div>
   <div id="toasts"></div>
   <div id="menu" class="hidden">
@@ -68,25 +79,22 @@ export function buildUI() {
       <h2>森の奥のキャンプカー</h2>
       <div class="row"><span>サウンド</span><div><button data-touch class="chip" id="sndBtn">🔊 オン</button><button data-touch class="chip" id="restartBtn">最初から</button></div></div>
       <div class="row"><span>画質</span><div><button data-touch class="chip" data-q="u">ウルトラ</button><button data-touch class="chip" data-q="h">高</button><button data-touch class="chip" data-q="m">軽量</button></div></div>
+      <div class="row"><span>ワープ</span><div><button data-touch class="chip" id="homeBtn">キャンプ地へ戻す（困ったとき）</button></div></div>
       <h3 class="sub">鑑賞モード（自由に天気・時間・出来事を起こせます）</h3>
       <div class="row"><span>天気</span><div id="wxBtns"></div></div>
       <div class="row"><span>時間</span><div><button data-touch class="chip" data-t="-3">−3h</button><button data-touch class="chip" data-t="3">+3h</button><button data-touch class="chip" id="ff">早送り</button></div></div>
       <div class="row"><span>出来事</span><div id="evBtns"></div></div>
       <button data-touch class="chip wide" id="closeMenu">閉じる</button>
     </div>
-  </div>
-  <div id="drivePanel" class="hidden"><div class="panel"><h3>どこへ移動する？</h3><div id="spotBtns"></div><button data-touch class="chip wide" id="closeDrive">やめる</button></div></div>`;
+  </div>`;
+  initTabletUI(document.body);
   toastEl = $('#toasts');
-  const vEl = $('#views');
-  for (const [k, v] of Object.entries(VIEWS)) {
-    const b = h('button', { className: 'vbtn', id: 'v-' + k }, v.label); b.dataset.touch = 1;
-    b.onclick = () => { initAudio(); setView(k); }; vEl.appendChild(b);
-  }
   const aEl = $('#actions');
   for (const a of ACTIONS) {
     const b = h('button', { className: 'abtn', id: 'a-' + a.id }, `<span>${a.icon}</span><small>${a.label}</small>`); b.dataset.touch = 1;
     b.onclick = () => { initAudio(); a.act(); refresh(); }; aEl.appendChild(b);
   }
+  $('#actToggle').onclick = () => { initAudio(); $('#actions').classList.toggle('hidden'); $('#actToggle').classList.toggle('on'); };
   const wx = $('#wxBtns');
   for (const [k, w] of Object.entries(WEATHERS)) { const b = h('button', { className: 'chip' }, w.label); b.dataset.touch = 1; b.onclick = () => setWeather(k); wx.appendChild(b); }
   const ev = $('#evBtns');
@@ -98,6 +106,8 @@ export function buildUI() {
   $('#ff').onclick = () => { G.timeMul = G.timeMul > 1 ? 1 : 30; $('#ff').classList.toggle('on', G.timeMul > 1); };
   $('#menuBtn').onclick = () => { initAudio(); $('#menu').classList.toggle('hidden'); };
   $('#closeMenu').onclick = () => $('#menu').classList.add('hidden');
+  $('#homeBtn').onclick = () => { $('#menu').classList.add('hidden'); bus.emit('rescueHome'); };
+  $('#camBtn').onclick = () => { setView('chase'); $('#camBtn').classList.toggle('on', V.cam === 'chase'); };
   try { if (localStorage.getItem('fc3d_mute') === '1') $('#sndBtn').textContent = '🔇 オフ'; } catch (e) {}
   $('#sndBtn').onclick = () => {
     initAudio();
@@ -106,32 +116,78 @@ export function buildUI() {
     $('#sndBtn').textContent = on ? '🔊 オン' : '🔇 オフ';
     try { localStorage.setItem('fc3d_mute', on ? '0' : '1'); } catch (e) {}
   };
-  $('#restartBtn').onclick = () => { if (confirm('最初からやり直しますか？')) location.reload(); };
-  const sEl = $('#spotBtns');
-  for (const [k, s] of Object.entries(SPOTS)) {
-    const b = h('button', { className: 'chip wide' }, `${s.name}<br><small>${k === 'hollow' ? '風雨を避けられる / 増水に弱い' : '水は来ない / 土砂崩れ・倒木に注意'}</small>`); b.dataset.touch = 1;
-    b.onclick = () => { $('#drivePanel').classList.add('hidden'); bus.emit('driveTo', k); }; sEl.appendChild(b);
-  }
-  $('#closeDrive').onclick = () => $('#drivePanel').classList.add('hidden');
-  bus.on('drive', () => { if (G.driving) return; $('#drivePanel').classList.remove('hidden'); });
-  hud = { tm: $('#tm'), wx: $('#wx'), hull: $('#b-hull'), bat: $('#b-bat'), calm: $('#b-calm'), threat: $('#threat'), spot: $('#spot') };
+  $('#restartBtn').onclick = () => { if (confirm('最初からやり直しますか？')) { try { localStorage.removeItem('fc3d_spot'); } catch (e) {} location.reload(); } };
+  $('#apStop').onclick = () => disengage('自動運転を止めた');
+  bus.on('drive', () => openTablet());
+  // ---- virtual joystick (left side of the screen, appears where the thumb lands)
+  const joy = $('#joy'), knob = $('#joyKnob'); let jid = null, jx = 0, jy = 0;
+  const canvas = document.getElementById('c');
+  canvas.addEventListener('pointerdown', e => {
+    if (jid !== null || e.clientX > window.innerWidth * 0.42 || TAB.open) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    jid = e.pointerId; jx = e.clientX; jy = e.clientY; initAudio();
+    joy.style.left = jx + 'px'; joy.style.top = jy + 'px'; joy.classList.add('on');
+  });
+  window.addEventListener('pointermove', e => {
+    if (e.pointerId !== jid) return;
+    let dx = e.clientX - jx, dy = e.clientY - jy; const d = Math.hypot(dx, dy), R = 52;
+    if (d > R) { dx *= R / d; dy *= R / d; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    PL.move.x = dx / R; PL.move.y = -dy / R;
+  });
+  const jend = e => { if (e.pointerId !== jid) return; jid = null; PL.move.x = PL.move.y = 0; knob.style.transform = ''; joy.classList.remove('on'); };
+  window.addEventListener('pointerup', jend); window.addEventListener('pointercancel', jend);
+  // keyboard (PC dev convenience): WASD + mouse drag
+  const keys = new Set();
+  window.addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'KeyE') $('#ctxBtn').click(); if (e.code === 'KeyM') TAB.open ? closeTablet() : openTablet(); updKeys(); });
+  window.addEventListener('keyup', e => { keys.delete(e.code); updKeys(); });
+  function updKeys() { if (jid !== null) return; PL.move.x = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0); PL.move.y = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0); PL.run = keys.has('ShiftLeft'); }
+  $('#runBtn').onclick = () => { PL.run = !PL.run; $('#runBtn').classList.toggle('on', PL.run); };
+  // ---- context action (sit / lie / stand / door / tablet)
+  $('#ctxBtn').onclick = () => {
+    initAudio();
+    const f = focusSpot(G.camper); if (!f) return;
+    if (f.id === 'stand') standUp();
+    else if (f.id === 'enter') goInside(G.camper);
+    else if (f.door) { if (G.driving && VEH.speed > 0.8) return toast('走行中は外に出られない', 'warn'); goOutside(G.camper); }
+    else if (f.tablet) openTablet();
+    else sitAt(f.id);
+  };
+  // after starting the autopilot from the tablet: sit down in the passenger seat if walking around
+  bus.on('seatForDrive', () => { if (PL.inside && !PL.seat) sitAt('passenger'); });
+  bus.on('arrived', id => { try { localStorage.setItem('fc3d_spot', id); } catch (e) {} });
+  hud = { tm: $('#tm'), wx: $('#wx'), hull: $('#b-hull'), bat: $('#b-bat'), calm: $('#b-calm'), threat: $('#threat'), spot: $('#spot'), ctx: $('#ctxBtn'),
+    ap: $('#apHud'), apDest: $('#apDest'), apSub: $('#apSub'), apBar: $('#apBar i') };
   refresh();
 }
 
 export function refresh() {
   for (const a of ACTIONS) if (a.on) document.getElementById('a-' + a.id)?.classList.toggle('on', !!a.on());
-  for (const k in VIEWS) document.getElementById('v-' + k)?.classList.toggle('on', V.cur === k);
 }
 
 export function updateUI() {
   if (!hud.tm || G.frame % 6) return;
   hud.tm.textContent = `${G.day}日目 ${fmtTime(G.hour)}`;
   hud.wx.textContent = ' ' + (WEATHERS[W.mode]?.label || '');
-  const S = G.state;
+  const S = G.state, th = [];
   const set = (el, v) => { el.style.width = clamp(v, 0, 100) + '%'; el.classList.toggle('low', v < 25); };
   set(hud.hull, S.hull); set(hud.bat, S.battery); set(hud.calm, S.calm);
-  hud.spot.textContent = '📍' + SPOTS[G.camperSpot].name;
-  const th = [];
+  const pk = parkedAt(), nd = nearestDest();
+  hud.spot.textContent = G.driving ? `🚐 ${Math.abs(VEH.fwdSpeed * 3.6).toFixed(0)}km/h` : pk ? '📍' + DESTS[pk].name : `📍${nd.d.name}付近（${Math.round(nd.dist)}m）`;
+  // context button
+  const f = focusSpot(G.camper);
+  hud.ctx.classList.toggle('hidden', !f || TAB.open);
+  if (f) hud.ctx.textContent = f.label;
+  // autopilot HUD
+  hud.ap.classList.toggle('hidden', !AP.on);
+  if (AP.on) {
+    const d = DESTS[AP.dest];
+    hud.apDest.textContent = '🧭 ' + d.name;
+    AP.total = Math.max(AP.total || 0, AP.remain);
+    hud.apBar.style.width = clamp(100 * (1 - AP.remain / Math.max(AP.total, 1)), 0, 100) + '%';
+    hud.apSub.textContent = { drive: `残り ${Math.round(AP.remain)}m ・ ${Math.abs(VEH.fwdSpeed * 3.6).toFixed(0)}km/h`, right: '体勢を立て直し中…', winch: 'ウインチで引き上げ中…' }[AP.mode] || '';
+  } else AP.total = 0;
+  if (VEH.up.y < 0.5) th.push('⚠ 横転している');
   if (Z.bear?.active) th.push(Z.bear.state === 'charge' ? '🐻 突進してくる！' : '🐻 クマが近くにいる');
   if (Z.wolves?.[0]?.active) th.push('🐺 オオカミ');
   if (Z.deer?.[0]?.active) th.push('🦌 シカ');
