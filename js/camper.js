@@ -704,7 +704,7 @@ export function updateCamper(dt) {
   C.uCurtain.value = C.curtainLevel;
   if (C.uSway) C.uSway.value = (G.rockAngle || 0) * 8 + (G.shakeV ? G.shakeV.x * 4 : 0);
   // interior lighting level
-  const target = S.lightsOn && !S.hiding ? 1 : 0;
+  const target = S.lightsOn && !S.hiding && S.battery > 0.5 ? 1 : 0;
   C.lightLevel += (target - C.lightLevel) * Math.min(1, dt * 6);
   const flick = 0.85 + 0.15 * Math.sin(G.t * 13) * Math.sin(G.t * 7.3) + (_flick() - 0.5) * 0.08;
   for (const { l, base } of C.interiorLights) l.intensity = base * C.lightLevel * (S.battery > 0 ? 1 : 0);
@@ -720,7 +720,7 @@ export function updateCamper(dt) {
   C.porch.intensity = S.hiding ? 0 : 3 * G.night;
   for (const sp of C.spill) sp.l.intensity = sp.base * C.lightLevel * (1 - C.curtainLevel * 0.85) * (0.25 + 0.75 * G.night);
   // spotlight & headlights
-  C.spot.intensity = S.spotOn ? 900 : 0;
+  C.spot.intensity = S.spotOn && S.battery > 0.5 ? 900 : 0;
   const hk = S.headOn || G.driving ? 1 : 0;
   C.heads.forEach(h => h.intensity = 350 * hk);
   C.headMat.emissiveIntensity = 6 * hk;

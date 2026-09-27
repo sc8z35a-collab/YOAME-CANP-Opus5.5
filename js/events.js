@@ -10,7 +10,7 @@ import { Z, spawnBear, spawnDeer, spawnWolves } from './animals.js';
 import { glassShared } from './glass.js';
 import { tex } from './assets.js';
 import { VIEWS } from './view.js';
-const QAview = () => VIEWS[P.get('view') || 'lounge'] || {};
+const QAview = () => VIEWS[P.get('view') || 'lounge'] || VIEWS.lounge;
 import { treeKit } from './forest.js';
 
 export const E = { active: null, cooldown: 25, log: [], slide: null, flood: { t: 0, on: false, peak: 0 }, fallen: null };
@@ -228,7 +228,7 @@ function buildFallingTree(scene) {
 export function startTreeFall() {
   if (!treeMesh || (E.fallen && !E.fallen.done)) return false;
   removeObstacles('tree');
-  const c = G.camper.position, a = G.camper.rotation.y;
+  const c = G.camper.position, a = Math.atan2(-VEH.fwd.x, -VEH.fwd.z);
   // while driving, the tree comes down across the road AHEAD (a road block the autopilot must handle)
   const ahead = G.driving && VEH.speed > 1;
   const side = R() < 0.5 ? -1 : 1;
@@ -280,6 +280,8 @@ export function powerTick(dt) {
   const solar = G.daylight * (1 - G.cloud * 0.8) * 0.22;
   const gen = S.generator ? 0.5 : 0;
   S.battery = clamp(S.battery + (solar + gen - draw) * dt * 0.35, 0, 100);
+  // slow field repair while parked safely (tools + generator power); never while driving or flooded
+  if (!G.driving && (G.submerge || 0) < 0.3 && S.hull < 100) S.hull = Math.min(100, S.hull + dt * (S.generator ? 0.12 : 0.03));
   if (S.battery <= 0.01 && (S.lightsOn || S.spotOn)) { S.lightsOn = false; S.spotOn = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
 }
 
@@ -337,7 +339,7 @@ export function triggerEvent(name) {
 
 export function updateEvents(dt) {
   // rain accumulation drives floods & slides
-  G.rainAccum = clamp(G.rainAccum + (G.rain > 0.5 ? dt * 0.0035 * G.rain : -dt * 0.001));
+  G.rainAccum = clamp(G.rainAccum + (G.rain > 0.5 ? dt * 0.0035 * G.rain : -dt * 0.001) * G.timeMul);
   updateSlide(dt); updateFlood(dt); updateTree(dt); powerTick(dt);
   // stress/calm
   const S = G.state;

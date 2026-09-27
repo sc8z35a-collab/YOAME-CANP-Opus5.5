@@ -116,6 +116,8 @@ function placeCamper(spot) {
   updateVehicle(0, C.group);
 }
 bus.on('driveTo', to => engage(to)); // legacy event name (menus, QA)
+// menu 'キャンプ地へ戻す' (always-available escape hatch; the physics-based recovery normally suffices)
+bus.on('rescueHome', () => { import('./autopilot.js').then(m => m.disengage()); placeCamper('hollow'); toast('レッカーでキャンプ地まで運んでもらった', 'info'); });
 // vehicle acceleration in camper-local space (sways the walking player & curtains)
 const _pv = new THREE.Vector3(), _qa = new THREE.Quaternion();
 G.vehAccL = new THREE.Vector3();
@@ -231,7 +233,7 @@ function loop(now) {
   renderer.toneMappingExposure = damp(renderer.toneMappingExposure, target, 1.5, dt);
   const gu = grade.uniforms;
   gu.uWarm.value = C.lightLevel * G.night * 0.25;
-  gu.uRed.value = damp(gu.uRed.value, Z.bear?.state === 'charge' || G.state.hull < 25 ? 0.35 : 0, 3, dt);
+  gu.uRed.value = damp(gu.uRed.value, Z.bear?.state === 'charge' || G.state.hull < 25 || VEH.airT > 0.5 ? 0.35 : 0, 3, dt);
   gu.uDark.value = G.state.hiding ? 1 : 0;
   gu.uSub.value = clamp((G.submerge || 0) - 0.5);
   bloom.strength = 0.28 + G.night * 0.14 + G.flash * 0.5;

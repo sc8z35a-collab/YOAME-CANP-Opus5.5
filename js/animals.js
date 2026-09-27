@@ -70,7 +70,7 @@ class Animal {
         G.camper.localToWorld(_v); this.pos.x = _v.x; this.pos.z = _v.z;
       }
     }
-    this.pos.y += (heightAt(this.pos.x, this.pos.z) - this.pos.y) * Math.min(1, dt * 10);
+    this.pos.y += (Math.max(heightAt(this.pos.x, this.pos.z), G.waterLevel - 0.6) - this.pos.y) * Math.min(1, dt * 10); // wade, don't sink
     this.obj.rotation.y = this.heading;
     return Math.hypot(dx, dz);
   }
