@@ -1,0 +1,9 @@
+PASS hollow -> ridge: 33s minUp 0.97 winch 0
+PASS ridge -> summit: 41s minUp 0.98 winch 0
+PASS summit -> hollow: 93s minUp 0.94 winch 0
+PASS hollow -> westEnd: 197s minUp 0.98 winch 0
+PASS westEnd -> swEnd: 66s minUp 0.98 winch 0
+PASS swEnd -> fordE: 70s minUp 0.98 winch 0
+PASS hollow -> north3: 56s minUp 0.98 winch 0
+PASS north3 -> south3: 107s minUp 0.96 winch 0
+PASS cliff -> wr2: 338s minUp 0.94 winch 0
