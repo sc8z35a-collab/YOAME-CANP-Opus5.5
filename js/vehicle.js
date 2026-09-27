@@ -151,7 +151,11 @@ function step(dt) {
         let fl = c.throttle * 2600 * (Math.abs(vLong) < 9 ? 1 : 0.4);
         const brake = c.hand ? 1 : c.brake;
         const mL = effMass(cp, wf), mT = effMass(cp, wr);
-        if (brake > 0) fl -= Math.sign(vLong) * Math.min(Math.abs(vLong) * mL / dt * 0.08, brake * fmax);
+        if (brake > 0) {
+          // kinetic braking + static hold: cancel the slope's pull along the tyre (so a parked van doesn't creep)
+          fl -= Math.sign(vLong) * Math.min(Math.abs(vLong) * mL / dt * 0.08, brake * fmax);
+          if (Math.abs(vLong) < 0.3) fl -= (vLong * mL / dt * 0.25) + (-9.81 * M / 4) * wf.y * brake;
+        }
         fl -= vLong * 18; // rolling resistance
         // lateral grip: cancel slip (impulse-style), limited by friction circle
         let flat = -vLat * mT / dt * 0.08;

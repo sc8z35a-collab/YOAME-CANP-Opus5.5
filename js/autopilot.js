@@ -76,6 +76,7 @@ function plan(fromRecovery = false) {
   while (!lead.length && k < Math.min(pts.length - 1, 4) && ((pts[k].x - p.x) * f.x + (pts[k].z - p.z) * f.z) < 0) k++;
   AP.path = pts.slice(k); AP.idx = 0; AP.kturn = null;
   AP.slow = fromRecovery || AP.offroad;
+  AP.slowUntil = fromRecovery ? Math.max(0, AP.path.length * 2 - 60) : 0; // creep for ~60m, then cruise
   return true;
 }
 
@@ -234,7 +235,7 @@ export function updateAutopilot(dt) {
     if (along > 0 && along < 16 && side < 1.6 + o.r) vt = Math.min(vt, 1.4 + along * 0.15);
   }
   if (G.obstacleAhead) vt = Math.min(vt, G.obstacleAhead);
-  if (AP.slow && remain < AP.slowUntil) AP.slow = false;
+  if (AP.slow && !AP.offroad && remain < AP.slowUntil) AP.slow = false;
   AP.speedT = vt;
   const err = vt - spd;
   c.hand = false;
