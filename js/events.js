@@ -1,7 +1,9 @@
 // Event director: schedules & runs accidents (bear attack, landslide, flash flood, falling tree,
 // wolves, deer visits, power trouble). Handles impacts (camera shake, glass cracks, hull damage).
 import { THREE, G, P, bus, clamp, rng, lerp, smooth, isNight } from './core.js';
-import { heightAt, creekX, SPOTS, WATER_BASE, spotHeight } from './terrain.js';
+import { heightAt, creekX, SPOTS, WATER_BASE, spotHeight, roadQuery } from './terrain.js';
+import { VEH, addObstacle, removeObstacles, applyImpulse } from './vehicle.js';
+import { ROADS } from './roads.js';
 import { W, setWeather, strike } from './weather.js';
 import { C, WINDOWS, windowLocal } from './camper.js';
 import { Z, spawnBear, spawnDeer, spawnWolves } from './animals.js';
@@ -19,14 +21,15 @@ function warn(msg, level = 'info', ms = 4200) { bus.emit('toast', { msg, level, 
 // ---------------------------------------------------------------- impacts
 bus.on('impact', ({ from, power = 1, source }) => {
   const S = G.state;
-  const dmg = (source === 'bear' ? 9 : source === 'rock' ? 14 : source === 'tree' ? 22 : 6) * power;
-  S.hull = Math.max(0, S.hull - dmg);
+  const dmg = (source === 'bear' ? 9 : source === 'rock' ? 14 : source === 'tree' ? 22 : source === 'crash' ? 5 : 6) * power;
+  // crashes / falls never finish the game (the map must never soft-lock): they bottom out at 8%
+  S.hull = source === 'crash' ? Math.max(Math.min(S.hull, 8), S.hull - dmg) : Math.max(0, S.hull - dmg);
   S.calm = Math.max(0, S.calm - 12 * power);
   G.shake = Math.min(1.5, G.shake + 0.9 * power);
   // camper rocks physically
   G.rockV = (G.rockV || 0) + (from ? Math.sign(from.x || 1) : 1) * 0.06 * power;
   // crack the window closest to the impact direction
-  if (from && G.camper) {
+  if (from && G.camper && (source !== 'crash' || power > 0.6)) {
     const dirL = from.clone().applyQuaternion(G.camper.quaternion.clone().invert());
     let best = null, bd = -2;
     for (const w of WINDOWS) {
@@ -41,7 +44,7 @@ bus.on('impact', ({ from, power = 1, source }) => {
       bus.emit('glasscrack', best.id);
     }
   }
-  bus.emit('sfx', source === 'bear' ? 'bearhit' : 'thud', power);
+  bus.emit('sfx', source === 'bear' ? 'bearhit' : source === 'crash' ? 'crash' : 'thud', power);
   if (S.hull <= 0) bus.emit('gameover', source);
 });
 
@@ -74,19 +77,32 @@ function softDot() {
   x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
 }
 
+function syncSlideObstacles(s) {
+  const obs = VEH.obstacles.filter(o => o.tag === 'slide');
+  let k = 0;
+  s.rocks.forEach((r, i) => {
+    if (r.r > 0.5 && obs[k]) { const o = obs[k++]; r.x = o.p.x; r.y = o.p.y; r.z = o.p.z; r.rot.x = (o.rotAcc || 0) + i; }
+    _q.setFromEuler(r.rot); _s.setScalar(r.r); _p.set(r.x, r.y, r.z); _m.compose(_p, _q, _s); s.im.setMatrixAt(i, _m);
+  });
+  s.im.instanceMatrix.needsUpdate = true;
+  s.dust.material.opacity = Math.max(0, s.dust.material.opacity - 0.002);
+}
 export function startLandslide() {
   const s = E.slide; if (!s || s.on) return false;
+  removeObstacles('slide'); s.done = false; s.mudInit = s.mudInit || false;
   const c = G.camper.position;
   // uphill direction = gradient of height
   const e = 2, gx = heightAt(c.x + e, c.z) - heightAt(c.x - e, c.z), gz = heightAt(c.x, c.z + e) - heightAt(c.x, c.z - e);
   let up = new THREE.Vector2(gx, gz); if (up.length() < 0.01) up.set(1, 0); up.normalize();
-  const hit = G.camperSpot === 'ridge' ? 1 : 0.35; // ridge = direct hit; hollow = debris stops short
+  // how exposed is the camper? steep ground above = direct hit, flat valley floor = debris stops short
+  let above = 0; for (let k = 10; k <= 30; k += 10) above = Math.max(above, heightAt(c.x + up.x * k, c.z + up.y * k) - c.y);
+  const hit = above > 6 ? 1 : 0.35;
   s.on = true; s.t = 0; s.up = up; s.hit = hit; s.rocks = []; s.impacted = false;
   const side = new THREE.Vector2(-up.y, up.x);
   for (let i = 0; i < s.im.count; i++) {
     const along = 28 + R() * 30, lat = (R() - 0.5) * 16;
     const x = c.x + up.x * along + side.x * lat, z = c.z + up.y * along + side.y * lat;
-    s.rocks.push({ x, z, y: heightAt(x, z) + 1, vx: 0, vz: 0, vy: 0, r: 0.25 + Math.pow(R(), 2) * 1.1, rot: new THREE.Euler(R() * 6, R() * 6, R() * 6), delay: R() * 3.5, stopAt: (hit > 0.9 ? -6 : 9) + R() * 5 });
+    s.rocks.push({ x, z, y: heightAt(x, z) + 1, vx: 0, vz: 0, vy: 0, r: 0.25 + Math.pow(R(), 2) * 1.1, rot: new THREE.Euler(R() * 6, R() * 6, R() * 6), delay: R() * 3.5, stopAt: (hit > 0.9 ? -6 : 9) + R() * 5, o: null });
   }
   s.im.visible = true; s.mud.visible = true; s.dust.visible = true;
   bus.emit('sfx', 'rumble', 1);
@@ -99,6 +115,7 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vect
 function updateSlide(dt) {
   const s = E.slide; if (!s || !s.on) return;
   s.t += dt;
+  if (s.done) { syncSlideObstacles(s); if (s.t > 600) { s.on = false; s.im.visible = s.mud.visible = s.dust.visible = false; removeObstacles('slide'); } return; }
   const c = G.camper.position;
   G.shake = Math.max(G.shake, 0.35 * smooth(0, 1, s.t) * (1 - smooth(8, 14, s.t)));
   let front = 1e9;
@@ -114,10 +131,13 @@ function updateSlide(dt) {
       const sp = Math.hypot(r.vx, r.vz);
       r.rot.x += sp * dt / r.r; r.rot.z += sp * dt / r.r * 0.3;
       front = Math.min(front, along);
-      // hits camper
+      // hits camper: real momentum transfer (big rocks can shove the van off the road)
       _p.set(r.x, r.y, r.z); G.camper.worldToLocal(_p);
       if (Math.abs(_p.x) < 1.3 + r.r && _p.z > -5.4 && _p.z < 3.4 && _p.y < 3.2 && sp > 1.5 && !r.hitDone) {
-        r.hitDone = true; r.vx *= -0.2; r.vz *= -0.2;
+        r.hitDone = true;
+        const m = 2600 * 4.2 * r.r ** 3, J = new THREE.Vector3(r.vx, 0, r.vz).multiplyScalar(m * 0.7);
+        applyImpulse(new THREE.Vector3(r.x, r.y, r.z), J);
+        r.vx *= -0.2; r.vz *= -0.2;
         bus.emit('impact', { from: new THREE.Vector3(s.up.x, 0.2, s.up.y), power: clamp(r.r * sp * 0.12, 0.2, 1.3), source: 'rock' });
       }
     }
@@ -148,15 +168,21 @@ function updateSlide(dt) {
   }
   dp.needsUpdate = true;
   s.dust.material.opacity = 0.4 * (1 - smooth(10, 30, s.t));
-  if (s.t > 14 && !s.done) { s.done = true; bus.emit('slidesettled'); warn(G.camperSpot === 'ridge' ? '土砂が車体を直撃…早く移動を！' : '土砂は手前で止まった。窪地で助かった…', 'warn'); }
+  if (s.t > 14 && !s.done) {
+    s.done = true; bus.emit('slidesettled');
+    // settled boulders stay on the ground as real obstacles (road blocks for the autopilot)
+    let onRoad = 0;
+    for (const r of s.rocks) if (r.r > 0.5) { addObstacle(new THREE.Vector3(r.x, r.y, r.z), r.r * 0.9, { tag: 'slide', static: r.r > 1.0 }); if (roadQuery(r.x, r.z).d < 3.5) onRoad++; }
+    warn(s.hit > 0.9 ? '土砂が車体を直撃…早く移動を！' : onRoad ? `土砂が道をふさいだ（岩${onRoad}個）。自動運転は迂回か押しのけて進む` : '土砂は手前で止まった…', 'warn');
+  }
 }
 
 // ---------------------------------------------------------------- flood
 export function startFlood() {
   const f = E.flood; if (f.on) return false;
   f.on = true; f.t = 0;
-  // flood peak relative to parking spot: hollow gets water up to wheels/door; ridge stays dry
-  f.peak = G.camperSpot === 'hollow' ? spotHeight('hollow') + 0.62 : WATER_BASE + 1.4;
+  // world flood level: the valley floor (hollow pad) goes ~60cm under; anything a few metres up stays dry
+  f.peak = spotHeight('hollow') + 0.62;
   if (W.mode !== 'storm' && W.mode !== 'rain') setWeather('rain');
   warn('⚠ 上流で鉄砲水！ 沢が増水しています', 'danger', 5200);
   bus.emit('sfx', 'flood', 1);
@@ -172,18 +198,20 @@ function updateFlood(dt) {
   G.waterLevel += (target - G.waterLevel) * Math.min(1, dt * 0.8);
   if (G.camper) {
     const sub = G.waterLevel - G.camper.position.y;
-    G.submerge = sub;
+    // current: pushes floating vans downstream (-z along the creek) and toward the channel
+    G.floodFlow = G.floodFlow || new THREE.Vector3();
+    G.floodFlow.set((creekX(G.camper.position.z) - G.camper.position.x) * 0.02, 0, -1).multiplyScalar(clamp(sub, 0, 1.5) * 1.2);
     if (sub > 0.35 && !f.warned) { f.warned = true; warn('水がタイヤを越えた！ 高台へ避難を！', 'danger'); }
     if (sub > 0.55) {
       G.state.hull = Math.max(0, G.state.hull - dt * 0.8);
       G.state.battery = Math.max(0, G.state.battery - dt * 0.3);
       G.state.calm = Math.max(0, G.state.calm - dt * 1.2);
       G.shake = Math.max(G.shake, 0.08);
-      if (G.state.hull <= 0) bus.emit('gameover', 'flood');
+      // flooding never destroys the van outright (the current carries it; the player can drive out)
+      G.state.hull = Math.max(G.state.hull, 6);
     }
   }
-  // floating debris pushes camper
-  if (f.t > 200) { f.on = false; f.warned = false; warn('水が引いていく…', 'info'); }
+  if (f.t > 200) { f.on = false; f.warned = false; G.floodFlow && G.floodFlow.set(0, 0, 0); warn('水が引いていく…', 'info'); }
 }
 
 // ---------------------------------------------------------------- falling tree
