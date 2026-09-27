@@ -185,10 +185,10 @@ export function updateUI() {
   if (AP.on) {
     const d = DESTS[AP.dest];
     hud.apDest.textContent = '🧭 ' + d.name;
-    AP.total = Math.max(AP.total || 0, AP.remain);
+    if (AP.remain > (AP.total || 0)) AP.total = AP.remain; // replans can lengthen the route
     hud.apBar.style.width = clamp(100 * (1 - AP.remain / Math.max(AP.total, 1)), 0, 100) + '%';
     hud.apSub.textContent = { drive: `残り ${Math.round(AP.remain)}m ・ ${Math.abs(VEH.fwdSpeed * 3.6).toFixed(0)}km/h`, right: '体勢を立て直し中…', winch: 'ウインチで引き上げ中…' }[AP.mode] || '';
-  } else AP.total = 0;
+  }
   if (VEH.up.y < 0.5) th.push('⚠ 横転している');
   if (Z.bear?.active) th.push(Z.bear.state === 'charge' ? '🐻 突進してくる！' : '🐻 クマが近くにいる');
   if (Z.wolves?.[0]?.active) th.push('🐺 オオカミ');

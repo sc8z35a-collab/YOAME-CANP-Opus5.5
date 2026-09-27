@@ -91,6 +91,7 @@ export function engage(destId) {
   if (VEH.up.y < 0.7) { AP.mode = 'right'; AP.rightT = 0; say('車体を起こしてから、ゆっくり発進する', 'warn'); }
   else if (!plan()) { say('ルートが見つからない…', 'warn'); AP.on = false; G.driving = false; return false; }
   else say(`🧭 自動運転：「${d.name}」へ${AP.offroad ? '（まず林道へ戻る）' : ''}`, 'info');
+  AP.total = 0; for (let i = 0; i < AP.path.length - 1; i++) AP.total += Math.hypot(AP.path[i + 1].x - AP.path[i].x, AP.path[i + 1].z - AP.path[i].z); AP.remain = AP.total;
   bus.emit('sfx', 'engine'); bus.emit('autopilot', 'start', destId);
   return true;
 }
