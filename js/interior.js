@@ -387,33 +387,32 @@ export function buildCab(I, M, C) {
   // defrost vent slots along the windshield base
   const vs = ventSlats();
   for (const x of [-0.7, 0, 0.7]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.04), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.rotation.x = -Math.PI / 2 + 0.2; v.position.set(x, 1.467, -4.1); g.add(v); }
-  // ---- instrument binnacle (hood) in front of the driver
+  // ---- instrument cluster on the dash face in front of the driver, under a moulded visor
   const bx = -0.55;
-  const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.34, 32, 1, true, -Math.PI / 2, Math.PI), M.dash);
-  hood.material = M.dash; hood.rotation.set(0, 0, Math.PI / 2); hood.scale.set(0.35, 1, 1);
-  hood.position.set(bx, 1.5, -3.86); hood.castShadow = true;
-  const hoodG = new THREE.Group(); hoodG.add(hood); g.add(hoodG);
-  // hood cap closes the dome visually (the dash top fills the rest)
-  g.add(B(bx - 0.17, 1.505, -3.97, bx + 0.17, 1.575, -3.75, M.dash, 0.03));
-  // cluster face (canvas gauges), recessed and tilted toward the driver's eyes
+  g.add(rb(0.4, 0.05, 0.2, M.dash, bx, 1.5, -3.73, 0.022, 3));                       // visor
+  for (const e of [-1, 1]) g.add(rb(0.03, 0.12, 0.1, M.dash, bx + e * 0.185, 1.44, -3.69, 0.012, 2)); // cheeks
+  g.add(rb(0.37, 0.14, 0.03, M.black, bx, 1.405, -3.712, 0.02, 2));                   // recess back
   const gm = new THREE.MeshStandardMaterial({ map: gaugeTex(), emissive: 0xffffff, roughness: 0.35 });
   gm.emissiveMap = gm.map; gm.emissiveIntensity = 0.9;
-  const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.121), gm);
-  gauges.position.set(bx, 1.492, -3.8); gauges.rotation.x = -0.28; g.add(gauges);
+  const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.133), gm);
+  gauges.position.set(bx, 1.405, -3.695); gauges.rotation.x = -0.12; g.add(gauges);
   IN.gauges = gauges; C.emissives.push({ m: gm, base: 0.9, kind: 'dash' });
-  // clear lens over the cluster
-  const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.13), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.03, transparent: true, opacity: 0.12, depthWrite: false }));
-  lens.position.set(bx, 1.495, -3.785); lens.rotation.x = -0.28; lens.renderOrder = 3; g.add(lens); IN.envMats.push(lens.material);
-  drawGauges(0, 0.8, 0.7, 0.3);
-  // ---- steering column + wheel
-  const wc = new THREE.Vector3(bx, 1.62, -3.6), tilt = -0.95;                 // wheel centre & tilt (rad)
-  const col = rb(0.085, 0.085, 0.3, M.black, bx, 1.44, -3.73, 0.03, 3); col.rotation.x = tilt + Math.PI / 2 - 1.57 + 0.62; g.add(col);
-  const shroud = rb(0.13, 0.1, 0.16, M.dash, bx, 1.5, -3.69, 0.035, 3); shroud.rotation.x = 0.62; g.add(shroud);
-  // stalks: indicator (left) + wiper (right)
+  const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.14), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.03, transparent: true, opacity: 0.1, depthWrite: false }));
+  lens.position.set(bx, 1.406, -3.688); lens.rotation.x = -0.12; lens.renderOrder = 3; g.add(lens); IN.envMats.push(lens.material);
+  drawGauges(0, 0, 0.7, 0.3);
+  // ---- steering column + wheel (face tilted ~34deg up toward the driver)
+  const tilt = -0.6, n = new THREE.Vector3(0, Math.sin(-tilt), Math.cos(tilt)); // wheel normal (toward driver)
+  const wc = new THREE.Vector3(bx, 1.64, -3.5);
+  const along = d => wc.clone().addScaledVector(n, -d);
+  const colP = along(0.14), col = rb(0.07, 0.07, 0.26, M.black, colP.x, colP.y, colP.z, 0.025, 3); col.rotation.x = tilt; g.add(col);
+  const shP = along(0.19), shroud = rb(0.13, 0.11, 0.15, M.dash, shP.x, shP.y, shP.z, 0.04, 3); shroud.rotation.x = tilt; g.add(shroud);
+  // stalks: indicator (left) + wiper (right) sticking out of the shroud
   for (const s of [-1, 1]) {
-    const st = cyl(0.007, 0.009, 0.15, M.black, 10); st.rotation.z = Math.PI / 2 + s * 0.12; st.position.set(bx + s * 0.12, 1.515, -3.66); g.add(st);
-    const tip = cyl(0.011, 0.011, 0.04, M.black, 12); tip.rotation.z = Math.PI / 2 + s * 0.12; tip.position.set(bx + s * 0.2, 1.525, -3.66); g.add(tip);
+    const st = cyl(0.006, 0.008, 0.13, M.black, 10); st.rotation.z = Math.PI / 2 + s * 0.15; st.position.set(bx + s * 0.12, shP.y + 0.02, shP.z + 0.03); g.add(st);
+    const tip = cyl(0.01, 0.01, 0.045, M.black, 12); tip.rotation.z = Math.PI / 2 + s * 0.15; tip.position.set(bx + s * 0.2, shP.y + 0.032, shP.z + 0.03); g.add(tip);
   }
+  // ignition barrel on the shroud (right side)
+  const ign = cyl(0.014, 0.014, 0.02, M.chrome, 16); ign.rotation.z = Math.PI / 2; ign.position.set(bx + 0.075, shP.y - 0.01, shP.z + 0.02); g.add(ign);
   const wheel = new THREE.Group(); wheel.position.copy(wc); wheel.rotation.x = tilt;
   const spin = new THREE.Group(); wheel.add(spin);
   const R = 0.2;
@@ -445,15 +444,15 @@ export function buildCab(I, M, C) {
   hv.position.set(0, 1.23, -3.685); g.add(hv);
   for (const s of [-1, 0, 1]) { const k = cyl(0.022, 0.024, 0.022, M.black, 24); k.rotation.x = Math.PI / 2; k.position.set(s * 0.086, 1.236, -3.675); g.add(k); }
   // central air vents (two) above the head unit
-  for (const s of [-1, 1]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.06), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.065, 1.44, -3.705); v.rotation.x = -0.25; g.add(v);
-    g.add(B(s * 0.065 - 0.056, 1.405, -3.72, s * 0.065 + 0.056, 1.412, -3.7, M.chrome, 0.002)); }
+  for (const s of [-1, 1]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.06), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.065, 1.44, -3.6885); g.add(v);
+    g.add(B(s * 0.065 - 0.054, 1.406, -3.692, s * 0.065 + 0.054, 1.41, -3.686, M.chrome, 0.001)); }
   // outer vents (round) at both dash ends
-  for (const s of [-1, 1]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.008, 8, 28), M.chrome); ring.position.set(s * 0.95, 1.4, -3.704); g.add(ring);
-    const v = new THREE.Mesh(new THREE.CircleGeometry(0.042, 24), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.95, 1.4, -3.707); g.add(v); }
+  for (const s of [-1, 1]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.008, 8, 28), M.chrome); ring.position.set(s * 0.95, 1.4, -3.698); g.add(ring);
+    const v = new THREE.Mesh(new THREE.CircleGeometry(0.042, 24), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.95, 1.4, -3.7; g.add(v); }
   // gear lever on the dash (van-style) with a leather gaiter
-  const gaiter = cyl(0.03, 0.045, 0.05, M.leatherDark, 16); gaiter.rotation.x = Math.PI / 2 - 0.5; gaiter.position.set(-0.13, 1.14, -3.73); g.add(gaiter);
-  const stick = cyl(0.007, 0.009, 0.1, M.brushed, 10); stick.rotation.x = Math.PI / 2 - 0.9; stick.position.set(-0.13, 1.17, -3.69); g.add(stick);
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.024, 20, 14), M.leatherDark); knob.scale.set(1, 1.15, 1); knob.position.set(-0.13, 1.205, -3.655); knob.castShadow = true; g.add(knob);
+  const gaiter = cyl(0.028, 0.04, 0.045, M.leatherDark, 16); gaiter.rotation.x = 0.9; gaiter.position.set(-0.11, 1.1, -3.68); g.add(gaiter);
+  const stick = cyl(0.007, 0.009, 0.12, M.brushed, 10); stick.rotation.x = 0.9; stick.position.set(-0.11, 1.137, -3.633); g.add(stick);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.024, 20, 14), M.leatherDark); knob.scale.set(1, 1.15, 1); knob.position.set(-0.11, 1.178, -3.582); knob.castShadow = true; g.add(knob);
   // glove box (passenger) with a chrome pull + seam lines
   g.add(B(0.3, 1.2, -3.715, 0.88, 1.36, -3.7, M.dashLight, 0.012));
   g.add(rb(0.12, 0.018, 0.012, M.chrome, 0.59, 1.34, -3.696, 0.006));
@@ -507,7 +506,7 @@ function seat(M, sx, inward) {
   for (const e of [-1, 1]) s.add(rb(0.1, 0.13, 0.5, M.leatherDark, e * 0.22, y0 + 0.435, -3.33, 0.045, 4));
   s.add(rb(0.52, 0.09, 0.08, M.leatherDark, 0, y0 + 0.44, -3.6, 0.04, 4));             // front roll
   // backrest (reclined ~12°) as a group so bolsters follow the angle
-  const back = new THREE.Group(); back.position.set(0, y0 + 0.48, -3.07); back.rotation.x = -0.2; s.add(back);
+  const back = new THREE.Group(); back.position.set(0, y0 + 0.48, -3.07); back.rotation.x = 0.2; s.add(back);
   back.add(rb(0.34, 0.62, 0.1, M.seatFab, 0, 0.34, -0.02, 0.045, 4));
   for (const e of [-1, 1]) { const bo = rb(0.1, 0.62, 0.15, M.leatherDark, e * 0.22, 0.34, 0.0, 0.05, 4); bo.rotation.y = -e * 0.18; back.add(bo); }
   back.add(rb(0.54, 0.62, 0.05, M.leatherDark, 0, 0.34, 0.07, 0.03, 3));                // shell back
@@ -516,13 +515,13 @@ function seat(M, sx, inward) {
   back.add(rb(0.28, 0.17, 0.1, M.seatFab, 0, 0.8, 0.02, 0.045, 4));
   // fold-down armrest on the inboard side
   const ar = rb(0.06, 0.07, 0.34, M.leatherDark, inward * 0.3, y0 + 0.66, -3.25, 0.03, 3); s.add(ar);
-  s.add(cyl(0.02, 0.02, 0.03, M.black, 12).rotateZ(Math.PI / 2).translateY(inward * -0.3).translateX(y0 + 0.66).translateZ(-3.1)); // pivot (approx)
   // seat belt (webbing from the B-pillar to the outboard buckle)
   const ox = -inward * 0.3;
   const belt = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-    new THREE.Vector3(ox * 1.95, y0 + 1.25, -2.98), new THREE.Vector3(ox * 1.5, y0 + 1.1, -3.0), new THREE.Vector3(ox * 1.05, y0 + 0.62, -3.0)]), 12, 0.012, 4), M.black);
-  belt.scale.set(1, 1, 0.35); belt.position.z = -3.0 * 0.65; s.add(belt);
-  s.add(rb(0.04, 0.09, 0.03, M.chrome, ox * 1.9, y0 + 1.27, -2.98, 0.006));
+    new THREE.Vector3(ox * 1.62, y0 + 1.32, -2.97), new THREE.Vector3(ox * 1.35, y0 + 1.05, -2.99), new THREE.Vector3(ox * 1.08, y0 + 0.55, -3.08)]), 16, 0.006, 4), M.black);
+  belt.scale.set(1, 1, 1); s.add(belt);
+  s.add(rb(0.035, 0.07, 0.03, M.chrome, ox * 1.62, y0 + 1.33, -2.965, 0.006));          // height adjuster / guide
+  s.add(rb(0.03, 0.08, 0.045, M.black, ox * 1.08, y0 + 0.52, -3.09, 0.01));             // buckle stalk
   return s;
 }
 
