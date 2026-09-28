@@ -165,3 +165,162 @@ function materials() {
   IN.envMats.push(M.steel, M.chrome, M.brushed, M.alu, M.fridgeDoor, M.mirror, M.pianoBlack, M.ceramic, M.castIron, M.enamel);
   return M;
 }
+
+// ---------------------------------------------------------------- kitchen (right side, z -1.68..0.32)
+const F = 0.72, XI = 1.08;             // interior floor / inner wall x
+export const K = { top: F + 0.92, x0: 0.47, z0: -1.68, z1: 0.32, sink: { x: 0.8, z: -0.5, w: 0.34, l: 0.4, d: 0.17 }, hob: { x: 0.79, z: -1.3 } };
+
+function worktop(M) {
+  // oak worktop with an undermount sink cut-out (shape in (x, -z), extruded upward)
+  const s = new THREE.Shape();
+  s.moveTo(K.x0, -K.z1); s.lineTo(XI, -K.z1); s.lineTo(XI, -K.z0); s.lineTo(K.x0, -K.z0); s.lineTo(K.x0, -K.z1);
+  const sk = K.sink, hole = roundRect(sk.w + 0.012, sk.l + 0.012, 0.045);
+  hole.getPoints(6); // ensure curves built
+  const hp = new THREE.Path(hole.getPoints(6).map(p => new THREE.Vector2(p.x + sk.x, p.y - sk.z)));
+  s.holes.push(hp);
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.036, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2, curveSegments: 6 });
+  g.rotateX(-Math.PI / 2); g.translate(0, K.top - 0.039, 0); g.computeVertexNormals(); boxUV(g, 1);
+  return mesh(g, M.oak);
+}
+
+function sinkBowl(M) {
+  const grp = new THREE.Group(), sk = K.sink, y0 = K.top - 0.039;
+  // bowl walls: thin rounded-rect ring extruded downward
+  const wallS = ringShape(sk.w, sk.l, 0.006, 0.04);
+  const wg = new THREE.ExtrudeGeometry(wallS, { depth: sk.d, bevelEnabled: false, curveSegments: 6 });
+  wg.rotateX(Math.PI / 2); // extrude toward -y
+  const inner = new THREE.MeshStandardMaterial().copy(M.steel); inner.side = THREE.DoubleSide; inner.roughness = 0.34;
+  IN.envMats.push(inner);
+  const walls = mesh(wg, inner); walls.position.set(sk.x, y0 + 0.001, sk.z); grp.add(walls);
+  // bottom (slightly dished toward the drain) with a brushed finish
+  const bg = new THREE.ShapeGeometry(roundRect(sk.w + 0.004, sk.l + 0.004, 0.042), 6); bg.rotateX(-Math.PI / 2);
+  const bp = bg.attributes.position;
+  for (let i = 0; i < bp.count; i++) { const x = bp.getX(i), z = bp.getZ(i); bp.setY(i, -0.004 * (1 - Math.min(1, Math.hypot(x / (sk.w / 2), z / (sk.l / 2))))); }
+  bg.computeVertexNormals();
+  const bot = mesh(bg, M.brushed); bot.position.set(sk.x, y0 - sk.d, sk.z); grp.add(bot);
+  // drain: chrome ring + dark strainer + cross
+  const drain = cyl(0.036, 0.036, 0.004, M.chrome, 28); drain.position.set(sk.x, y0 - sk.d - 0.002, sk.z + 0.08); grp.add(drain);
+  const hole = cyl(0.028, 0.028, 0.005, M.black, 24); hole.position.copy(drain.position); hole.position.y += 0.0005; grp.add(hole);
+  for (const r of [0, Math.PI / 2]) { const bar = rb(0.052, 0.003, 0.005, M.chrome, sk.x, drain.position.y + 0.003, drain.position.z, 0.001); bar.rotation.y = r; grp.add(bar); }
+  // overflow slot on the back wall
+  const of = rb(0.004, 0.012, 0.05, M.black, sk.x + sk.w / 2 - 0.002, y0 - 0.035, sk.z, 0.004); grp.add(of);
+  // fitted glass cover leaning? -> real campers hinge it; ours sits open against the wall (smoked glass)
+  return grp;
+}
+
+function faucet(M) {
+  const g = new THREE.Group(), sk = K.sink, T = K.top;
+  const bx = XI - 0.075, bz = sk.z - 0.02;
+  const base = cyl(0.024, 0.027, 0.03, M.chrome, 28); base.position.set(bx, T + 0.015, bz); g.add(base);
+  const body = cyl(0.017, 0.019, 0.07, M.chrome, 24); body.position.set(bx, T + 0.065, bz); g.add(body);
+  // gooseneck spout (tube along a smooth arc, reaching over the bowl)
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(bx, T + 0.09, bz), new THREE.Vector3(bx, T + 0.17, bz), new THREE.Vector3(bx - 0.025, T + 0.215, bz),
+    new THREE.Vector3(bx - 0.085, T + 0.22, bz), new THREE.Vector3(bx - 0.135, T + 0.19, bz), new THREE.Vector3(bx - 0.15, T + 0.155, bz)]);
+  const tube = mesh(new THREE.TubeGeometry(curve, 48, 0.0105, 16, false), M.chrome); g.add(tube);
+  const tip = cyl(0.0125, 0.0115, 0.022, M.chrome, 20); tip.position.set(bx - 0.15, T + 0.148, bz); g.add(tip);
+  const aer = cyl(0.009, 0.009, 0.002, M.black, 16); aer.position.set(bx - 0.15, T + 0.1365, bz); g.add(aer);
+  // single lever mixer handle on the side
+  const hub = cyl(0.014, 0.014, 0.028, M.chrome, 20); hub.rotation.x = Math.PI / 2; hub.position.set(bx, T + 0.075, bz + 0.024); g.add(hub);
+  const lever = rb(0.012, 0.008, 0.06, M.chrome, bx - 0.012, T + 0.088, bz + 0.05, 0.004); lever.rotation.x = -0.35; g.add(lever);
+  return g;
+}
+
+function hob(M, C) {
+  const g = new THREE.Group(), hb = K.hob, T = K.top;
+  const W = 0.36, L = 0.52; // x, z
+  // stainless tray with a pressed edge + black enamel inner well
+  g.add(rb(W, 0.012, L, M.steel, hb.x, T + 0.006, hb.z, 0.006, 3));
+  g.add(rb(W - 0.03, 0.004, L - 0.03, M.castIron, hb.x, T + 0.0125, hb.z, 0.002));
+  C.stove = [];
+  for (const dz of [-0.12, 0.12]) {
+    const z = hb.z + dz, big = dz < 0;
+    const rad = big ? 0.05 : 0.04;
+    // burner crown (aluminium) + enamel cap
+    const crown = cyl(rad, rad + 0.006, 0.014, M.alu, 28); crown.position.set(hb.x, T + 0.021, z); g.add(crown);
+    const cap = cyl(rad - 0.012, rad - 0.008, 0.008, M.castIron, 28); cap.position.set(hb.x, T + 0.031, z); g.add(cap);
+    // flame ring (blue, emissive when cooking) — ring of small cones around the crown
+    const fm = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x4a8cff, emissiveIntensity: 0, transparent: true, opacity: 0.85, depthWrite: false });
+    const cone = new THREE.ConeGeometry(0.004, 0.018, 6); const parts = [];
+    for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2; const c = cone.clone(); c.rotateZ(-0.6); c.rotateY(-a); c.translate(Math.cos(a) * (rad + 0.004), 0.009, Math.sin(a) * (rad + 0.004)); parts.push(c); }
+    const flame = new THREE.Mesh(mergeGeometries(parts), fm); flame.position.set(hb.x, T + 0.022, z); flame.visible = false; g.add(flame);
+    C.stove.push(fm); IN.hobFlames.push(flame);
+    // cast-iron pan support: 4 arms + outer square
+    const sup = [];
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + Math.PI / 4;
+      const arm = new THREE.BoxGeometry(0.075, 0.012, 0.008); arm.translate(rad + 0.045, 0.04, 0); arm.rotateY(a); sup.push(arm);
+      const foot = new THREE.BoxGeometry(0.008, 0.028, 0.008); foot.translate(rad + 0.078, 0.027, 0); foot.rotateY(a); sup.push(foot);
+    }
+    const ring = new THREE.TorusGeometry(rad + 0.078, 0.004, 4, 32); ring.rotateX(Math.PI / 2); ring.translate(0, 0.014, 0); sup.push(ring);
+    const s = mesh(mergeGeometries(sup), M.castIron); s.position.set(hb.x, T + 0.006, z); g.add(s);
+    // control knob on the worktop front strip
+    const kn = cyl(0.017, 0.019, 0.022, M.black, 24); kn.position.set(hb.x - W / 2 + 0.03, T + 0.024, z); g.add(kn);
+    const kp = rb(0.004, 0.006, 0.026, M.chrome, hb.x - W / 2 + 0.03, T + 0.036, z, 0.002); g.add(kp);
+    const ind = rb(0.006, 0.002, 0.002, M.chrome, hb.x - W / 2 + 0.012, T + 0.013, z, 0.0005); g.add(ind);
+  }
+  // igniter button
+  const ig = cyl(0.008, 0.008, 0.01, M.grey, 16); ig.position.set(hb.x - W / 2 + 0.03, T + 0.017, hb.z); g.add(ig);
+  // smoked-glass lid hinged at the back, folded up against the backsplash
+  const lid = rb(0.006, 0.36, L - 0.01, new THREE.MeshPhysicalMaterial({ color: 0x1a1d1f, roughness: 0.05, metalness: 0.2, clearcoat: 1, transparent: true, opacity: 0.55 }), hb.x + W / 2 - 0.004, T + 0.012 + 0.18, hb.z, 0.003);
+  lid.rotation.z = 0.06; g.add(lid);
+  for (const dz of [-L / 2 + 0.04, L / 2 - 0.04]) g.add(rb(0.012, 0.02, 0.03, M.chrome, hb.x + W / 2 - 0.006, T + 0.02, hb.z + dz, 0.003));
+  return g;
+}
+
+function cabinetFronts(M, x, y0, y1, z0, z1, layout, handle = 'bar') {
+  // layout: array of {h, kind:'drawer'|'door'} from the top; gaps 3mm, slab 18mm
+  const g = new THREE.Group(), gap = 0.003, fx = x - 0.009;
+  let y = y1;
+  for (const cell of layout) {
+    const h = cell.h === 'rest' ? y - y0 : cell.h;
+    const doors = cell.split || 1;
+    for (let k = 0; k < doors; k++) {
+      const a = z0 + (z1 - z0) * k / doors + gap / 2, b = z0 + (z1 - z0) * (k + 1) / doors - gap / 2;
+      g.add(B(fx - 0.009, y - h + gap / 2, a, fx + 0.009, y - gap / 2, b, M.cab, 0.004));
+      // handle: brushed bar near the top edge (drawers centred, doors on the meeting edge)
+      const hz = cell.kind === 'drawer' ? (a + b) / 2 : (doors === 2 ? (k === 0 ? b - 0.04 : a + 0.04) : b - 0.04);
+      const hy = cell.kind === 'drawer' ? y - h / 2 : y - 0.06;
+      const len = cell.kind === 'drawer' ? Math.min(0.16, (b - a) * 0.45) : 0.012;
+      const hl = cell.kind === 'drawer' ? rb(0.012, 0.012, len, M.brushed, fx - 0.018, hy, hz, 0.005) : rb(0.012, 0.1, 0.012, M.brushed, fx - 0.018, hy - 0.04, hz, 0.005);
+      g.add(hl);
+      for (const e of cell.kind === 'drawer' ? [-1, 1] : [-1, 1]) {
+        const post = cell.kind === 'drawer' ? rb(0.012, 0.008, 0.008, M.brushed, fx - 0.012, hy, hz + e * (len / 2 - 0.006), 0.002)
+          : rb(0.012, 0.008, 0.008, M.brushed, fx - 0.012, hy - 0.04 + e * 0.044, hz, 0.002);
+        g.add(post);
+      }
+    }
+    y -= h;
+  }
+  return g;
+}
+
+export function buildKitchen(I, M, C) {
+  const T = K.top;
+  // carcass (plywood) recessed toe-kick + fronts
+  I.add(B(0.53, F + 0.09, K.z0 + 0.01, XI, T - 0.04, K.z1 - 0.01, M.cabEdge, 0.002));
+  I.add(B(0.6, F, K.z0 + 0.03, XI, F + 0.09, K.z1 - 0.03, M.black, 0.002));             // plinth
+  I.add(cabinetFronts(M, 0.52, F + 0.095, T - 0.042, K.z0 + 0.01, -0.92, [{ h: 0.16, kind: 'drawer' }, { h: 0.27, kind: 'drawer' }, { h: 'rest', kind: 'drawer' }]));
+  I.add(cabinetFronts(M, 0.52, F + 0.095, T - 0.042, -0.92, -0.08, [{ h: 'rest', kind: 'door', split: 2 }]));
+  I.add(cabinetFronts(M, 0.52, F + 0.095, T - 0.042, -0.08, K.z1 - 0.01, [{ h: 0.12, kind: 'drawer' }, { h: 0.16, kind: 'drawer' }, { h: 0.2, kind: 'drawer' }, { h: 'rest', kind: 'drawer' }]));
+  I.add(worktop(M));
+  I.add(sinkBowl(M));
+  I.add(faucet(M));
+  I.add(hob(M, C));
+  // backsplash: subway tile under the window + aluminium cap
+  I.add(B(XI - 0.01, T, K.z0, XI, 1.83, K.z1, M.tile, 0.001));
+  I.add(B(XI - 0.016, 1.826, K.z0, XI, 1.834, K.z1, M.alu, 0.002));
+  // side panel at the door end (visible when entering)
+  I.add(B(0.47, F, K.z1 - 0.012, XI, T - 0.04, K.z1 + 0.006, M.cabEdge, 0.003));
+  // electric socket + USB plate on the backsplash
+  const plate = rb(0.006, 0.07, 0.12, M.ceramic, XI - 0.013, T + 0.08, 0.12, 0.006); I.add(plate);
+  for (const dz of [-0.025, 0.025]) { const s = cyl(0.008, 0.008, 0.004, M.black, 12); s.rotation.z = Math.PI / 2; s.position.set(XI - 0.017, T + 0.08, 0.12 + dz); I.add(s); }
+  // 12V control panel near the door (water tank / battery gauges, switches)
+  const pt = canvasTex(256, 128, (c, w, h) => {
+    c.fillStyle = '#e9ebea'; c.fillRect(0, 0, w, h); c.fillStyle = '#0d1a22'; c.fillRect(12, 12, 150, 104);
+    c.fillStyle = '#6fd3ff'; c.font = 'bold 22px monospace'; c.fillText('12.8V', 24, 48); c.font = '16px monospace'; c.fillText('H2O 72%', 24, 78); c.fillText('GREY 18%', 24, 102);
+    for (let i = 0; i < 3; i++) { c.fillStyle = '#c9ccce'; c.fillRect(180, 16 + i * 36, 60, 26); c.fillStyle = i ? '#2bd46a' : '#ffb03a'; c.fillRect(186, 25 + i * 36, 8, 8); }
+  });
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshStandardMaterial({ map: pt, emissive: 0xffffff, emissiveMap: pt, emissiveIntensity: 0.25, roughness: 0.4 }));
+  panel.position.set(XI - 0.011, T + 0.6, 0.22); panel.rotation.y = -Math.PI / 2; I.add(panel);
+}
