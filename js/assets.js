@@ -11,7 +11,9 @@ const GL = new GLTFLoader(manager);
 const texCache = new Map();
 const glbCache = new Map();
 
-const dir = () => ({ m: 'assets/tex_m/', u: 'assets/tex/' }[G.quality] || 'assets/tex_h/');
+// resolve relative to this module so tools/*.html previews load the same files
+const ROOT = new URL('../', import.meta.url).href;
+const dir = () => ROOT + ({ m: 'assets/tex_m/', u: 'assets/tex/' }[G.quality] || 'assets/tex_h/');
 let maxAniso = 8;
 export function setAniso(n) { maxAniso = n; }
 
@@ -50,7 +52,7 @@ export function pbr(base, { repeat = 1, arm = true, diff = '_diffuse', color, ro
 
 export function glb(name) {
   if (!glbCache.has(name)) {
-    glbCache.set(name, new Promise((res, rej) => GL.load('assets/models/' + name + '.glb', res, undefined, rej)));
+    glbCache.set(name, new Promise((res, rej) => GL.load(ROOT + 'assets/models/' + name + '.glb', res, undefined, rej)));
   }
   return glbCache.get(name);
 }
