@@ -324,3 +324,221 @@ export function buildKitchen(I, M, C) {
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshStandardMaterial({ map: pt, emissive: 0xffffff, emissiveMap: pt, emissiveIntensity: 0.25, roughness: 0.4 }));
   panel.position.set(XI - 0.011, T + 0.6, 0.22); panel.rotation.y = -Math.PI / 2; I.add(panel);
 }
+
+// ---------------------------------------------------------------- fridge column (right, z -2.55..-1.72)
+export function buildFridge(I, M) {
+  const x0 = 0.45, z0 = -2.55, z1 = -1.72, top = 2.4, fx = x0;             // front plane faces -x (aisle)
+  // tall housing (painted ply) with side panels
+  I.add(B(x0 + 0.02, F, z0, XI, top, z0 + 0.02, M.cab, 0.003));
+  I.add(B(x0 + 0.02, F, z1 - 0.02, XI, top, z1, M.cab, 0.003));
+  I.add(B(x0 + 0.06, F, z0 + 0.02, XI, top, z1 - 0.02, M.cabEdge, 0.002));   // carcass back/inside
+  // lower cupboard (F+0.09..F+0.42) + plinth
+  I.add(B(x0 + 0.08, F, z0 + 0.03, x0 + 0.12, F + 0.09, z1 - 0.03, M.black, 0.002));
+  I.add(cabinetFronts(M, x0 + 0.02, F + 0.095, F + 0.43, z0 + 0.02, z1 - 0.02, [{ h: 'rest', kind: 'door' }]));
+  // fridge: black moulded frame + brushed-silver door (fridge 0.52 wide x 1.08 high) with a freezer door on top
+  const fz0 = z0 + 0.13, fz1 = z1 - 0.13, fy0 = F + 0.44, fy1 = F + 1.52;
+  const fc = (fz0 + fz1) / 2, fw = fz1 - fz0;
+  // frame (4 bars) — sits proud of the housing by 12mm, the doors sit inside it
+  I.add(B(fx - 0.012, fy0 - 0.02, fz0 - 0.1, fx + 0.03, fy0 + 0.012, fz1 + 0.1, M.fridgeFrame, 0.004));
+  I.add(B(fx - 0.012, fy1 - 0.012, fz0 - 0.1, fx + 0.03, fy1 + 0.07, fz1 + 0.1, M.fridgeFrame, 0.004));
+  I.add(B(fx - 0.012, fy0, fz0 - 0.1, fx + 0.03, fy1, fz0 - 0.004, M.fridgeFrame, 0.004));
+  I.add(B(fx - 0.012, fy0, fz1 + 0.004, fx + 0.03, fy1, fz1 + 0.1, M.fridgeFrame, 0.004));
+  // control strip across the top bar (label + LED + dial)
+  const cp = new THREE.Mesh(new THREE.PlaneGeometry(fw * 0.8, 0.045), new THREE.MeshStandardMaterial({ map: fridgePanelTex(), roughness: 0.5, emissive: 0xffffff, emissiveMap: null }));
+  cp.position.set(fx - 0.0125, fy1 + 0.03, fc); cp.rotation.y = -Math.PI / 2; I.add(cp);
+  // doors: freezer (top 0.26) + fridge; slightly domed panel with 2mm shadow gap
+  const door = (y0, y1) => {
+    const d = rb(0.03, y1 - y0 - 0.004, fw - 0.004, M.fridgeDoor, fx - 0.004, (y0 + y1) / 2, fc, 0.01, 3);
+    d.userData.env = 1; return d;
+  };
+  I.add(door(fy1 - 0.27, fy1)); I.add(door(fy0, fy1 - 0.274));
+  I.add(B(fx - 0.006, fy1 - 0.276, fz0, fx + 0.001, fy1 - 0.27, fz1, M.fridgeFrame, 0.001));
+  // latch handles: vertical black recessed grips on the aisle-facing, hinge on the cab side
+  for (const [y, h] of [[fy1 - 0.135, 0.14], [fy0 + 0.62, 0.34]]) {
+    I.add(rb(0.03, h, 0.034, M.fridgeFrame, fx - 0.03, y, fz1 - 0.035, 0.012, 3));
+    I.add(rb(0.012, h - 0.04, 0.012, M.brushed, fx - 0.046, y, fz1 - 0.035, 0.005));
+  }
+  // ventilation grille strip below (compressor air intake)
+  const vg = new THREE.Mesh(new THREE.PlaneGeometry(fw + 0.1, 0.05), new THREE.MeshStandardMaterial({ map: ventSlats(), roughness: 0.6 }));
+  vg.position.set(fx - 0.013, fy0 - 0.005, fc); vg.rotation.y = -Math.PI / 2; I.add(vg);
+  // upper locker above the fridge (microwave-height cupboard)
+  I.add(cabinetFronts(M, x0 + 0.02, fy1 + 0.075, top - 0.005, z0 + 0.02, z1 - 0.02, [{ h: 'rest', kind: 'door' }]));
+}
+
+// ---------------------------------------------------------------- driver's cab
+function dashProfile() {
+  // (z, y) outline of the dash cross-section: windshield base -> top pad -> lip -> face -> footwell
+  const s = new THREE.Shape();
+  const P = [[-4.21, 1.44], [-4.05, 1.475], [-3.9, 1.505], [-3.8, 1.515], [-3.745, 1.5], [-3.715, 1.465], [-3.705, 1.38],
+    [-3.71, 1.26], [-3.74, 1.16], [-3.82, 1.06], [-3.97, 0.98], [-4.21, 0.95]];
+  const pts = new THREE.SplineCurve(P.map(p => new THREE.Vector2(-p[0], p[1]))).getPoints(64);
+  s.setFromPoints(pts); return s;
+}
+export function buildCab(I, M, C) {
+  const g = new THREE.Group(); g.name = 'cab';
+  // ---- dash body: extruded profile across the cab
+  const dg = new THREE.ExtrudeGeometry(dashProfile(), { depth: 2 * XI - 0.004, bevelEnabled: false, curveSegments: 1 });
+  dg.rotateY(Math.PI / 2); // shape x(-z) -> world... (x -> -z after rotate), extrude z -> +x
+  dg.translate(-XI + 0.002, 0, 0); dg.computeVertexNormals(); boxUV(dg, 1);
+  g.add(mesh(dg, M.dash));
+  // stitched soft pad along the top edge (slightly lighter)
+  const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 2 * XI - 0.01, 12), M.dashLight);
+  lip.rotation.z = Math.PI / 2; lip.position.set(0, 1.49, -3.735); lip.castShadow = true; g.add(lip);
+  // defrost vent slots along the windshield base
+  const vs = ventSlats();
+  for (const x of [-0.7, 0, 0.7]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.04), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.rotation.x = -Math.PI / 2 + 0.2; v.position.set(x, 1.467, -4.1); g.add(v); }
+  // ---- instrument binnacle (hood) in front of the driver
+  const bx = -0.55;
+  const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.34, 32, 1, true, -Math.PI / 2, Math.PI), M.dash);
+  hood.material = M.dash; hood.rotation.set(0, 0, Math.PI / 2); hood.scale.set(0.35, 1, 1);
+  hood.position.set(bx, 1.5, -3.86); hood.castShadow = true;
+  const hoodG = new THREE.Group(); hoodG.add(hood); g.add(hoodG);
+  // hood cap closes the dome visually (the dash top fills the rest)
+  g.add(B(bx - 0.17, 1.505, -3.97, bx + 0.17, 1.575, -3.75, M.dash, 0.03));
+  // cluster face (canvas gauges), recessed and tilted toward the driver's eyes
+  const gm = new THREE.MeshStandardMaterial({ map: gaugeTex(), emissive: 0xffffff, roughness: 0.35 });
+  gm.emissiveMap = gm.map; gm.emissiveIntensity = 0.9;
+  const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.121), gm);
+  gauges.position.set(bx, 1.492, -3.8); gauges.rotation.x = -0.28; g.add(gauges);
+  IN.gauges = gauges; C.emissives.push({ m: gm, base: 0.9, kind: 'dash' });
+  // clear lens over the cluster
+  const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.13), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.03, transparent: true, opacity: 0.12, depthWrite: false }));
+  lens.position.set(bx, 1.495, -3.785); lens.rotation.x = -0.28; lens.renderOrder = 3; g.add(lens); IN.envMats.push(lens.material);
+  drawGauges(0, 0.8, 0.7, 0.3);
+  // ---- steering column + wheel
+  const wc = new THREE.Vector3(bx, 1.62, -3.6), tilt = -0.95;                 // wheel centre & tilt (rad)
+  const col = rb(0.085, 0.085, 0.3, M.black, bx, 1.44, -3.73, 0.03, 3); col.rotation.x = tilt + Math.PI / 2 - 1.57 + 0.62; g.add(col);
+  const shroud = rb(0.13, 0.1, 0.16, M.dash, bx, 1.5, -3.69, 0.035, 3); shroud.rotation.x = 0.62; g.add(shroud);
+  // stalks: indicator (left) + wiper (right)
+  for (const s of [-1, 1]) {
+    const st = cyl(0.007, 0.009, 0.15, M.black, 10); st.rotation.z = Math.PI / 2 + s * 0.12; st.position.set(bx + s * 0.12, 1.515, -3.66); g.add(st);
+    const tip = cyl(0.011, 0.011, 0.04, M.black, 12); tip.rotation.z = Math.PI / 2 + s * 0.12; tip.position.set(bx + s * 0.2, 1.525, -3.66); g.add(tip);
+  }
+  const wheel = new THREE.Group(); wheel.position.copy(wc); wheel.rotation.x = tilt;
+  const spin = new THREE.Group(); wheel.add(spin);
+  const R = 0.2;
+  // rim: leather-wrapped torus with slight thumb-grip bulges
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R, 0.017, 16, 72), M.leatherDark); rim.castShadow = true; spin.add(rim);
+  // hub / airbag cover
+  const hubG = new THREE.CylinderGeometry(0.07, 0.078, 0.05, 32); hubG.rotateX(Math.PI / 2);
+  const hub = new THREE.Mesh(hubG, M.dash); hub.position.z = 0.012; spin.add(hub);
+  const hubPad = rb(0.12, 0.09, 0.03, M.black, 0, 0, 0.03, 0.03, 4); spin.add(hubPad);
+  const badge = cyl(0.014, 0.014, 0.003, M.chrome, 20); badge.rotation.x = Math.PI / 2; badge.position.z = 0.047; spin.add(badge);
+  // three spokes (9, 3 and 6 o'clock) with button pads
+  for (const a of [0, Math.PI, -Math.PI / 2]) {
+    const sp = rb(R - 0.06, 0.036, 0.018, M.dash, Math.cos(a) * (R / 2 + 0.03), Math.sin(a) * (R / 2 + 0.03), 0.008, 0.008);
+    sp.rotation.z = a; spin.add(sp);
+    if (a !== -Math.PI / 2) { const bt = rb(0.035, 0.025, 0.008, M.pianoBlack, Math.cos(a) * 0.105, 0.005, 0.02, 0.004); spin.add(bt); }
+  }
+  g.add(wheel); IN.wheel = spin;
+  // ---- centre stack: head unit (radio) + HVAC + gear lever
+  g.add(B(-0.17, 0.98, -3.9, 0.17, 1.47, -3.69, M.dash, 0.02));
+  const hu = rb(0.26, 0.12, 0.02, M.pianoBlack, 0, 1.36, -3.69, 0.008, 2); hu.rotation.x = -0.12; g.add(hu);
+  // radio display (camper.js drawRadio draws into C.radio.material.emissiveMap)
+  const radioTex = canvasTex(256, 64, () => {});
+  const radioM = new THREE.MeshStandardMaterial({ color: 0x050505, emissive: 0xffffff, emissiveMap: radioTex, emissiveIntensity: 1.0, roughness: 0.2 });
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.05), radioM);
+  scr.position.set(0, 1.375, -3.677); scr.rotation.x = -0.12; g.add(scr); C.radio = scr;
+  for (const s of [-1, 1]) { const k = cyl(0.014, 0.014, 0.018, M.chrome, 20); k.rotation.x = Math.PI / 2 - 0.12; k.position.set(s * 0.115, 1.33, -3.672); g.add(k); }
+  for (let i = 0; i < 5; i++) g.add(rb(0.03, 0.012, 0.006, M.black, -0.07 + i * 0.035, 1.315, -3.676, 0.003));
+  const hv = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.065), new THREE.MeshStandardMaterial({ map: hvacTex(), roughness: 0.5 }));
+  hv.position.set(0, 1.23, -3.685); g.add(hv);
+  for (const s of [-1, 0, 1]) { const k = cyl(0.022, 0.024, 0.022, M.black, 24); k.rotation.x = Math.PI / 2; k.position.set(s * 0.086, 1.236, -3.675); g.add(k); }
+  // central air vents (two) above the head unit
+  for (const s of [-1, 1]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.06), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.065, 1.44, -3.705); v.rotation.x = -0.25; g.add(v);
+    g.add(B(s * 0.065 - 0.056, 1.405, -3.72, s * 0.065 + 0.056, 1.412, -3.7, M.chrome, 0.002)); }
+  // outer vents (round) at both dash ends
+  for (const s of [-1, 1]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.008, 8, 28), M.chrome); ring.position.set(s * 0.95, 1.4, -3.704); g.add(ring);
+    const v = new THREE.Mesh(new THREE.CircleGeometry(0.042, 24), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.95, 1.4, -3.707); g.add(v); }
+  // gear lever on the dash (van-style) with a leather gaiter
+  const gaiter = cyl(0.03, 0.045, 0.05, M.leatherDark, 16); gaiter.rotation.x = Math.PI / 2 - 0.5; gaiter.position.set(-0.13, 1.14, -3.73); g.add(gaiter);
+  const stick = cyl(0.007, 0.009, 0.1, M.brushed, 10); stick.rotation.x = Math.PI / 2 - 0.9; stick.position.set(-0.13, 1.17, -3.69); g.add(stick);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.024, 20, 14), M.leatherDark); knob.scale.set(1, 1.15, 1); knob.position.set(-0.13, 1.205, -3.655); knob.castShadow = true; g.add(knob);
+  // glove box (passenger) with a chrome pull + seam lines
+  g.add(B(0.3, 1.2, -3.715, 0.88, 1.36, -3.7, M.dashLight, 0.012));
+  g.add(rb(0.12, 0.018, 0.012, M.chrome, 0.59, 1.34, -3.696, 0.006));
+  // cup holders (two recessed rings) on the passenger side dash top
+  for (const x of [0.62, 0.74]) { const cu = cyl(0.036, 0.036, 0.004, M.black, 24); cu.position.set(x, 1.517, -3.81); g.add(cu); const r = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.004, 6, 24), M.dashLight); r.rotation.x = Math.PI / 2; r.position.copy(cu.position); g.add(r); }
+  // ---- footwell: pedals, dead-rest, floor mats
+  g.add(B(-XI, F, -4.2, XI, F + 0.02, -3.0, M.rubber, 0.004));                          // rubber cab floor
+  for (const [x, z0, z1] of [[-0.55, -3.95, -3.35], [0.55, -3.95, -3.35]]) {
+    const mat = B(x - 0.26, F + 0.02, z0, x + 0.26, F + 0.03, z1, new THREE.MeshStandardMaterial({ color: 0x1a1a1b, roughness: 1, normalMap: tex('knitted_fleece_nor_gl', { repeat: 6 }) }), 0.01); g.add(mat);
+  }
+  const pedal = (x, w, h, y, z, ang) => { const p = rb(w, h, 0.02, M.rubber, x, y, z, 0.008); p.rotation.x = ang; g.add(p);
+    const arm = cyl(0.008, 0.008, 0.26, M.castIron, 8); arm.position.set(x, y + 0.13, z - 0.06); arm.rotation.x = -0.4; g.add(arm); };
+  pedal(-0.62, 0.1, 0.08, F + 0.17, -3.84, -0.7);   // brake
+  pedal(-0.42, 0.055, 0.2, F + 0.14, -3.86, -0.9);  // accelerator (organ)
+  g.add(B(-0.86, F + 0.03, -3.95, -0.77, F + 0.2, -3.8, M.rubber, 0.01));               // dead pedal
+  // engine tunnel / centre console box between the seats with storage & cupholders
+  g.add(B(-0.2, F, -3.7, 0.2, F + 0.42, -3.05, M.dash, 0.04));
+  g.add(B(-0.18, F + 0.42, -3.66, 0.18, F + 0.435, -3.09, M.dashLight, 0.01));
+  for (const z of [-3.55, -3.45]) { const cu = cyl(0.036, 0.036, 0.004, M.black, 24); cu.position.set(0, F + 0.437, z); g.add(cu); }
+  // handbrake lever
+  const hb = rb(0.035, 0.03, 0.2, M.black, -0.22, F + 0.5, -3.3, 0.012); hb.rotation.x = 0.35; g.add(hb);
+  // ---- captain seats (swivel) — driver + passenger
+  for (const sx of [-0.55, 0.55]) g.add(seat(M, sx, sx < 0 ? 1 : -1));
+  // ---- door cards on both cab sides
+  for (const s of [-1, 1]) doorCard(g, M, s);
+  // ---- A-pillar trims, header with sun visors, grab handle
+  for (const s of [-1, 1]) {
+    const ap = rb(0.08, 0.8, 0.07, M.dashLight, s * (XI - 0.03), 1.83, -4.18, 0.03, 3); ap.rotation.x = -0.15; ap.rotation.z = s * 0.1; g.add(ap);
+    const vis = rb(0.46, 0.018, 0.17, M.headliner, s * 0.52, 2.155, -4.07, 0.008, 3); vis.rotation.x = 0.05; g.add(vis);
+    g.add(rb(0.02, 0.014, 0.02, M.grey, s * 0.28, 2.162, -4.13, 0.004));
+    const mir = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.06), M.mirror); mir.rotation.x = Math.PI / 2 + 0.05; mir.position.set(s * 0.52, 2.145, -4.07); g.add(mir);
+    // grab handle on the A-pillar (entry help)
+    const gh = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 8, 20, Math.PI), M.black); gh.rotation.set(0, s * Math.PI / 2, Math.PI / 2); gh.position.set(s * (XI - 0.03), 1.7, -3.95); g.add(gh);
+  }
+  // header trim under the alcove (padded headliner) + map light
+  g.add(B(-XI, 2.165, -4.2, XI, 2.175, -2.9, M.headliner, 0.004));
+  const ml = rb(0.2, 0.025, 0.09, M.dashLight, 0, 2.152, -3.4, 0.01); g.add(ml);
+  const mlL = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.03), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff0d8, emissiveIntensity: 0.6 }));
+  mlL.rotation.x = Math.PI / 2; mlL.position.set(-0.05, 2.139, -3.4); g.add(mlL); C.emissives.push({ m: mlL.material, base: 0.6, kind: 'led' });
+  I.add(g);
+  return g;
+}
+
+function seat(M, sx, inward) {
+  const s = new THREE.Group(), y0 = F; s.position.set(sx, 0, 0);
+  // swivel console + base
+  s.add(B(-0.2, y0, -3.52, 0.2, y0 + 0.3, -3.08, M.dash, 0.03));
+  s.add(cyl(0.16, 0.18, 0.04, M.castIron, 24).translateY(y0 + 0.32).translateZ(-3.3));
+  // cushion: fabric centre with leather side bolsters
+  s.add(rb(0.34, 0.1, 0.5, M.seatFab, 0, y0 + 0.43, -3.33, 0.045, 4));
+  for (const e of [-1, 1]) s.add(rb(0.1, 0.13, 0.5, M.leatherDark, e * 0.22, y0 + 0.435, -3.33, 0.045, 4));
+  s.add(rb(0.52, 0.09, 0.08, M.leatherDark, 0, y0 + 0.44, -3.6, 0.04, 4));             // front roll
+  // backrest (reclined ~12°) as a group so bolsters follow the angle
+  const back = new THREE.Group(); back.position.set(0, y0 + 0.48, -3.07); back.rotation.x = -0.2; s.add(back);
+  back.add(rb(0.34, 0.62, 0.1, M.seatFab, 0, 0.34, -0.02, 0.045, 4));
+  for (const e of [-1, 1]) { const bo = rb(0.1, 0.62, 0.15, M.leatherDark, e * 0.22, 0.34, 0.0, 0.05, 4); bo.rotation.y = -e * 0.18; back.add(bo); }
+  back.add(rb(0.54, 0.62, 0.05, M.leatherDark, 0, 0.34, 0.07, 0.03, 3));                // shell back
+  // headrest on two chrome posts
+  for (const e of [-1, 1]) { const p = cyl(0.0065, 0.0065, 0.1, M.chrome, 10); p.position.set(e * 0.08, 0.7, 0.02); back.add(p); }
+  back.add(rb(0.28, 0.17, 0.1, M.seatFab, 0, 0.8, 0.02, 0.045, 4));
+  // fold-down armrest on the inboard side
+  const ar = rb(0.06, 0.07, 0.34, M.leatherDark, inward * 0.3, y0 + 0.66, -3.25, 0.03, 3); s.add(ar);
+  s.add(cyl(0.02, 0.02, 0.03, M.black, 12).rotateZ(Math.PI / 2).translateY(inward * -0.3).translateX(y0 + 0.66).translateZ(-3.1)); // pivot (approx)
+  // seat belt (webbing from the B-pillar to the outboard buckle)
+  const ox = -inward * 0.3;
+  const belt = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+    new THREE.Vector3(ox * 1.95, y0 + 1.25, -2.98), new THREE.Vector3(ox * 1.5, y0 + 1.1, -3.0), new THREE.Vector3(ox * 1.05, y0 + 0.62, -3.0)]), 12, 0.012, 4), M.black);
+  belt.scale.set(1, 1, 0.35); belt.position.z = -3.0 * 0.65; s.add(belt);
+  s.add(rb(0.04, 0.09, 0.03, M.chrome, ox * 1.9, y0 + 1.27, -2.98, 0.006));
+  return s;
+}
+
+function doorCard(g, M, s) {
+  const x = s * (XI - 0.012), z0 = -4.15, z1 = -3.0;
+  g.add(B(x - 0.012, F + 0.08, z0, x + 0.012, 1.58, z1, M.dashLight, 0.02));
+  // armrest + pull handle
+  g.add(rb(0.06, 0.05, 0.5, M.dash, x - s * 0.035, 1.32, -3.45, 0.02, 3));
+  g.add(rb(0.02, 0.03, 0.14, M.chrome, x - s * 0.02, 1.45, -3.75, 0.008));
+  g.add(rb(0.018, 0.05, 0.1, M.black, x - s * 0.016, 1.45, -3.75, 0.008));
+  // window / mirror switches on the armrest
+  for (let i = 0; i < 2; i++) g.add(rb(0.012, 0.012, 0.03, M.pianoBlack, x - s * 0.06, 1.35, -3.57 + i * 0.045, 0.004));
+  // speaker grille + door pocket
+  const sp = new THREE.Mesh(new THREE.CircleGeometry(0.075, 28), new THREE.MeshStandardMaterial({ map: speakerTex(), roughness: 0.8 }));
+  sp.rotation.y = -s * Math.PI / 2; sp.position.set(x - s * 0.0125, F + 0.32, -3.85); g.add(sp);
+  g.add(B(Math.min(x - s * 0.1, x), F + 0.12, -3.7, Math.max(x - s * 0.1, x), F + 0.26, -3.1, M.dash, 0.02));
+  // top rail (window sill) in dark grain
+  g.add(B(x - 0.03, 1.56, z0, x + 0.012, 1.6, z1, M.dash, 0.012));
+}
