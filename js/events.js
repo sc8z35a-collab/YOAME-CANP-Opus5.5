@@ -2,7 +2,7 @@
 // wolves, deer visits, power trouble). Handles impacts (camera shake, glass cracks, hull damage).
 import { THREE, G, P, bus, clamp, rng, lerp, smooth, isNight } from './core.js';
 import { heightAt, creekX, SPOTS, WATER_BASE, spotHeight, roadQuery } from './terrain.js';
-import { VEH, addObstacle, removeObstacles, applyImpulse } from './vehicle.js';
+import { VEH, addObstacle, removeObstacles, applyImpulse, linkObstacles, toLocal } from './vehicle.js';
 import { ROADS } from './roads.js';
 import { W, setWeather, strike } from './weather.js';
 import { C, WINDOWS, windowLocal } from './camper.js';
@@ -19,8 +19,15 @@ const R = rng(1234);
 function warn(msg, level = 'info', ms = 4200) { bus.emit('toast', { msg, level, ms }); }
 
 // ---------------------------------------------------------------- impacts
-bus.on('impact', ({ from, power = 1, source }) => {
+bus.on('impact', ({ from, power = 1, source, lp, ln, cause }) => {
   const S = G.state;
+  // physical damage on the body where it was hit (dent + scratches), see damage.js
+  if (lp) bus.emit('dent', { lp, ln, sev: clamp(power * 0.8, 0.1, 1.2), cause: cause || source });
+  else if (from && G.camper) { // external hit without a contact point: dent the side facing the blow
+    const d = from.clone().applyQuaternion(G.camper.quaternion.clone().invert()); d.y = 0; d.normalize();
+    const l = new THREE.Vector3(d.x * 1.2, 1.1 + R() * 0.8, clamp(d.z * 4, -5.2, 3.2) + (R() - 0.5) * 1.5);
+    bus.emit('dent', { lp: l, ln: d.clone().negate(), sev: clamp(power * 0.8, 0.1, 1.2), cause: source });
+  }
   const dmg = (source === 'bear' ? 9 : source === 'rock' ? 14 : source === 'tree' ? 22 : source === 'crash' ? 5 : 6) * power;
   // crashes / falls never finish the game (the map must never soft-lock): they bottom out at 8%
   S.hull = source === 'crash' ? Math.max(Math.min(S.hull, 8), S.hull - dmg) : Math.max(0, S.hull - dmg);
@@ -77,36 +84,37 @@ function softDot() {
   x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
 }
 
-function syncSlideObstacles(s) {
-  const obs = VEH.obstacles.filter(o => o.tag === 'slide');
-  let k = 0;
-  s.rocks.forEach((r, i) => {
-    if (r.r > 0.5 && obs[k]) { const o = obs[k++]; r.x = o.p.x; r.y = o.p.y; r.z = o.p.z; r.rot.x = (o.rotAcc || 0) + i; }
-    _q.setFromEuler(r.rot); _s.setScalar(r.r); _p.set(r.x, r.y, r.z); _m.compose(_p, _q, _s); s.im.setMatrixAt(i, _m);
-  });
+function syncSlide(s) {
+  // every rock of the slide is a physical body (vehicle.js obstacles): draw them where they are
+  s.bodies.forEach((o, i) => { _s.setScalar(o.r / 0.9); s.im.setMatrixAt(i, _m.compose(o.p, o.q, _s)); });
+  for (let i = s.bodies.length; i < s.im.count; i++) s.im.setMatrixAt(i, _m.makeScale(0, 0, 0));
   s.im.instanceMatrix.needsUpdate = true;
-  s.dust.material.opacity = Math.max(0, s.dust.material.opacity - 0.002);
 }
 export function startLandslide() {
   const s = E.slide; if (!s || s.on) return false;
-  removeObstacles('slide'); s.done = false; s.mudInit = s.mudInit || false;
+  removeObstacles('slide'); s.done = false;
   const c = G.camper.position;
   // uphill direction = gradient of height
   const e = 2, gx = heightAt(c.x + e, c.z) - heightAt(c.x - e, c.z), gz = heightAt(c.x, c.z + e) - heightAt(c.x, c.z - e);
-  let up = new THREE.Vector2(gx, gz); if (up.length() < 0.01) up.set(1, 0); up.normalize();
-  // how exposed is the camper? steep ground above = direct hit, flat valley floor = debris stops short
-  let above = 0; for (let k = 10; k <= 30; k += 10) above = Math.max(above, heightAt(c.x + up.x * k, c.z + up.y * k) - c.y);
-  const hit = above > 6 ? 1 : 0.35;
-  s.on = true; s.t = 0; s.up = up; s.hit = hit; s.rocks = []; s.impacted = false;
-  const side = new THREE.Vector2(-up.y, up.x);
-  for (let i = 0; i < s.im.count; i++) {
-    const along = 28 + R() * 30, lat = (R() - 0.5) * 16;
+  const up = new THREE.Vector2(gx, gz); if (up.length() < 0.01) up.set(1, 0); up.normalize();
+  // size of the slide scales with how much steep ground there is above the van
+  let above = 0; for (let k = 10; k <= 40; k += 10) above = Math.max(above, heightAt(c.x + up.x * k, c.z + up.y * k) - c.y);
+  const scale = clamp(above / 10, 0.35, 1.3);
+  s.on = true; s.t = 0; s.up = up; s.scale = scale; s.bodies = []; s.src = new THREE.Vector2(c.x + up.x * 36, c.z + up.y * 36);
+  const side = new THREE.Vector2(-up.y, up.x), n = Math.round(24 + 36 * scale);
+  s.queue = [];
+  for (let i = 0; i < Math.min(n, s.im.count); i++) {
+    const along = 26 + R() * 22, lat = (R() - 0.5) * 18 * (0.6 + scale * 0.4);
     const x = c.x + up.x * along + side.x * lat, z = c.z + up.y * along + side.y * lat;
-    s.rocks.push({ x, z, y: heightAt(x, z) + 1, vx: 0, vz: 0, vy: 0, r: 0.25 + Math.pow(R(), 2) * 1.1, rot: new THREE.Euler(R() * 6, R() * 6, R() * 6), delay: R() * 3.5, stopAt: (hit > 0.9 ? -6 : 9) + R() * 5, o: null });
+    const r = (0.22 + Math.pow(R(), 2.2) * 1.05) * (0.7 + scale * 0.35);
+    s.queue.push({ x, z, r, delay: R() * 3.5 * (0.7 + scale * 0.3) });
   }
+  // the flowing mud sheet: a moving heavy-fluid zone the van floats / wades in (vehicle.js)
+  s.mudZ = { x: s.src.x, z: s.src.y, r: 8 * (0.6 + scale * 0.4), depth: 0.35 + 0.45 * scale, vx: 0, vz: 0, slide: true };
+  G.mudZones.push(s.mudZ);
   s.im.visible = true; s.mud.visible = true; s.dust.visible = true;
   bus.emit('sfx', 'rumble', 1);
-  warn('⚠ 地鳴り…！ 山側で土砂崩れ！', 'danger', 5000);
+  warn(scale > 0.9 ? '⚠ 地鳴り…！ 山側で大規模な土砂崩れ！' : '⚠ 地鳴り…！ 山側で土砂崩れ！', 'danger', 5000);
   G.shake = 0.5;
   return true;
 }
@@ -115,66 +123,56 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vect
 function updateSlide(dt) {
   const s = E.slide; if (!s || !s.on) return;
   s.t += dt;
-  if (s.done) { syncSlideObstacles(s); if (s.t > 600) { s.on = false; s.im.visible = s.mud.visible = s.dust.visible = false; removeObstacles('slide'); } return; }
-  const c = G.camper.position;
-  G.shake = Math.max(G.shake, 0.35 * smooth(0, 1, s.t) * (1 - smooth(8, 14, s.t)));
-  let front = 1e9;
-  s.rocks.forEach((r, i) => {
-    if (s.t > r.delay) {
-      const along = (r.x - c.x) * s.up.x + (r.z - c.z) * s.up.y;
-      const g = 9.8 * 0.35;
-      if (along > r.stopAt) { r.vx -= s.up.x * g * dt; r.vz -= s.up.y * g * dt; }
-      else { r.vx *= 0.9; r.vz *= 0.9; }
-      r.x += r.vx * dt; r.z += r.vz * dt;
-      const h = heightAt(r.x, r.z) + r.r * 0.6;
-      r.vy -= 9.8 * dt; r.y += r.vy * dt; if (r.y < h) { r.y = h; r.vy = Math.abs(r.vy) * 0.3 + Math.hypot(r.vx, r.vz) * 0.08; }
-      const sp = Math.hypot(r.vx, r.vz);
-      r.rot.x += sp * dt / r.r; r.rot.z += sp * dt / r.r * 0.3;
-      front = Math.min(front, along);
-      // hits camper: real momentum transfer (big rocks can shove the van off the road)
-      _p.set(r.x, r.y, r.z); G.camper.worldToLocal(_p);
-      if (Math.abs(_p.x) < 1.3 + r.r && _p.z > -5.4 && _p.z < 3.4 && _p.y < 3.2 && sp > 1.5 && !r.hitDone) {
-        r.hitDone = true;
-        const m = 2600 * 4.2 * r.r ** 3, J = new THREE.Vector3(r.vx, 0, r.vz).multiplyScalar(m * 0.7);
-        applyImpulse(new THREE.Vector3(r.x, r.y, r.z), J);
-        r.vx *= -0.2; r.vz *= -0.2;
-        bus.emit('impact', { from: new THREE.Vector3(s.up.x, 0.2, s.up.y), power: clamp(r.r * sp * 0.12, 0.2, 1.3), source: 'rock' });
-      }
-    }
-    _q.setFromEuler(r.rot); _s.setScalar(r.r); _p.set(r.x, r.y, r.z);
-    _m.compose(_p, _q, _s); s.im.setMatrixAt(i, _m);
-  });
-  s.im.instanceMatrix.needsUpdate = true;
-  // mud sheet follows the front
-  const len = Math.max(2, 60 - Math.max(front, s.hit > 0.9 ? -4 : 8));
-  const mid = Math.max(front, -4) + len / 2;
-  s.mud.position.set(c.x + s.up.x * mid, 0, c.z + s.up.y * mid);
-  s.mud.rotation.set(0, Math.atan2(s.up.x, s.up.y), 0);
-  s.mud.scale.set(18, 1, len);
-  const mp = s.mud.geometry.attributes.position;
-  if (!s.mudInit) { s.mud.geometry.rotateX(-Math.PI / 2); s.mudInit = true; }
-  s.mud.updateMatrixWorld();
-  for (let i = 0; i < mp.count; i++) {
-    _p.set(mp.getX(i), 0, mp.getZ(i)); s.mud.localToWorld(_p);
-    const edge = 1 - Math.pow(Math.abs(mp.getX(i)) * 2, 4);
-    mp.setY(i, heightAt(_p.x, _p.z) + 0.08 + 0.35 * edge * smooth(0, 3, s.t));
+  // release queued rocks as bodies (they slide & roll down the real slope under gravity)
+  for (let i = s.queue.length - 1; i >= 0; i--) {
+    const q = s.queue[i]; if (s.t < q.delay) continue;
+    const o = addObstacle(new THREE.Vector3(q.x, heightAt(q.x, q.z) + q.r + 0.3, q.z), q.r * 0.9, { tag: 'slide', v: new THREE.Vector3(-s.up.x * 4, -1, -s.up.y * 4) });
+    s.bodies.push(o); s.queue.splice(i, 1);
   }
-  mp.needsUpdate = true; s.mud.geometry.computeVertexNormals();
+  // mud front: flows downhill along the fall line, slows on flat ground, spreads and thins
+  const m = s.mudZ;
+  if (m) {
+    const e = 1.5, gx = (heightAt(m.x + e, m.z) - heightAt(m.x - e, m.z)) / (2 * e), gz = (heightAt(m.x, m.z + e) - heightAt(m.x, m.z - e)) / (2 * e);
+    const g = Math.hypot(gx, gz), acc = 9.81 * (g - 0.08);                       // Bingham-ish: stops below ~8% grade
+    const dir = g > 1e-3 ? [-gx / g, -gz / g] : [0, 0];
+    m.vx += (dir[0] * acc - m.vx * 0.35) * dt; m.vz += (dir[1] * acc - m.vz * 0.35) * dt;
+    if (acc < 0) { m.vx *= 1 - Math.min(1, dt * 0.6); m.vz *= 1 - Math.min(1, dt * 0.6); }
+    const sp = Math.hypot(m.vx, m.vz); if (sp > 9) { m.vx *= 9 / sp; m.vz *= 9 / sp; }
+    m.x += m.vx * dt; m.z += m.vz * dt;
+    m.r = Math.min(14 * (0.6 + s.scale * 0.4), m.r + dt * 0.6);
+    if (s.t > 14) m.depth = Math.max(0.12, m.depth - dt * 0.01);
+    if (s.t > 25 && sp < 0.3) { m.vx = m.vz = 0; }
+  }
+  syncSlide(s);
+  G.shake = Math.max(G.shake, 0.35 * smooth(0, 1, s.t) * (1 - smooth(8, 14, s.t)));
+  // mud sheet mesh follows the flow
+  if (m) {
+    s.mud.position.set(m.x, 0, m.z); s.mud.rotation.set(0, Math.atan2(s.up.x, s.up.y), 0);
+    s.mud.scale.set(m.r * 1.9, 1, m.r * 2.2 + 8);
+    const mp = s.mud.geometry.attributes.position;
+    if (!s.mudInit) { s.mud.geometry.rotateX(-Math.PI / 2); s.mudInit = true; }
+    s.mud.updateMatrixWorld();
+    for (let i = 0; i < mp.count; i++) {
+      _p.set(mp.getX(i), 0, mp.getZ(i)); s.mud.localToWorld(_p);
+      const edge = 1 - Math.pow(Math.hypot(mp.getX(i), mp.getZ(i)) * 2, 3);
+      mp.setY(i, heightAt(_p.x, _p.z) + 0.05 + m.depth * Math.max(0, edge) * smooth(0, 3, s.t));
+    }
+    mp.needsUpdate = true; s.mud.geometry.computeVertexNormals();
+  }
   // dust
   const dp = s.dust.geometry.attributes.position;
-  for (let i = 0; i < dp.count; i++) {
-    const r = s.rocks[i % s.rocks.length];
+  if (s.bodies.length) for (let i = 0; i < dp.count; i++) {
+    const r = s.bodies[i % s.bodies.length].p;
     dp.setXYZ(i, r.x + Math.sin(i * 7.1 + s.t) * 2, r.y + (i % 7) * 0.4 + s.t * 0.1, r.z + Math.cos(i * 3.3 + s.t) * 2);
   }
   dp.needsUpdate = true;
   s.dust.material.opacity = 0.4 * (1 - smooth(10, 30, s.t));
-  if (s.t > 14 && !s.done) {
+  if (s.t > 16 && !s.done) {
     s.done = true; bus.emit('slidesettled');
-    // settled boulders stay on the ground as real obstacles (road blocks for the autopilot)
-    let onRoad = 0;
-    for (const r of s.rocks) if (r.r > 0.5) { addObstacle(new THREE.Vector3(r.x, r.y, r.z), r.r * 0.9, { tag: 'slide', static: r.r > 1.0 }); if (roadQuery(r.x, r.z).d < 3.5) onRoad++; }
-    warn(s.hit > 0.9 ? '土砂が車体を直撃…早く移動を！' : onRoad ? `土砂が道をふさいだ（岩${onRoad}個）。自動運転は迂回か押しのけて進む` : '土砂は手前で止まった…', 'warn');
+    let onRoad = 0; for (const o of s.bodies) if (o.r > 0.45 && roadQuery(o.p.x, o.p.z).d < 3.5) onRoad++;
+    warn(onRoad ? `土砂が道をふさいだ（岩${onRoad}個）。押しのけるか迂回する` : '土砂は手前で止まった…', 'warn');
   }
+  if (s.t > 600) { s.on = false; s.im.visible = s.mud.visible = s.dust.visible = false; removeObstacles('slide'); G.mudZones.splice(G.mudZones.indexOf(m), 1); s.mudZ = null; }
 }
 
 // ---------------------------------------------------------------- flood
@@ -191,16 +189,15 @@ export function startFlood() {
 function updateFlood(dt) {
   const f = E.flood;
   const base = WATER_BASE + G.rainAccum * 0.35;
-  if (!f.on) { G.waterLevel += (base - G.waterLevel) * dt * 0.05; return; }
+  if (!f.on) { G.waterLevel += (base - G.waterLevel) * dt * 0.05; G.floodK = Math.max(0, (G.floodK || 0) - dt * 0.05); return; }
   f.t += dt;
   const rise = smooth(0, 35, f.t), fall = smooth(120, 200, f.t);
   const target = lerp(base, f.peak, rise * (1 - fall));
   G.waterLevel += (target - G.waterLevel) * Math.min(1, dt * 0.8);
+  // current strength (vehicle.js waterFlowAt): strongest on the rising limb of the flood wave
+  G.floodK = clamp(smooth(0, 20, f.t) * (1 - smooth(90, 200, f.t)) * 1.1);
   if (G.camper) {
     const sub = G.waterLevel - G.camper.position.y;
-    // current: pushes floating vans downstream (-z along the creek) and toward the channel
-    G.floodFlow = G.floodFlow || new THREE.Vector3();
-    G.floodFlow.set((creekX(G.camper.position.z) - G.camper.position.x) * 0.02, 0, -1).multiplyScalar(clamp(sub, 0, 1.5) * 1.2);
     if (sub > 0.35 && !f.warned) { f.warned = true; warn('水がタイヤを越えた！ 高台へ避難を！', 'danger'); }
     if (sub > 0.55) {
       G.state.hull = Math.max(0, G.state.hull - dt * 0.8);
@@ -211,7 +208,7 @@ function updateFlood(dt) {
       G.state.hull = Math.max(G.state.hull, 6);
     }
   }
-  if (f.t > 200) { f.on = false; f.warned = false; G.floodFlow && G.floodFlow.set(0, 0, 0); warn('水が引いていく…', 'info'); }
+  if (f.t > 200) { f.on = false; f.warned = false; warn('水が引いていく…', 'info'); }
 }
 
 // ---------------------------------------------------------------- falling tree
@@ -257,18 +254,31 @@ function updateTree(dt) {
   else if (!f.hit) {
     f.hit = true; f.v = 0;
     if (f.ahead) {
-      // the trunk becomes a row of heavy log segments lying across the road
-      for (let k = 2; k < 15; k += 1.2) addObstacle(f.base.clone().addScaledVector(f.dir, k).setY(heightAt(f.base.x + f.dir.x * k, f.base.z + f.dir.z * k) + 0.35), 0.38, { tag: 'tree', m: 450 });
+      // the trunk becomes ONE rigid log (a linked chain of segments, ~1.2 t, thicker at the butt)
+      // lying across the road: the van can shove / pivot it, or get blocked by it
+      removeObstacles('tree');
+      const segs = [];
+      for (let k = 2; k < 15; k += 1.2) {
+        const r = 0.42 - k * 0.012, x = f.base.x + f.dir.x * k, z = f.base.z + f.dir.z * k;
+        segs.push(addObstacle(new THREE.Vector3(x, heightAt(x, z) + r * 0.9, z), r, { tag: 'tree', m: 700 * r * r * 3.14 * 1.2 }));
+      }
+      linkObstacles(segs); f.segs = segs;
       G.shake = Math.max(G.shake, 0.6); bus.emit('sfx', 'thud', 0.8);
     } else {
-      bus.emit('impact', { from: new THREE.Vector3(0, 1, 0), power: 1.2, source: 'tree' });
+      // the trunk lands on the roof: dent where it hits + the skylight cracks, the van is pushed down/sideways
+      const hitW = G.camper.localToWorld(new THREE.Vector3(0, 2.95, -0.8));
+      bus.emit('impact', { from: new THREE.Vector3(0, 1, 0), power: 1.2, source: 'tree', lp: toLocal(hitW), ln: new THREE.Vector3(0, -1, 0), cause: 'tree' });
       const u = C.glass.sky1?.material.userData.u; if (u) u.uCrack.value = 1;
-      applyImpulse(G.camper.position.clone().setY(G.camper.position.y + 2.9), f.dir.clone().multiplyScalar(2600).setY(-6000));
+      applyImpulse(hitW, f.dir.clone().multiplyScalar(2600).setY(-6000));
     }
   }
-  treeMesh.quaternion.setFromAxisAngle(f.axis, f.ang);
+  if (f.segs && f.segs.length > 1) { // the mesh follows the physical log (pushed / rotated by the van)
+    const a = f.segs[0].p, b = f.segs[f.segs.length - 1].p, d = _p.subVectors(b, a).normalize();
+    treeMesh.quaternion.setFromUnitVectors(_s.set(0, 1, 0), d);
+    treeMesh.position.copy(a).addScaledVector(d, -2); treeMesh.position.y -= 0.35; // segs[0] sits 2 m up the trunk from its base
+  } else treeMesh.quaternion.setFromAxisAngle(f.axis, f.ang);
   // parked hit: once the van drives away the tree slides off the roof and ends up on the ground
-  if (f.hit && !f.ahead && G.camper.position.distanceTo(f.base) > 11) { f.maxA = Math.PI / 2 - 0.06; f.ahead = true; f.hit = false; }
+  if (f.hit && !f.ahead && G.camper.position.distanceTo(f.base) > 11) { f.maxA = Math.PI / 2 - 0.06; f.ahead = true; f.hit = false; f.segs = null; }
   // clean up long after (so another tree can fall later)
   if (f.t > 400) { f.done = true; treeMesh.visible = false; removeObstacles('tree'); }
 }
@@ -332,7 +342,7 @@ export function triggerEvent(name) {
     return;
   }
   if (name === 'flood' && P.has('qa')) { startFlood(); E.flood.t = 40; G.waterLevel = E.flood.peak; return; }
-  if (name === 'landslide' && P.has('qa')) { startLandslide(); for (let i = 0; i < 60; i++) updateSlide(0.1); return; }
+  if (name === 'landslide' && P.has('qa')) { startLandslide(); return; }
   e.run && e.run();
   lastRun[name] = G.t;
 }
