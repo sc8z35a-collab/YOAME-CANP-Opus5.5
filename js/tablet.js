@@ -238,6 +238,7 @@ export function updateTablet(dt) {
   drawT -= dt; if (drawT > 0) return; drawT = TAB.open ? 0 : 0.25;
   if (!TAB.open) { draw(TAB.ctx, 640, 400, false); TAB.tex.needsUpdate = true; }
   TAB.screenMat.emissiveIntensity = 0.55 + G.night * 0.2;
+  if (TAB.open && TAB.fctx && Math.abs(TAB.fcanvas.width - Math.round(TAB.fcanvas.clientWidth * (TAB.dpr || 1))) > 2) resizeFull(); // layout settled / rotated
   if (TAB.open && TAB.fctx) draw(TAB.fctx, TAB.fcanvas.width, TAB.fcanvas.height, true, TAB.dpr || 1);
 }
 
