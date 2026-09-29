@@ -13,3 +13,9 @@ outdoor_table_chair_set_01, dry_branches_medium_01, rock_07, nettle_plant, weed_
 
 ## Engine
 - three.js r180 (MIT)
+
+## Interior v3 — Poly Haven (CC0)
+Textures: white_oak_veneer, ash_veneer, poly_wool_herringbone, brown_leather, long_white_tiles, rubber_tiles,
+gingham_check, caban, plywood.
+Models: vintage_electric_kettle, potted_plant_02, throw_pillows_01, wooden_cutting_board, wooden_bowl_01,
+tea_set_01, binoculars, vintage_oil_lamp, wicker_basket_01, pot_enamel_01 (fetched by tools/fetch_polyhaven.py)
