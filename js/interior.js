@@ -412,7 +412,7 @@ export function buildCab(I, M, C) {
   drawGauges(0, 0, 0.7, 0.3);
   // ---- steering column + wheel (face tilted ~34deg up toward the driver)
   const tilt = -0.6, n = new THREE.Vector3(0, Math.sin(-tilt), Math.cos(tilt)); // wheel normal (toward driver)
-  const wc = new THREE.Vector3(bx, 1.53, -3.52);
+  const wc = new THREE.Vector3(bx, 1.49, -3.5);
   const along = d => wc.clone().addScaledVector(n, -d);
   const colP = along(0.14), col = rb(0.07, 0.07, 0.26, M.black, colP.x, colP.y, colP.z, 0.025, 3); col.rotation.x = tilt; g.add(col);
   const shP = along(0.19), shroud = rb(0.13, 0.11, 0.15, M.dash, shP.x, shP.y, shP.z, 0.04, 3); shroud.rotation.x = tilt; g.add(shroud);
