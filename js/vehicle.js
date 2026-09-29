@@ -241,7 +241,8 @@ function updateDrivetrain(dt) {
   let rpmW = Math.abs(wd) * ratio * toRpm;
   if (D.mode === 'D' && D.shiftT <= 0) { // 6-speed automatic shift schedule (kick-down with throttle)
     const upAt = lerp(1750, 3350, thr), downAt = lerp(1050, 1900, thr);
-    if (rpmW > upAt && D.gear < 6) { D.gear++; D.shiftT = 0.35; }
+    const spinning = VEH.wheels.some((W, i) => mask[i] && W.contact && Math.abs(W.w * WHEEL_R - vF) > 1.5);
+    if (rpmW > upAt && D.gear < 6 && !spinning) { D.gear++; D.shiftT = 0.35; }
     else if (D.gear > 1 && rpmW < downAt && Math.abs(wd) * GEARS[D.gear - 1] * FINAL * rangeK(D) * toRpm < upAt * 0.82) { D.gear--; D.shiftT = 0.3; }
     ratio = ratioOf(D); rpmW = Math.abs(wd) * ratio * toRpm;
   }
@@ -347,7 +348,9 @@ function step(dt) {
     // TCS (not in 4L): brake a spinning driven wheel so an open diff still drives the other side
     const sv = W.w * WHEEL_R - vx;
     if (brkEff > 0.05 && Math.abs(vx) > 1.8 && sv * Math.sign(vx) < -0.16 * Math.abs(vx)) { W.abs = 0.06; D.abs = true; }
-    if (driven && D.range !== '4L' && Math.abs(sv) > 0.9 + 0.2 * Math.abs(vx) && Math.sign(sv) === Math.sign(Td)) { Tb += 900; D.tcs = true; }
+    const ex = Math.abs(sv) - (0.6 + 0.15 * Math.abs(vx));
+    if (driven && D.range !== '4L' && ex > 0 && Math.sign(sv) === Math.sign(Td)) { W.tcs = Math.min(4200, (W.tcs || 0) + ex * 9000 * dt); D.tcs = true; } else W.tcs = Math.max(0, (W.tcs || 0) - 6000 * dt);
+    Tb += W.tcs || 0;
     // implicit tyre / wheel solve (unconditionally stable slip-velocity model)
     const ks = CK * Fz / Math.max(Math.abs(vx), 0.5), ky = CA * Fz / Math.max(Math.abs(vx), 1.0);
     const mL = effMass(cp, wf) * 0.3, mT = effMass(cp, wr) * 0.3;

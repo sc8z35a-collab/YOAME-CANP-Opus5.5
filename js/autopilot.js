@@ -17,6 +17,7 @@ const _o = new THREE.Vector3();
 const LOCK = 0.72;          // max steering angle (rad) ≈ 7.5m turning radius
 const WB = 6.55;            // wheelbase
 
+const lerpV = (a, b, t) => a + (b - a) * t;
 function say(msg, level = 'info', ms = 3800) { AP.msg = msg; bus.emit('toast', { msg, level, ms }); }
 
 // ---------------------------------------------------------------- planning
@@ -208,6 +209,11 @@ export function updateAutopilot(dt) {
   c.steer = -clamp(Math.atan(2 * WB * lat / (Ld * Ld)), -LOCK, LOCK); // steer>0 = left
   // ---- speed plan
   // curvature ahead: heading change over ~6m windows, speed limited by the distance to it
+  // usable lateral acceleration: friction budget (wet/mud) and the static rollover threshold of a
+  // tall motorhome (track/2h ≈ 0.9 g) with a big safety margin; decel budget from the same grip
+  const mu = clamp(VEH.mu || 0.7, 0.2, 0.9);
+  const aLat = Math.min(mu * 0.45, 0.28) * 9.81, aDec = Math.min(mu * 0.4, 0.3) * 9.81;
+  AP.aLat = aLat;
   let vcurve = AP.cruise, dist = 0;
   for (let i = AP.idx; i < Math.min(path.length - 2, AP.idx + 30); i++) {
     const a = path[i], b = path[Math.min(path.length - 1, i + 3)], cc = path[Math.min(path.length - 1, i + 6)];
@@ -215,16 +221,23 @@ export function updateAutopilot(dt) {
     if (l1 > 0.5 && l2 > 0.5) {
       let dh = Math.abs(Math.atan2(cc.x - b.x, cc.z - b.z) - Math.atan2(b.x - a.x, b.z - a.z)); dh = Math.min(dh, Math.PI * 2 - dh);
       const k = dh / ((l1 + l2) / 2);
-      const vk = Math.max(1.3, Math.sqrt(2.0 / Math.max(k, 1e-3)));
-      vcurve = Math.min(vcurve, Math.sqrt(vk * vk + 2 * 1.4 * dist));
+      const vk = Math.max(1.3, Math.sqrt(aLat / Math.max(k, 1e-3)));
+      vcurve = Math.min(vcurve, Math.sqrt(vk * vk + 2 * aDec * 0.6 * dist));
     }
     dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   }
   let remain = 0; for (let i = AP.idx; i < path.length - 1; i++) remain += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   AP.remain = remain + bd;
-  let vt = Math.min(AP.cruise, vcurve, 1.2 + Math.sqrt(2 * 1.6 * Math.max(0, remain - 1)));
+  let vt = Math.min(AP.cruise, vcurve, 1.2 + Math.sqrt(2 * Math.min(1.6, aDec * 0.6) * Math.max(0, remain - 1)));
   // don't accelerate while still turning, or while off the planned line
-  vt = Math.min(vt, Math.max(1.4, Math.sqrt(2.0 * WB / Math.max(Math.tan(Math.abs(VEH.steer)), 1e-3))));
+  vt = Math.min(vt, Math.max(1.4, Math.sqrt(aLat * WB / Math.max(Math.tan(Math.abs(VEH.steer)), 1e-3))));
+  // steep downhill: go slower (brake fade / sliding on loose gravel)
+  if (f.y < -0.1) vt = Math.min(vt, lerpV(AP.cruise, 3, clamp((-f.y - 0.1) / 0.12)));
+  // lateral tilt: creep when the van leans (side slope / one wheel on a bank)
+  const tilt = Math.abs(VEH.roll || 0);
+  if (tilt > 0.12) vt = Math.min(vt, Math.max(1.0, 4 - tilt * 12));
+  // tyres already sliding: back off
+  if (VEH.skid > 1.5) vt = Math.min(vt, Math.max(1.2, Math.abs(spd) - 1));
   if (bd > 1.2) vt = Math.min(vt, Math.max(1.4, 6 - bd * 1.5));
   if (AP.slow) vt = Math.min(vt, 2.6);
   if (VEH.submerged > 0.15) vt = Math.min(vt, 2);
@@ -239,12 +252,20 @@ export function updateAutopilot(dt) {
   AP.speedT = vt;
   const err = vt - spd;
   c.hand = false;
-  if (err > 0) { c.throttle = clamp(err * 0.5 + 0.18 + Math.max(0, f.y) * 2, 0, 1); c.brake = 0; }
-  else { c.throttle = 0; c.brake = clamp(-err * 0.4, 0, 1); }
+  // PI speed control with grade feed-forward (the diesel pulls hard; wheelspin -> lift off)
+  AP.ei = clamp((AP.ei || 0) + err * dt * 0.25, -0.3, 0.5);
+  const spinning = VEH.drive.tcs || VEH.wheels.some(W => W.contact && W.slip > 2.2);
+  if (err > -0.3) { c.throttle = clamp(err * 0.35 + AP.ei + 0.08 + Math.max(0, f.y) * 1.6, 0, spinning ? 0.45 : 1); c.brake = 0; }
+  else { c.throttle = 0; AP.ei = Math.min(AP.ei, 0); c.brake = clamp(-err * 0.35, 0, 1); }
+  // transfer case: 4H on slippery / soft / steep ground, 4L to crawl out of mud, deep water, stuck
+  const soft = VEH.wheels.reduce((a, W) => Math.max(a, W.soft || 0, W.sink > 0.08 ? 1 : 0), 0);
+  const want = AP.stuckN > 0 || VEH.submerged > 0.2 || soft > 0.6 ? '4L' : (mu < 0.55 || f.y > 0.12 || soft > 0.25 || AP.offroad) ? '4H' : '2H';
+  if (want !== c.range) { AP.rangeT = (AP.rangeT || 0) + dt; if (AP.rangeT > (want === '2H' ? 6 : 0.5)) { AP.rangeT = 0; if (want === '4L' && Math.abs(spd) > 2.4) { c.throttle = 0; c.brake = 0.4; } else c.range = want; } } else AP.rangeT = 0;
   // ---- stuck: back up with opposite lock, mark ahead as blocked, replan; repeated -> winch
   if (Math.abs(spd) < 0.35 && vt > 1) AP.stuckT += dt; else AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
   if (Math.abs(spd) > 2) { AP.goodT = (AP.goodT || 0) + dt; if (AP.goodT > 20) { AP.goodT = 0; AP.stuckN = 0; } }
-  if (AP.stuckT > 4 && AP.stuckT < 6.5) { c.throttle = -0.5; c.steer = -c.steer; c.brake = 0; }
+  // stuck: rock the van (reverse a little with opposite lock, then go again) like a real driver
+  if (AP.stuckT > 4 && AP.stuckT < 6.5) { c.throttle = -0.45; c.steer = -c.steer; c.brake = 0; }
   if (AP.stuckT >= 6.5) {
     AP.stuckT = 0; AP.stuckN = (AP.stuckN || 0) + 1;
     for (let i = AP.idx; i < Math.min(path.length, AP.idx + 8); i++) if (path[i].n >= 0) AP.blockedNodes.set(path[i].n, G.t + 90);
