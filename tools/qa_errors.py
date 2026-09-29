@@ -21,4 +21,5 @@ for e in errs:
     seen.add(k)
     lines = [l for l in e.split("\n") if "ERROR" in l or "Material" in l or "PAGEERR" in l or "TIMEOUT" in l]
     print("----", "\n".join(lines[:8]) if lines else e[:400])
+    if "-v" in sys.argv: print(e[:6000])
 print("unique errors:", len(seen))
