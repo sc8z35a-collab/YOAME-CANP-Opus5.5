@@ -8,7 +8,7 @@ import { PL, initPlayer, updatePlayer, goOutside } from './player.js';
 import { buildTablet, updateTablet } from './tablet.js';
 import { FLOOR, ZF } from './camper.js';
 import { buildForest, camp, updateForest } from './forest.js';
-import { buildCamper, updateCamper, C } from './camper.js';
+import { buildCamper, updateCamper, C, bakeInteriorEnv, IN } from './camper.js';
 import { buildWeather, updateWeather, W } from './weather.js';
 import { buildAnimals, updateAnimals, Z } from './animals.js';
 import { buildEvents, updateEvents, E, startForcedEvent } from './events.js';
@@ -126,7 +126,7 @@ function updateDrive(dt) {
   _pv.copy(VEH.v);
   updateVehicle(dt, C.group);
   if (dt > 0) G.vehAccL.copy(VEH.v).sub(_pv).divideScalar(dt).applyQuaternion(_qa.copy(VEH.q).invert());
-  G.driveSpeed = VEH.fwdSpeed;
+  G.driveSpeed = VEH.fwdSpeed; G.steerAngle = VEH.steer;
   G.submerge = VEH.submerged * 1.6;
   // road rumble & wind gusts rock the van a little (camera shake is felt, not scripted)
   if (G.driving && VEH.speed > 1) G.shake = Math.max(G.shake, 0.05 + VEH.speed * 0.008);
@@ -174,7 +174,8 @@ async function init() {
   resize();
   updateWeather(0.016, camera);
   updateEnv();
-  // warm up shaders
+  // interior reflections (after CC0 props are in) + warm up shaders
+  try { await IN.ready; bakeInteriorEnv(renderer, scene, C.group); } catch (e) { console.warn('env bake', e); }
   renderer.compile(scene, camera);
   loadEl.classList.add('done');
   setTimeout(() => loadEl.remove(), 1200);

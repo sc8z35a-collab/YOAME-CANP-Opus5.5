@@ -8,7 +8,7 @@
 //   tools/interior.html?pos=x,y,z&at=x,y,z&fov=60&night=1&w=915&h=412&q=m
 import { THREE, G, U, P } from '../js/core.js';
 import { setAniso, manager } from '../js/assets.js';
-import { buildCamper, updateCamper, C, FLOOR, ZF, uIntAmb } from '../js/camper.js';
+import { buildCamper, updateCamper, C, FLOOR, ZF, uIntAmb, bakeInteriorEnv, IN } from '../js/camper.js';
 const canvas = document.getElementById('c');
 const W = +(P.get('w') || 915), H = +(P.get('h') || 412);
 const r = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -41,7 +41,8 @@ cam.lookAt(new THREE.Vector3().fromArray(P.has('at') ? v('at') : [1.4, FLOOR + 1
 if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); if (k === 'shell') C.group.children.forEach(o => { if (o !== C.interiorRoot) o.visible = false; }); }
 let n = 0;
 const done = () => new Promise(res => { if (manager.itemsLoaded === manager.itemsTotal) res(); else manager.onLoad = res; setTimeout(res, 60000); });
-await done();
+await done(); await IN.ready; if (!P.has('noenv')) bakeInteriorEnv(r, scene, C.group);
+if (P.has('steer')) G.steerAngle = +P.get('steer'); if (P.has('drive')) { G.driving = true; G.driveSpeed = +P.get('drive'); }
 function loop() {
   G.t += 1 / 30; G.frame++; U.uTime.value = G.t; updateCamper(1 / 30);
   r.render(scene, cam);

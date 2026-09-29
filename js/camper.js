@@ -4,6 +4,8 @@ import { THREE, G, U, rng, fmtTime } from './core.js';
 import { tex, pbr, canvasTex } from './assets.js';
 import { makeGlass } from './glass.js';
 import { RoundedBoxGeometry } from './lib/addons/geometries/RoundedBoxGeometry.js';
+import { buildInteriorV3, updateInterior, bakeInteriorEnv, IN } from './interior.js';
+export { bakeInteriorEnv, IN };
 
 export const FLOOR = 0.72;          // interior floor height (camper local)
 export const CEIL = 2.75;
@@ -206,11 +208,11 @@ export function buildCamper(scene) {
   const paint = paintMaterial();
   const rubber = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.8 });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2, metalness: 1 });
-  const panel = pbr('oak_veneer_01', { color: 0xc99a6a, repeat: 0.55, normalScale: 0.8 });
-  const ceilM = pbr('rough_linen', { arm: false, color: 0xd9ccb4, repeat: 0.7, normalScale: 0.6 });
+  const panel = pbr('ash_veneer', { color: 0xf0e4d2, repeat: 0.6, normalScale: 0.35 });   // light ash wall boards
+  const ceilM = pbr('rough_linen', { arm: false, color: 0xeee8dc, repeat: 0.7, normalScale: 0.5 }); // padded headliner
   const oak = pbr('oak_veneer_01', { repeat: 1, color: 0xd9b48a, normalScale: 0.6 });
   const oakDark = pbr('oak_veneer_01', { repeat: 1, color: 0x8a5a35, normalScale: 0.6 });
-  const floorM = pbr('laminate_floor_02', { repeat: 1, normalScale: 0.7 });
+  const floorM = pbr('laminate_floor_02', { repeat: 1, normalScale: 0.7, color: 0xe8dccb });
   floorM.map.repeat.set(1.3, 2.5); floorM.normalMap.repeat.set(1.3, 2.5); floorM.aoMap.repeat.set(1.3, 2.5);
   const leather = pbr('leather_white', { color: 0x7a4a2a, repeat: 1, normalScale: 0.6 });
   const linen = pbr('rough_linen', { arm: false, color: 0xf4eee3, repeat: 1.5 });
@@ -422,105 +424,9 @@ function buildInterior(I, M) {
   const add = (...o) => { o.forEach(x => I.add(x)); return o[0]; };
   const xi = XW - 0.12; // inner wall x
 
-  // ---- dinette (left, facing benches) ----
-  const benchBase = (z0, z1, backAtFront) => {
-    add(bb(-xi, F, z0, -0.35, F + 0.4, z1, M.oak));
-    add(rbox(-0.35 + xi - 0.02, 0.12, z1 - z0 - 0.02, M.leather, (-xi - 0.35) / 2, F + 0.46, (z0 + z1) / 2, 0.05, 3));
-    const bz = backAtFront ? z0 + 0.06 : z1 - 0.06;
-    add(rbox(-0.35 + xi - 0.02, 0.55, 0.12, M.leather, (-xi - 0.35) / 2, F + 0.8, bz, 0.05, 3));
-  };
-  benchBase(-2.45, -1.9, true);
-  benchBase(-0.3, 0.25, false);
-  // table (on a pedestal)
-  const table = add(bb(-xi + 0.02, F + 0.7, -1.78, -0.42, F + 0.74, -0.42, M.oakDark, 0.02));
-  add(bb(-0.8, F, -1.15, -0.72, F + 0.7, -1.05, M.steel, 0.01));
-  // ---- cab ----
-  for (const sx of [-0.55, 0.55]) {
-    add(rbox(0.55, 0.14, 0.55, M.leather, sx, F + 0.5, -3.3, 0.06, 3));
-    add(rbox(0.55, 0.7, 0.14, M.leather, sx, F + 0.95, -2.98, 0.06, 3));
-    add(rbox(0.3, 0.16, 0.1, M.leather, sx, F + 1.36, -2.97, 0.05, 3));
-    add(rbox(0.4, 0.42, 0.4, M.darkPlastic, sx, F + 0.21, -3.3, 0.03));
-  }
-  // dashboard
-  const dash = add(bb(-xi, F + 0.55, ZF + 0.02, xi, F + 0.85, ZF + 0.55, M.dashM, 0.08));
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.022, 10, 32), M.darkPlastic);
-  wheel.position.set(-0.55, F + 0.98, ZF + 0.75); wheel.rotation.x = -0.9; add(wheel);
-  add(rbox(0.06, 0.06, 0.35, M.darkPlastic, -0.55, F + 0.9, ZF + 0.6, 0.02));
-  const gaugeM = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x3aa0ff, emissiveIntensity: 0.6 });
-  const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), gaugeM);
-  gauge.position.set(-0.55, F + 0.87, ZF + 0.5); gauge.rotation.x = -1.1; add(gauge);
-  C.emissives.push({ m: gaugeM, base: 0.6, kind: 'dash' });
-  // alcove bunk over cab
-  add(bb(-xi, 2.17, ZF + 0.05, xi, 2.24, -2.85, M.oak, 0.02));
-  add(rbox(2.0, 0.14, 1.3, M.linen, 0, 2.31, -3.55, 0.06, 3));
-  add(rbox(0.5, 0.12, 0.35, M.fleece, 0.4, 2.44, -3.8, 0.05, 3));
-  add(bb(-xi, 2.24, -2.9, xi, 2.36, -2.85, M.oakDark, 0.01));
-
-  // ---- kitchen (right) ----
-  add(bb(0.5, F, -1.65, xi, F + 0.88, 0.3, M.oak));
-  const counter = add(bb(0.47, F + 0.88, -1.68, xi, F + 0.92, 0.32, M.oakDark, 0.01));
-  // sink
-  add(bb(0.62, F + 0.84, -0.3, 0.98, F + 0.925, 0.1, M.steel, 0.02));
-  const faucet = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.012, 8, 16, Math.PI), M.chrome);
-  faucet.position.set(1.0, F + 1.04, -0.1); faucet.rotation.y = Math.PI / 2; add(faucet);
-  add(rbox(0.024, 0.12, 0.024, M.chrome, 1.0, F + 0.98, 0.0, 0.01));
-  // stove (glass top with burners)
-  const stoveTop = new THREE.MeshPhysicalMaterial({ color: 0x0b0b0c, roughness: 0.08, clearcoat: 1 });
-  add(bb(0.58, F + 0.92, -1.45, 1.02, F + 0.935, -0.8, stoveTop, 0.01));
-  C.stove = [];
-  for (const z of [-1.28, -0.97]) {
-    const bm = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xff3a10, emissiveIntensity: 0 });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.008, 6, 28), bm);
-    ring.rotation.x = -Math.PI / 2; ring.position.set(0.8, F + 0.94, z); add(ring); C.stove.push(bm);
-  }
-  // kettle
-  const kettle = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.09, 0], [0.1, 0.05], [0.09, 0.14], [0.05, 0.18], [0.015, 0.2], [0, 0.2]].map(p => new THREE.Vector2(p[0], p[1])), 24), M.chrome);
-  kettle.position.set(0.8, F + 0.94, -0.97); kettle.castShadow = true; add(kettle);
-  // backsplash tile
-  add(bb(xi - 0.012, F + 0.92, -1.65, xi, F + 1.25, 0.3, M.tile, 0.002));
-  // fridge
-  add(bb(0.45, F, -2.55, xi, F + 1.7, -1.72, new THREE.MeshStandardMaterial({ color: 0xd8d8d4, roughness: 0.35 }), 0.02));
-  add(rbox(0.02, 0.4, 0.03, M.chrome, 0.44, F + 1.2, -1.8, 0.01));
-  // wet bath / wardrobe block (left, behind dinette)
-  add(bb(-xi, F, 0.35, -0.2, CEIL, 1.45, M.oak, 0.01));
-  add(bb(-0.205, F + 0.1, 0.45, -0.19, CEIL - 0.1, 1.35, M.oakDark, 0.005));
-  add(rbox(0.03, 0.12, 0.03, M.chrome, -0.18, F + 1.1, 0.55, 0.01));
-
-  // ---- bed (rear) ----
-  add(bb(-xi, F, 1.5, xi, F + 0.58, ZB - 0.12, M.oak));
-  add(rbox(2.14, 0.2, 1.55, M.linen, 0, F + 0.68, 2.33, 0.08, 3));
-  // blanket (draped, wrinkled)
-  const bl = new THREE.PlaneGeometry(2.1, 1.1, 40, 24); bl.rotateX(-Math.PI / 2);
-  const bp = bl.attributes.position; const R = rng(4);
-  for (let i = 0; i < bp.count; i++) {
-    const x = bp.getX(i), z = bp.getZ(i);
-    const edge = Math.max(0, Math.abs(x) - 0.98);
-    bp.setY(i, Math.sin(x * 9 + z * 3) * 0.012 + Math.sin(z * 14) * 0.008 + (R() - 0.5) * 0.004 - edge * 2.2);
-    if (edge > 0) bp.setX(i, Math.sign(x) * (0.98 + edge * 0.25));
-  }
-  bl.computeVertexNormals();
-  const blanket = new THREE.Mesh(bl, M.fleece); blanket.position.set(0, F + 0.8, 2.45); blanket.castShadow = true; blanket.receiveShadow = true; add(blanket);
-  for (const sx of [-0.5, 0.5]) add(rbox(0.62, 0.14, 0.36, M.linen, sx, F + 0.86, 1.72, 0.07, 4));
-  // book
-  add(rbox(0.16, 0.03, 0.22, new THREE.MeshStandardMaterial({ color: 0x2a4d6b, roughness: 0.7 }), 0.3, F + 0.84, 2.9, 0.005));
-
-  // ---- overhead lockers (both sides) & LED strips ----
-  const ledM = new THREE.MeshStandardMaterial({ color: 0xffe0b0, emissive: 0xffc27a, emissiveIntensity: 1.1 });
-  C.emissives.push({ m: ledM, base: 1.1, kind: 'led' });
-  const locker = (sgn, z0, z1) => {
-    const x0 = sgn < 0 ? -xi : xi - 0.34, x1 = sgn < 0 ? -xi + 0.34 : xi;
-    add(bb(x0, 2.4, z0, x1, CEIL, z1, M.oak, 0.01));
-    const n = Math.max(1, Math.round((z1 - z0) / 0.55));
-    for (let k = 0; k < n; k++) {
-      const a = z0 + (z1 - z0) * k / n + 0.01, b = z0 + (z1 - z0) * (k + 1) / n - 0.01;
-      const fx = sgn < 0 ? x1 + 0.005 : x0 - 0.005;
-      add(bb(fx - 0.01, 2.42, a, fx + 0.01, CEIL - 0.02, b, M.oakDark, 0.005));
-      add(rbox(0.02, 0.02, 0.1, M.chrome, fx + (sgn < 0 ? 0.015 : -0.015), 2.46, (a + b) / 2, 0.005));
-    }
-    const led = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.01, z1 - z0 - 0.1), ledM);
-    led.position.set(sgn < 0 ? x1 - 0.04 : x0 + 0.04, 2.395, (z0 + z1) / 2); add(led);
-  };
-  locker(-1, -2.55, -0.3); locker(1, -1.65, 0.3); locker(-1, 1.5, 2.1); locker(1, 1.5, 2.1);
+  // ---- furniture, kitchen, fridge, cab, bed, lockers, window surrounds, CC0 props (interior.js)
+  const V3 = buildInteriorV3(I, C, WINDOWS, windowLocal);
+  M.chrome = V3.chrome; M.darkPlastic = V3.black; M.steel = V3.steel;
 
   // ---- fairy lights (string along both locker edges and over bed) ----
   const pts = [];
@@ -546,42 +452,24 @@ function buildInterior(I, M) {
   lg.add(cage);
   const top = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.04, 16), new THREE.MeshStandardMaterial({ color: 0x1b1b1b, metalness: 0.7, roughness: 0.4 }));
   top.position.y = 0.085; lg.add(top);
-  lg.position.set(-0.95, F + 0.81, -1.35); add(lg);
+  lg.position.set(-0.98, F + 0.81, -1.5); add(lg);
   C.emissives.push({ m: lanternM, base: 2.4, kind: 'lantern' });
-  const lanternL = new THREE.PointLight(0xff9a45, 1.6, 4, 2); lanternL.position.set(-0.95, F + 0.85, -1.35);
+  const lanternL = new THREE.PointLight(0xff9a45, 1.6, 4, 2); lanternL.position.set(-0.98, F + 0.85, -1.5);
   add(lanternL); C.lantern = lanternL;
-  // mugs
-  const mugM = new THREE.MeshStandardMaterial({ color: 0xeee6d8, roughness: 0.3 });
-  for (const [x, z] of [[-0.62, -1.1], [-0.68, -0.72]]) {
-    const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.036, 0.09, 18), mugM);
-    mug.position.set(x, F + 0.785, z); mug.castShadow = true; add(mug);
-  }
-  // wall map, clock, radio
+  // wall map + clock on the wardrobe side panel (facing the dinette)
   const mapM = new THREE.MeshStandardMaterial({ map: mapTex(), roughness: 0.9 });
   const map = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.375), mapM);
-  map.position.set(-0.199, F + 1.55, 0.9); map.rotation.y = -Math.PI / 2; add(map);
-  const clk = new THREE.Mesh(new THREE.CircleGeometry(0.12, 32), new THREE.MeshStandardMaterial({ map: clockTex(), roughness: 0.6 }));
-  clk.position.set(0, 2.25, ZB - 0.121); clk.rotation.y = Math.PI; add(clk); C.clock = clk; drawClock();
-  clk.position.set(-0.199, F + 1.1, 0.95); clk.rotation.y = -Math.PI / 2;
-  const radioTex = canvasTex(256, 64, () => {});
-  const radioM = new THREE.MeshStandardMaterial({ color: 0x050505, emissive: 0xffffff, emissiveMap: radioTex, emissiveIntensity: 1.2 });
-  add(rbox(0.3, 0.14, 0.12, M.darkPlastic, 0.8, F + 1.0, 0.2, 0.02));
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.05), radioM);
-  scr.position.set(0.8, F + 1.02, 0.141); add(scr); C.radio = scr; drawRadio('FM 81.3 森');
-  scr.rotation.y = 0; scr.position.set(0.8, F + 1.02, 0.141);
+  map.position.set(-0.65, F + 1.6, 0.348); map.rotation.y = Math.PI; add(map);
+  add(bb(-0.92, F + 1.4, 0.343, -0.38, F + 1.8, 0.35, new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.6 }), 0.004));
+  map.position.z = 0.342;
+  const clk = new THREE.Mesh(new THREE.CircleGeometry(0.11, 40), new THREE.MeshStandardMaterial({ map: clockTex(), roughness: 0.4 }));
+  add(clk); C.clock = clk; drawClock();
+  clk.position.set(-0.199 + 0.02, F + 1.25, 0.9); clk.rotation.y = Math.PI / 2;
+  const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.113, 0.01, 10, 40), M.chrome); bezel.position.copy(clk.position); bezel.position.x += 0.004; bezel.rotation.y = Math.PI / 2; add(bezel);
+  drawRadio('FM 81.3 森');
   // rug
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 1.3), new THREE.MeshStandardMaterial({ map: kilimTex(), roughness: 1, normalMap: tex('knitted_fleece_nor_gl', { repeat: 3 }) }));
   rug.rotation.x = -Math.PI / 2; rug.position.set(0.05, F + 0.004, -0.6); rug.receiveShadow = true; add(rug);
-  // plant
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.045, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0xa55a35, roughness: 0.9 }));
-  pot.position.set(1.0, F + 0.97, 0.22); add(pot);
-  const leafM = new THREE.MeshStandardMaterial({ color: 0x3f7a3a, roughness: 0.6, side: THREE.DoubleSide });
-  for (let i = 0; i < 9; i++) {
-    const lf = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6, 0, Math.PI), leafM);
-    lf.scale.set(0.5, 1.6, 0.2); lf.position.set(1.0 + Math.cos(i * 2.4) * 0.03, F + 1.08 + (i % 3) * 0.03, 0.22 + Math.sin(i * 2.4) * 0.03);
-    lf.rotation.set(Math.cos(i * 2.4) * 0.6, i * 2.4, Math.sin(i * 2.4) * 0.6); add(lf);
-  }
-
   // ---- ceiling lamp & interior lights ----
   const domeM = new THREE.MeshStandardMaterial({ color: 0xfff4e0, emissive: 0xffd9a0, emissiveIntensity: 0.45, roughness: 0.6 });
   for (const z of [-2.0, 0.9]) {
@@ -726,7 +614,8 @@ export function updateCamper(dt) {
   C.headMat.emissiveIntensity = 6 * hk;
   // stove glow
   const cook = S.cooking > 0 ? 1 : 0;
-  C.stove.forEach(m => m.emissiveIntensity = cook * (1.5 + Math.sin(G.t * 9) * 0.2));
+  C.stove.forEach(m => m.emissiveIntensity = cook * (2.2 + Math.sin(G.t * 9) * 0.3));
+  updateInterior(dt, S, C.lightLevel);
   // clock
   if (G.frame % 30 === 0) drawClock();
 }
