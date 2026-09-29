@@ -12,12 +12,12 @@ import { THREE, G, bus, clamp } from './core.js';
 const ND = 32, NS = 48;
 export const DMG = {
   dents: [], scratches: [],
+  // all damage data lives in one RGBA float texture (uniform arrays blow the mobile uniform budget):
+  //   texel 2i / 2i+1          : dent i       (centre.xyz, radius) / (inward dir.xyz, depth)
+  //   texel 2ND+2j / 2ND+2j+1  : scratch j    (start.xyz, width)   / (end.xyz, intensity)
   u: {
-    uDent: { value: Array.from({ length: ND }, () => new THREE.Vector4()) },   // xyz centre, w radius
-    uDentN: { value: Array.from({ length: ND }, () => new THREE.Vector4()) },  // xyz inward dir, w depth
+    uDmg: { value: null },
     uNd: { value: 0 },
-    uScrA: { value: Array.from({ length: NS }, () => new THREE.Vector4()) },   // xyz start, w width
-    uScrB: { value: Array.from({ length: NS }, () => new THREE.Vector4()) },   // xyz end, w intensity
     uNs: { value: 0 },
     uCamRot: { value: new THREE.Matrix3() },   // camper-local -> world rotation
     uCamInv: { value: new THREE.Matrix4() },   // world -> camper-local
@@ -25,6 +25,11 @@ export const DMG = {
   dirty: true,
 };
 const HB = { x: 1.2, y0: 0.5, y1: 2.95, z0: -5.35, z1: 3.3 };
+const TEXW = 2 * ND + 2 * NS, TD = new Float32Array(TEXW * 4);
+DMG.tex = new THREE.DataTexture(TD, TEXW, 1, THREE.RGBAFormat, THREE.FloatType);
+DMG.tex.minFilter = DMG.tex.magFilter = THREE.NearestFilter; DMG.tex.needsUpdate = true;
+DMG.u.uDmg.value = DMG.tex;
+const put = (i, a, b, c, d) => { TD[i * 4] = a; TD[i * 4 + 1] = b; TD[i * 4 + 2] = c; TD[i * 4 + 3] = d; };
 
 // ---------------------------------------------------------------- adding damage
 /** Snap a camper-local point to the skin (nearest face of the body box). */
@@ -89,10 +94,11 @@ export function updateDamage(dt, scrapes) {
   if (cam) { DMG.u.uCamRot.value.setFromMatrix4(cam.matrixWorld); DMG.u.uCamInv.value.copy(cam.matrixWorld).invert(); }
   if (DMG.dirty) {
     DMG.dirty = false;
-    DMG.dents.forEach((d, i) => { DMG.u.uDent.value[i].set(d.c.x, d.c.y, d.c.z, d.r); DMG.u.uDentN.value[i].set(d.n.x, d.n.y, d.n.z, d.depth); });
+    DMG.dents.forEach((d, i) => { put(2 * i, d.c.x, d.c.y, d.c.z, d.r); put(2 * i + 1, d.n.x, d.n.y, d.n.z, d.depth); });
     DMG.u.uNd.value = DMG.dents.length;
-    DMG.scratches.forEach((s, i) => { DMG.u.uScrA.value[i].set(s.a.x, s.a.y, s.a.z, s.w); DMG.u.uScrB.value[i].set(s.b.x, s.b.y, s.b.z, s.k); });
+    DMG.scratches.forEach((s, i) => { put(2 * ND + 2 * i, s.a.x, s.a.y, s.a.z, s.w); put(2 * ND + 2 * i + 1, s.b.x, s.b.y, s.b.z, s.k); });
     DMG.u.uNs.value = DMG.scratches.length;
+    DMG.tex.needsUpdate = true;
     saveT = 2;
   }
   if (saveT > 0 && (saveT -= dt) <= 0) save();
@@ -118,8 +124,8 @@ export function loadDamage() {
 const GLSL_COMMON = /* glsl */`
   #define ND ${ND}
   #define NS ${NS}
-  uniform vec4 uDent[ND]; uniform vec4 uDentN[ND]; uniform int uNd;
-  uniform vec4 uScrA[NS]; uniform vec4 uScrB[NS]; uniform int uNs;
+  uniform highp sampler2D uDmg; uniform int uNd; uniform int uNs;
+  vec4 dmgT(int i) { return texelFetch(uDmg, ivec2(i, 0), 0); }
   uniform mat3 uCamRot; uniform mat4 uCamInv;
   varying vec3 vCP;
 `;
@@ -128,9 +134,10 @@ const GLSL_DENT = /* glsl */`
   vec3 dentDisp(vec3 p) {
     vec3 d = vec3(0.);
     for (int i = 0; i < ND; i++) { if (i >= uNd) break;
-      vec3 q = p - uDent[i].xyz; float r = uDent[i].w;
+      vec4 A = dmgT(2 * i), B = dmgT(2 * i + 1);
+      vec3 q = p - A.xyz; float r = A.w;
       float f = exp(-dot(q, q) / (r * r * 0.5));
-      d += uDentN[i].xyz * uDentN[i].w * f; }
+      d += B.xyz * B.w * f; }
     return d;
   }
 `;
@@ -155,26 +162,28 @@ export function patchPaint(sh) {
       void damageEval(vec3 p) {
         gScr = 0.; gScuff = 0.; gDent = 0.; gDentGrad = vec3(0.);
         for (int i = 0; i < ND; i++) { if (i >= uNd) break;
-          vec3 q = p - uDent[i].xyz; float r = uDent[i].w, k = r * r * 0.5;
-          float f = exp(-dot(q, q) / k) * uDentN[i].w;
+          vec4 A = dmgT(2 * i), B = dmgT(2 * i + 1);
+          vec3 q = p - A.xyz; float r = A.w, k = r * r * 0.5;
+          float f = exp(-dot(q, q) / k) * B.w;
           gDent += f / max(r, 0.05);
           // slope of the dent (camper-local) + crumples that grow with the depth
           gDentGrad += (-2. * q / k) * f;
           gDentGrad += (vec3(dn(p*38.), dn(p*38.+7.), dn(p*38.+13.)) - .5) * f * 22.;
         }
         for (int i = 0; i < NS; i++) { if (i >= uNs) break;
-          vec3 a = uScrA[i].xyz, b = uScrB[i].xyz, ab = b - a;
+          vec4 SA = dmgT(2 * ND + 2 * i), SB = dmgT(2 * ND + 2 * i + 1);
+          vec3 a = SA.xyz, b = SB.xyz, ab = b - a;
           float L = max(length(ab), 1e-3); vec3 t = ab / L;
           float s = clamp(dot(p - a, t), 0., L);
-          vec3 off = p - (a + t * s); float d = length(off), w = uScrA[i].w;
+          vec3 off = p - (a + t * s); float d = length(off), w = SA.w;
           if (d > w * 2.5) continue;
           // many thin parallel scores across the width, broken up along the length
           float u = d / w;
           float lines = smoothstep(.55, .95, dn(vec3(u * 9., s * 1.5, float(i))) ) * step(u, 1.);
           float broken = smoothstep(.25, .6, dn(vec3(s * 6., u * 3., float(i) * 3.1)));
           float taper = smoothstep(0., .12, s) * smoothstep(0., .12, L - s);
-          gScr = max(gScr, lines * broken * taper * uScrB[i].w);
-          gScuff = max(gScuff, (1. - smoothstep(.6, 2.5, u)) * taper * .6 * uScrB[i].w);
+          gScr = max(gScr, lines * broken * taper * SB.w);
+          gScuff = max(gScuff, (1. - smoothstep(.6, 2.5, u)) * taper * .6 * SB.w);
         }
       }`)
     .replace('#include <color_fragment>', `#include <color_fragment>
