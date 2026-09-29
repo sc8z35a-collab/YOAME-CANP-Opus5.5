@@ -260,7 +260,8 @@ export function updateAutopilot(dt) {
   // transfer case: 4H on slippery / soft / steep ground, 4L to crawl out of mud, deep water, stuck
   const soft = VEH.wheels.reduce((a, W) => Math.max(a, W.soft || 0, W.sink > 0.08 ? 1 : 0), 0);
   const want = AP.stuckN > 0 || VEH.submerged > 0.2 || soft > 0.6 ? '4L' : (mu < 0.55 || f.y > 0.12 || soft > 0.25 || AP.offroad) ? '4H' : '2H';
-  if (want !== c.range) { AP.rangeT = (AP.rangeT || 0) + dt; if (AP.rangeT > (want === '2H' ? 6 : 0.5)) { AP.rangeT = 0; if (want === '4L' && Math.abs(spd) > 2.4) { c.throttle = 0; c.brake = 0.4; } else c.range = want; } } else AP.rangeT = 0;
+  if (G.rangeMode && G.rangeMode !== 'auto') { c.range = G.rangeMode; AP.rangeT = 0; }
+  else if (want !== c.range) { AP.rangeT = (AP.rangeT || 0) + dt; if (AP.rangeT > (want === '2H' ? 6 : 0.5)) { AP.rangeT = 0; if (want === '4L' && Math.abs(spd) > 2.4) { c.throttle = 0; c.brake = 0.4; } else c.range = want; } } else AP.rangeT = 0;
   // ---- stuck: back up with opposite lock, mark ahead as blocked, replan; repeated -> winch
   if (Math.abs(spd) < 0.35 && vt > 1) AP.stuckT += dt; else AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
   if (Math.abs(spd) > 2) { AP.goodT = (AP.goodT || 0) + dt; if (AP.goodT > 20) { AP.goodT = 0; AP.stuckN = 0; } }
