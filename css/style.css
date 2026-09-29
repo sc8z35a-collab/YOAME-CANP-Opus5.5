@@ -41,15 +41,20 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .chip{min-height:44px;min-width:56px;padding:0 12px;margin:2px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid var(--line);font-size:13px}
 .chip.on{background:rgba(255,180,94,.3)}
 .chip.wide{display:block;width:100%;margin-top:8px;padding:8px}
-#loading{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 60%,#16231c 0%,#050807 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity 1.2s;z-index:10}
+#loading{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 55%,#132019 0%,#050807 70%);display:flex;align-items:center;justify-content:center;transition:opacity 1s;z-index:10}
 #loading.done{opacity:0;pointer-events:none}
-#loading .title{font-size:30px;font-weight:800;letter-spacing:.12em;color:#ffd9a0;text-shadow:0 0 24px rgba(255,160,70,.45)}
-#loading .sub{opacity:.7}
-#loading .track{width:44vw;height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
-#loadbar{height:100%;width:0;background:linear-gradient(90deg,#ffb45e,#ffe7b0);transition:width .2s}
-#loading .hint{font-size:12px;opacity:.5}
+.ld-ring{position:relative;width:88px;height:88px}
+.ld-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ld-bg{fill:none;stroke:rgba(255,236,200,.1);stroke-width:3}
+.ld-fg{fill:none;stroke:#ffc47a;stroke-width:3;stroke-linecap:round;stroke-dasharray:276.5;stroke-dashoffset:276.5;transition:stroke-dashoffset .3s;filter:drop-shadow(0 0 6px rgba(255,170,80,.6))}
+.ld-van{position:absolute;left:50%;top:50%;width:26px;height:14px;margin:-9px 0 0 -13px;border-radius:4px 7px 3px 3px;background:#ffd9a0;box-shadow:0 0 16px rgba(255,190,110,.5);animation:ldb 1.6s ease-in-out infinite}
+.ld-van::before,.ld-van::after{content:"";position:absolute;bottom:-4px;width:6px;height:6px;border-radius:50%;background:#ffd9a0}
+.ld-van::before{left:3px}.ld-van::after{right:3px}
+@keyframes ldb{50%{transform:translateY(-2px)}}
 #rotate{display:none;position:fixed;inset:0;z-index:20;background:#050807;align-items:center;justify-content:center;text-align:center;font-size:22px;line-height:1.8}
 @media (orientation:portrait){#rotate{display:flex}}
+.rot-ph{width:34px;height:60px;border:3px solid #ffd9a0;border-radius:8px;animation:rot 2.2s ease-in-out infinite}
+@keyframes rot{0%,20%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}
 @media (max-height:380px){#actions{grid-template-columns:repeat(6,52px);bottom:60px}.abtn{width:52px;height:52px}.bar{width:92px}}
 .intro{max-width:min(78vw,620px)}
 .intro p{margin:0 0 8px;line-height:1.6;opacity:.9}

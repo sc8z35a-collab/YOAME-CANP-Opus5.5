@@ -19,13 +19,11 @@
 <div id="ui"></div>
 <div id="over" class="hidden"></div>
 <div id="intro" class="hidden"></div>
-<div id="loading">
-  <div class="title">森の奥のキャンプカー</div>
-  <div class="sub">雨音と、森の気配と、秘密基地。</div>
-  <div class="track"><div id="loadbar"></div></div>
-  <div class="hint">画面をタップで全画面・横向き / 左で歩く・右で見回す / タブレットで自動運転</div>
+<div id="loading" aria-busy="true" aria-label="loading">
+  <div class="ld-ring"><svg viewBox="0 0 100 100"><circle class="ld-bg" cx="50" cy="50" r="44"/><circle id="loadbar" class="ld-fg" cx="50" cy="50" r="44"/></svg>
+    <div class="ld-van"></div></div>
 </div>
-<div id="rotate"><div>📱↻<br>横向きにしてください</div></div>
+<div id="rotate" aria-label="rotate"><div class="rot-ph"></div></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
