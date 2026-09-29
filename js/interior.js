@@ -448,7 +448,7 @@ export function buildCab(I, M, C) {
     g.add(B(s * 0.065 - 0.054, 1.406, -3.692, s * 0.065 + 0.054, 1.41, -3.686, M.chrome, 0.001)); }
   // outer vents (round) at both dash ends
   for (const s of [-1, 1]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.008, 8, 28), M.chrome); ring.position.set(s * 0.95, 1.4, -3.698); g.add(ring);
-    const v = new THREE.Mesh(new THREE.CircleGeometry(0.042, 24), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.95, 1.4, -3.7; g.add(v); }
+    const v = new THREE.Mesh(new THREE.CircleGeometry(0.042, 24), new THREE.MeshStandardMaterial({ map: vs, roughness: 0.7 })); v.position.set(s * 0.95, 1.4, -3.701); g.add(v); }
   // gear lever on the dash (van-style) with a leather gaiter
   const gaiter = cyl(0.028, 0.04, 0.045, M.leatherDark, 16); gaiter.rotation.x = 0.9; gaiter.position.set(-0.11, 1.1, -3.68); g.add(gaiter);
   const stick = cyl(0.007, 0.009, 0.12, M.brushed, 10); stick.rotation.x = 0.9; stick.position.set(-0.11, 1.137, -3.633); g.add(stick);
@@ -540,4 +540,105 @@ function doorCard(g, M, s) {
   g.add(B(Math.min(x - s * 0.1, x), F + 0.12, -3.7, Math.max(x - s * 0.1, x), F + 0.26, -3.1, M.dash, 0.02));
   // top rail (window sill) in dark grain
   g.add(B(x - 0.03, 1.56, z0, x + 0.012, 1.6, z1, M.dash, 0.012));
+}
+
+// ---------------------------------------------------------------- dinette (left, facing benches + table)
+function cushion(w, h, d, mat, r = 0.04) {
+  // upholstered cushion (centred at origin) with piping along the long top edges
+  const g = new THREE.Group();
+  g.add(rb(w, h, d, mat, 0, 0, 0, r, 4));
+  for (const s of [-1, 1]) {
+    const t = cyl(0.005, 0.005, w - 2 * r, PIPING, 6); t.rotation.z = Math.PI / 2; t.position.set(0, h / 2 - 0.012, s * (d / 2 - 0.004)); g.add(t);
+  }
+  return g;
+}
+const PIPING = new THREE.MeshStandardMaterial({ color: 0x6b5a45, roughness: 0.8 });
+export function buildDinette(I, M) {
+  const x0 = -XI, x1 = -0.35;
+  const bench = (z0, z1, backAtFront) => {
+    I.add(B(x0, F + 0.06, z0, x1 - 0.02, F + 0.4, z1, M.cab, 0.004));                      // box
+    I.add(B(x0, F, z0 + 0.02, x1 - 0.06, F + 0.06, z1 - 0.02, M.black, 0.002));             // toe recess
+    I.add(B(x1 - 0.02, F + 0.08, z0 + 0.03, x1, F + 0.38, z1 - 0.03, M.cab, 0.006));        // storage door
+    I.add(rb(0.012, 0.012, 0.12, M.brushed, x1 + 0.008, F + 0.33, (z0 + z1) / 2, 0.005));
+    I.add(B(x0, F + 0.395, z0, x1 + 0.005, F + 0.415, z1, M.oak, 0.004));                   // seat board lip
+    const c = cushion(x1 - x0 - 0.02, 0.11, z1 - z0 - 0.03, M.herring);
+    c.position.set((x0 + x1) / 2, F + 0.47, (z0 + z1) / 2 + (backAtFront ? 0.03 : -0.03)); I.add(c);
+    const bk = cushion(x1 - x0 - 0.02, 0.5, 0.1, M.herring);
+    bk.position.set((x0 + x1) / 2, F + 0.8, backAtFront ? z0 + 0.075 : z1 - 0.075);
+    bk.rotation.x = backAtFront ? -0.1 : 0.1; I.add(bk);
+    const fz = backAtFront ? z0 : z1 - 0.03;                                                  // backrest frame
+    I.add(B(x0, F + 0.4, fz, x1, F + 1.12, fz + 0.03, M.cab, 0.006));
+    I.add(B(x0, F + 1.1, fz - 0.005, x1 + 0.01, F + 1.135, fz + 0.035, M.oak, 0.008));
+  };
+  bench(-2.45, -1.9, true);
+  bench(-0.3, 0.25, false);
+  // table: oiled oak slab on a chrome pedestal + wall rail
+  const tx0 = x0 + 0.02, tx1 = -0.42, tz0 = -1.78, tz1 = -0.42;
+  I.add(rb(tx1 - tx0, 0.032, tz1 - tz0, M.oak, (tx0 + tx1) / 2, F + 0.724, (tz0 + tz1) / 2, 0.012, 3));
+  const post = cyl(0.03, 0.03, 0.66, M.chrome, 24); post.position.set(-0.78, F + 0.37, -1.1); I.add(post);
+  const foot = cyl(0.13, 0.15, 0.012, M.chrome, 32); foot.position.set(-0.78, F + 0.006, -1.1); I.add(foot);
+  const flange = cyl(0.08, 0.08, 0.012, M.chrome, 32); flange.position.set(-0.78, F + 0.702, -1.1); I.add(flange);
+  I.add(B(-XI, F + 0.66, tz0 + 0.05, -XI + 0.02, F + 0.7, tz1 - 0.05, M.alu, 0.004));
+  const run = new THREE.Mesh(new THREE.PlaneGeometry(0.28, tz1 - tz0 - 0.2), M.gingham);
+  run.rotation.x = -Math.PI / 2; run.position.set(-0.72, F + 0.7415, (tz0 + tz1) / 2); run.receiveShadow = true; I.add(run);
+}
+
+// ---------------------------------------------------------------- wardrobe, bed, lockers
+const ZB_I = 3.08;
+export function buildRear(I, M) {
+  // wet bath / wardrobe block (left, behind the dinette): painted panels, oak-framed door, mirror
+  I.add(B(-XI, F, 0.35, -0.2, 2.72, 1.45, M.cab, 0.006));
+  I.add(B(-0.21, F + 0.06, 0.42, -0.186, 2.64, 1.38, M.cab, 0.006));
+  for (const [z0, z1, y0, y1] of [[0.42, 0.45, F + 0.06, 2.64], [1.35, 1.38, F + 0.06, 2.64], [0.42, 1.38, 2.61, 2.64], [0.42, 1.38, F + 0.06, F + 0.09]])
+    I.add(B(-0.19, y0, z0, -0.18, y1, z1, M.oak, 0.003));
+  I.add(rb(0.02, 0.018, 0.12, M.brushed, -0.168, F + 1.05, 0.52, 0.007));
+  const rose = cyl(0.022, 0.022, 0.014, M.brushed, 20); rose.rotation.z = Math.PI / 2; rose.position.set(-0.173, F + 1.05, 0.46); I.add(rose);
+  const mir = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.9), M.mirror); mir.rotation.y = Math.PI / 2; mir.position.set(-0.1795, F + 1.5, 0.92); I.add(mir);
+  // bed platform with drawers + oak nosing
+  I.add(B(-XI, F, 1.52, XI, F + 0.52, ZB_I, M.cab, 0.004));
+  for (const [x0, x1] of [[-0.9, -0.33], [-0.3, 0.3], [0.33, 0.9]]) {
+    I.add(B(x0, F + 0.1, 1.495, x1, F + 0.48, 1.52, M.cab, 0.005));
+    I.add(rb(0.12, 0.012, 0.012, M.brushed, (x0 + x1) / 2, F + 0.43, 1.485, 0.005));
+  }
+  I.add(B(-XI, F + 0.5, 1.49, XI, F + 0.535, 1.54, M.oak, 0.008));
+  I.add(B(-XI, F, 1.51, XI, F + 0.08, 1.54, M.black, 0.002));
+  // mattress (fitted sheet), duvet draped over the edges, pillows
+  I.add(rb(2.14, 0.18, 1.52, M.linen, 0, F + 0.625, 2.31, 0.07, 4));
+  const bl = new THREE.PlaneGeometry(2.14, 1.16, 56, 30); bl.rotateX(-Math.PI / 2);
+  const bp = bl.attributes.position; const R = rng(4);
+  for (let i = 0; i < bp.count; i++) {
+    const x = bp.getX(i), z = bp.getZ(i);
+    const edge = Math.max(0, Math.abs(x) - 1.0);
+    const fold = Math.exp(-Math.pow((z + 0.5) * 7, 2)) * 0.03;               // turned-down fold at the head end
+    bp.setY(i, Math.sin(x * 7 + z * 3) * 0.012 + Math.sin(z * 11 + x * 2) * 0.008 + (R() - 0.5) * 0.003 + fold - edge * 2.4);
+    if (edge > 0) bp.setX(i, Math.sign(x) * (1.0 + edge * 0.2));
+  }
+  bl.computeVertexNormals(); boxUV(bl, 1);
+  const dm = M.duvet.clone(); dm.side = THREE.DoubleSide;
+  I.add(mesh(bl, dm, 0, F + 0.735, 2.5));
+  for (const sx of [-0.5, 0.5]) { const p = rb(0.6, 0.13, 0.36, M.linen, sx, F + 0.78, 1.76, 0.065, 5); p.rotation.x = -0.12; I.add(p); }
+  // headboard shelf (rear wall) with an oak lip
+  I.add(B(-XI, F + 0.95, ZB_I - 0.16, XI, F + 0.975, ZB_I, M.oak, 0.006));
+}
+
+export function buildLockers(I, M, C) {
+  // overhead lockers: painted doors, oak grip band, chrome push-locks, LED pucks underneath
+  const lockers = [[-1, -2.55, -0.3], [1, -1.65, 0.3], [-1, 1.5, 2.1], [1, 1.5, 2.1]];
+  const puckM = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffe2b8, emissiveIntensity: 1.6 });
+  C.emissives.push({ m: puckM, base: 1.6, kind: 'led' });
+  for (const [sgn, z0, z1] of lockers) {
+    const xa = sgn < 0 ? -XI : XI - 0.34, xb = sgn < 0 ? -XI + 0.34 : XI;
+    I.add(B(xa, 2.4, z0, xb, 2.745, z1, M.cabEdge, 0.004));
+    const n = Math.max(1, Math.round((z1 - z0) / 0.55)), fx = sgn < 0 ? xb : xa;
+    for (let k = 0; k < n; k++) {
+      const a = z0 + (z1 - z0) * k / n + 0.004, b = z0 + (z1 - z0) * (k + 1) / n - 0.004;
+      I.add(B(fx - 0.009, 2.415, a, fx + 0.009, 2.735, b, M.cab, 0.006));
+      I.add(B(fx - 0.011, 2.402, a, fx + 0.011, 2.42, b, M.oak, 0.004));
+      const btn = cyl(0.011, 0.011, 0.012, M.chrome, 16); btn.rotation.z = Math.PI / 2; btn.position.set(fx - sgn * 0.012, 2.69, (a + b) / 2); I.add(btn);
+    }
+    for (let z = z0 + 0.3; z < z1 - 0.1; z += 0.6) {
+      const p = cyl(0.03, 0.03, 0.006, puckM, 20); p.position.set((xa + xb) / 2, 2.397, z); I.add(p);
+      const r = new THREE.Mesh(new THREE.TorusGeometry(0.031, 0.003, 6, 20), M.brushed); r.rotation.x = Math.PI / 2; r.position.copy(p.position); I.add(r);
+    }
+  }
 }
