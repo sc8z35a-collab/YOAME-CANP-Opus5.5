@@ -156,6 +156,7 @@ async function init() {
   buildTerrain(scene);
   buildCamper(scene);
   if (!P.has('qa')) loadDamage();
+  if (P.has('dmgdemo')) import('./damage.js').then(m => { const V3 = THREE.Vector3; m.addDent(new V3(1.2, 1.6, -1.5), new V3(-1, 0, 0), 1, 'rock'); m.addDent(new V3(1.2, 1.1, 1.2), new V3(-1, 0, 0), 0.6, 'crash'); m.addScratch(new V3(1.2, 0.9, -3.5), new V3(1.2, 1.2, 1.5), 0.08, 1); });
   placeCamper(P.get('spot') || (() => { try { return localStorage.getItem('fc3d_spot'); } catch (e) { return null; } })() || 'hollow');
   buildTablet(C.group, FLOOR, ZF);
   await buildForest(scene);
