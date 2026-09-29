@@ -34,10 +34,12 @@ const I = new THREE.Vector3(                                       // principal 
 export const WHEELS = [[-1.02, -4.65, true], [1.02, -4.65, true], [-1.02, 1.9, false], [1.02, 1.9, false]]; // = camper.js wheel layout
 export const WHEEL_R = 0.42;
 const WB = 6.55, TRACK = 2.04;
-const ANCHOR_Y = 0.95, SUS_LEN = 1.09, COMP0 = 0.14, BUMP = 0.27;  // travel: 0.14 static, bump stop at 0.27
+const ANCHOR_Y = 0.95, SUS_LEN = 1.21, COMP0 = 0.26, BUMP = 0.4;   // travel: 0.26 droop, 0.14 bump to the stop (anchor-relative)
 // static axle loads from the COM position -> spring rates giving equal static compression
 const FRONT_SHARE = (WHEELS[2][1] - COM.z) / WB;
-const K_SUS = [0, 1, 2, 3].map(i => (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE) * M * 9.81 / 2 / COMP0);
+const DEFL = 0.12;                                                 // static spring deflection (≈1.45 Hz ride)
+const K_SUS = [0, 1, 2, 3].map(i => (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE) * M * 9.81 / 2 / DEFL);
+const PRE = COMP0 - DEFL;                                          // spring preload offset (droop travel beyond free length is limited by the damper)
 const C_SUS = K_SUS.map((k, i) => 2 * 0.36 * Math.sqrt(k * (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE) * M / 2));
 const K_ARB = [32000, 24000];                                       // anti-roll bars front / rear (N/m)
 const STEP = 1 / 180;
@@ -304,11 +306,14 @@ function step(dt) {
     else W.t = SUS_LEN;
   }
   // ---- pass 2: forces
+  let nGrip = 0; for (let i = 0; i < 4; i++) if (mask[i] && VEH.wheels[i].contact) nGrip++;
   for (let i = 0; i < 4; i++) {
     const [wx, , front] = WHEELS[i], W = VEH.wheels[i], A = _wA[i];
     const driven = mask[i] && (D.mode === 'D' || D.mode === 'R');
     const Iw = IW + (mask[i] ? D.iRef : 0);
-    const Td = driven ? D.torque / D.nDriven : 0;
+    // torque split: centre/cross-axle traction control (brake-based) sends the torque of a wheel
+    // that lost ground contact to the others; without it an unloaded wheel would just spin
+    const Td = driven ? D.torque * (W.contact ? 1 / Math.max(1, nGrip) : 0.04) : 0;
     // brakes: service (with ABS), handbrake (rear), parking pawl (driven axle)
     if (W.abs > 0) W.abs -= dt;
     let Tb = brkEff * TB_MAX[i] * (W.abs > 0 ? 0.15 : 1);
@@ -329,7 +334,7 @@ function step(dt) {
     // spring + damper (+ bump stop, + anti-roll bar)
     const vn = vel.dot(up);
     const cDamp = C_SUS[i] * (vn > 0 ? 1.45 : 0.75);
-    let fs = K_SUS[i] * comp - Math.sign(vn) * Math.min(cDamp * Math.abs(vn), effMass(cp, up) * Math.abs(vn) / dt * 0.08);
+    let fs = K_SUS[i] * Math.max(0, comp - PRE) - Math.sign(vn) * Math.min(cDamp * Math.abs(vn), effMass(cp, up) * Math.abs(vn) / dt * 0.08);
     if (comp > BUMP) fs += 250000 * (comp - BUMP) + 5000000 * (comp - BUMP) ** 2;
     const Wo = VEH.wheels[i ^ 1];
     fs += K_ARB[front ? 0 : 1] * (comp - (Wo.contact ? Wo.comp : 0));

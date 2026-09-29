@@ -254,8 +254,8 @@ export function updateAutopilot(dt) {
   c.hand = false;
   // PI speed control with grade feed-forward (the diesel pulls hard; wheelspin -> lift off)
   AP.ei = clamp((AP.ei || 0) + err * dt * 0.25, -0.3, 0.5);
-  const spinning = VEH.drive.tcs || VEH.wheels.some(W => W.contact && W.slip > 2.2);
-  if (err > -0.3) { c.throttle = clamp(err * 0.35 + AP.ei + 0.08 + Math.max(0, f.y) * 1.6, 0, spinning ? 0.45 : 1); c.brake = 0; }
+  const spinning = VEH.wheels.some(W => W.contact && W.slip > 3);
+  if (err > -0.3) { c.throttle = clamp(err * 0.35 + AP.ei + 0.08 + Math.max(0, f.y) * 1.6, 0, spinning ? 0.7 : 1); c.brake = 0; }
   else { c.throttle = 0; AP.ei = Math.min(AP.ei, 0); c.brake = clamp(-err * 0.35, 0, 1); }
   // transfer case: 4H on slippery / soft / steep ground, 4L to crawl out of mud, deep water, stuck
   const soft = VEH.wheels.reduce((a, W) => Math.max(a, W.soft || 0, W.sink > 0.08 ? 1 : 0), 0);
