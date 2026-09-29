@@ -1,6 +1,6 @@
 // Camper van: exterior shell (painted, muddy), windows with rain glass, full interior
 // (dinette, kitchen, bed, cab, alcove), warm lighting, fairy lights, curtains, wall clock.
-import { THREE, G, U, rng, fmtTime } from './core.js';
+import { THREE, G, U, P, rng, fmtTime } from './core.js';
 import { tex, pbr, canvasTex } from './assets.js';
 import { makeGlass } from './glass.js';
 import { RoundedBoxGeometry } from './lib/addons/geometries/RoundedBoxGeometry.js';
@@ -151,7 +151,7 @@ function paintMaterial() {
       }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.95, gMud); roughnessFactor = mix(roughnessFactor, 0.15, uWet*.7);`);
-    patchPaint(sh); // dents + scratches (damage.js)
+    if (!P.has('nodmg')) patchPaint(sh); // dents + scratches (damage.js)
   };
   return m;
 }
