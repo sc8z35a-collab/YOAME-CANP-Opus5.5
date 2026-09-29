@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("QA_BASE", "http://127.0.0.1:8080")
 args = sys.argv[1:]
 jobs = []
+os.makedirs("build/shots", exist_ok=True)
 if args and args[0] == "-b":
     a = args[1:]
     for i in range(0, len(a) - 1, 2):
