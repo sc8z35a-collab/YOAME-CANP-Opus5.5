@@ -152,7 +152,7 @@ function materials() {
   // metals (get a baked interior cube env later, so they reflect the cabin instead of the sky)
   M.steel = std({ color: 0xd3d7da, metalness: 1, roughness: 0.3, normalMap: tex('metal_plate_nor_gl', { repeat: 4 }), normalScale: new THREE.Vector2(0.04, 0.04) });
   M.chrome = std({ color: 0xe6e8ea, metalness: 1, roughness: 0.08 });
-  M.brushed = std({ color: 0xb9bdc1, metalness: 1, roughness: 0.38 });
+  M.brushed = std({ color: 0xaeb2b6, metalness: 1, roughness: 0.48 });
   M.alu = std({ color: 0xc8ccd0, metalness: 0.9, roughness: 0.3 });
   M.castIron = std({ color: 0x1a1a1b, metalness: 0.6, roughness: 0.62 });
   M.fridgeFrame = std({ color: 0x1c1d1f, roughness: 0.4 });
@@ -189,7 +189,8 @@ function sinkBowl(M) {
   const wallS = ringShape(sk.w, sk.l, 0.006, 0.04);
   const wg = new THREE.ExtrudeGeometry(wallS, { depth: sk.d, bevelEnabled: false, curveSegments: 6 });
   wg.rotateX(Math.PI / 2); // extrude toward -y
-  const inner = new THREE.MeshStandardMaterial().copy(M.steel); inner.side = THREE.DoubleSide; inner.roughness = 0.34;
+  const inner = new THREE.MeshStandardMaterial().copy(M.steel); inner.side = THREE.DoubleSide; inner.roughness = 0.5; inner.color.set(0xb8bcc0);
+  inner.normalMap = tex('metal_plate_nor_gl', { repeat: 9 }); inner.normalScale = new THREE.Vector2(0.06, 0.06);
   IN.envMats.push(inner);
   const walls = mesh(wg, inner); walls.position.set(sk.x, y0 + 0.001, sk.z); grp.add(walls);
   // bottom (slightly dished toward the drain) with a brushed finish
@@ -421,7 +422,8 @@ export function buildCab(I, M, C) {
   // hub / airbag cover
   const hubG = new THREE.CylinderGeometry(0.07, 0.078, 0.05, 32); hubG.rotateX(Math.PI / 2);
   const hub = new THREE.Mesh(hubG, M.dash); hub.position.z = 0.012; spin.add(hub);
-  const hubPad = rb(0.12, 0.09, 0.03, M.black, 0, 0, 0.03, 0.03, 4); spin.add(hubPad);
+  const padG = new THREE.CylinderGeometry(0.062, 0.066, 0.03, 40); padG.rotateX(Math.PI / 2); padG.scale(1.18, 0.9, 1);
+  const hubPad = mesh(padG, M.black, 0, 0, 0.032); spin.add(hubPad);
   const badge = cyl(0.014, 0.014, 0.003, M.chrome, 20); badge.rotation.x = Math.PI / 2; badge.position.z = 0.047; spin.add(badge);
   // three spokes (9, 3 and 6 o'clock) with button pads
   for (const a of [0, Math.PI, -Math.PI / 2]) {
@@ -669,8 +671,7 @@ export function buildWindowFrames(I, WINDOWS, windowLocal) {
 // ---------------------------------------------------------------- CC0 props (Poly Haven)
 const PROPS = [
   // name, position (surface point), rotY, scale
-  ['vintage_electric_kettle', [0.8, K.top + 0.046, K.hob.z + 0.12], 1.9, 0.6],
-  ['pot_enamel_01', [0.79, K.top + 0.046, K.hob.z - 0.12], 0.4, 0.8],
+  ['vintage_electric_kettle', [0.79, K.top + 0.052, K.hob.z - 0.12], 1.9, 0.6],
   ['wooden_cutting_board', [0.8, K.top, -0.86], Math.PI / 2, 0.7],
   ['potted_plant_02', [0.93, K.top, 0.18], 0.8, 0.3],
   ['tea_set_01', [-0.74, F + 0.741, -1.08], Math.PI / 2, 0.5],
