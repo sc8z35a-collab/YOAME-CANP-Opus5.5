@@ -2,7 +2,7 @@
 // node tools/agents/drive_test.mjs [-q] [from to ...]
 globalThis.document = { createElement: () => ({ getContext: () => ({}) }) }; globalThis.location = { search: '' };
 globalThis.window = { addEventListener() {} }; globalThis.localStorage = { getItem() { return null; } };
-const { G, bus } = await import('../../js/core.js'); G.waterLevel = -2.05;
+const { G, bus } = await import("../../js/core.js"); G.waterLevel = -2.05; if (process.env.WET) { G.wet = +process.env.WET; G.rain = +process.env.WET; }
 const V = await import('../../js/vehicle.js');
 const T = await import('../../js/terrain.js');
 const A = await import('../../js/autopilot.js');
