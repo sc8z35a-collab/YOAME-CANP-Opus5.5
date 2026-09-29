@@ -142,7 +142,7 @@ function materials() {
   M.duvet = rep(pbr('caban', { color: 0xc9a27a, normalScale: 0.8 }), 2.0);
   M.gingham = rep(pbr('gingham_check', { color: 0xffffff, normalScale: 0.6 }), 2.5);
   // grained dashboard plastic: leather grain normal at a tiny scale reads as moulded texture
-  M.dash = std({ color: 0x2c2d30, roughness: 0.72, normalMap: tex('leather_white_nor_gl', { repeat: 7 }), normalScale: new THREE.Vector2(0.45, 0.45) });
+  M.dash = std({ color: 0x3a3b3f, roughness: 0.72, normalMap: tex('leather_white_nor_gl', { repeat: 7 }), normalScale: new THREE.Vector2(0.45, 0.45) });
   M.dashLight = std({ color: 0x5a5b5e, roughness: 0.65, normalMap: M.dash.normalMap, normalScale: new THREE.Vector2(0.35, 0.35) });
   M.black = std({ color: 0x141517, roughness: 0.45 });
   M.rubber = std({ color: 0x0d0d0e, roughness: 0.9 });
@@ -299,7 +299,16 @@ function cabinetFronts(M, x, y0, y1, z0, z1, layout, handle = 'bar') {
 export function buildKitchen(I, M, C) {
   const T = K.top;
   // carcass (plywood) recessed toe-kick + fronts
-  I.add(B(0.53, F + 0.09, K.z0 + 0.01, XI, T - 0.04, K.z1 - 0.01, M.cabEdge, 0.002));
+  // carcass: full-height boxes either side of the sink, lowered under the bowl so it stays visible
+  const sk = K.sink, sz0 = sk.z - sk.l / 2 - 0.03, sz1 = sk.z + sk.l / 2 + 0.03;
+  I.add(B(0.53, F + 0.09, K.z0 + 0.01, XI, T - 0.04, sz0, M.cabEdge, 0.002));
+  I.add(B(0.53, F + 0.09, sz1, XI, T - 0.04, K.z1 - 0.01, M.cabEdge, 0.002));
+  I.add(B(0.53, F + 0.09, sz0, XI, T - 0.04 - sk.d - 0.03, sz1, M.cabEdge, 0.002));
+  // front rail + back rail under the worktop around the bowl (closes the gap seen through the doors)
+  I.add(B(0.53, T - 0.1, sz0, 0.6, T - 0.04, sz1, M.cabEdge, 0.002));
+  I.add(B(XI - 0.05, T - 0.1, sz0, XI, T - 0.04, sz1, M.cabEdge, 0.002));
+  // waste trap + hose under the bowl
+  const trap = cyl(0.02, 0.02, 0.12, M.grey, 12); trap.position.set(sk.x, T - 0.039 - sk.d - 0.07, sk.z + 0.08); I.add(trap);
   I.add(B(0.6, F, K.z0 + 0.03, XI, F + 0.09, K.z1 - 0.03, M.black, 0.002));             // plinth
   I.add(cabinetFronts(M, 0.52, F + 0.095, T - 0.042, K.z0 + 0.01, -0.92, [{ h: 0.16, kind: 'drawer' }, { h: 0.27, kind: 'drawer' }, { h: 'rest', kind: 'drawer' }]));
   I.add(cabinetFronts(M, 0.52, F + 0.095, T - 0.042, -0.92, -0.08, [{ h: 'rest', kind: 'door', split: 2 }]));
