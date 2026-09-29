@@ -1,0 +1,52 @@
+---- Material Name: 
+Material Type: MeshStandardMaterial
+THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshStandardMaterial
+
+Program Info Log: 
+
+
+---- Material Name: vintage_oil_lamp
+Material Type: MeshStandardMaterial
+THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: vintage_oil_lamp
+Material Type: MeshStandardMaterial
+
+Program Info Log: 
+
+
+---- Material Name: 
+Material Type: ShaderMaterial
+THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: ShaderMaterial
+
+Program Info Log: 
+
+
+---- Material Name: unspecified
+Material Type: ShaderMaterial
+THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: unspecified
+Material Type: ShaderMaterial
+
+Program Info Log: 
+
+
+---- Material Name: OutputShader
+Material Type: RawShaderMaterial
+THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: OutputShader
+Material Type: RawShaderMaterial
+
+Program Info Log: 
+
+
+unique errors: 5
+done
