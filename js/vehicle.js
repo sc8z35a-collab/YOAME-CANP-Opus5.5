@@ -519,7 +519,7 @@ function stepObstacles(dt) {
       if (vn < 0) o.v.addScaledVector(n, -vn * 1.2);                  // bounce a little
       // tangential: irregular rocks roll/slide with resistance
       const vt = _ov.copy(o.v).addScaledVector(n, -o.v.dot(n)), sp = vt.length();
-      const muR = o.tag === 'tree' ? 0.55 : 0.22 + o.r * 0.18;
+      const muR = o.tag === 'tree' ? 0.55 : o.tag === 'slide' && G.t - (o.born || 0) < 25 ? 0.12 : 0.3 + o.r * 0.1; // fresh slide debris rides on wet mud
       const dec = muR * 9.81 * n.y * dt;
       if (sp > dec) o.v.addScaledVector(vt, -dec / sp); else o.v.addScaledVector(vt, -1);
       // mud flow carries debris
@@ -558,7 +558,7 @@ function stepObstacles(dt) {
   }
 }
 export function addObstacle(p, r, opts = {}) {
-  const o = { p: p.clone(), v: opts.v ? opts.v.clone() : new THREE.Vector3(), r, m: opts.m ?? 2600 * r * r * r * 4, static: !!opts.static, tag: opts.tag || 'rock', rot: Math.random() * 6, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6)), sleep: false, group: null };
+  const o = { p: p.clone(), v: opts.v ? opts.v.clone() : new THREE.Vector3(), r, m: opts.m ?? 2600 * r * r * r * 4, static: !!opts.static, tag: opts.tag || 'rock', rot: Math.random() * 6, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6)), sleep: false, group: null, born: G.t };
   VEH.obstacles.push(o); return o;
 }
 /** Link obstacles into a rigid chain (e.g. the segments of one fallen trunk). */
