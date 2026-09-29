@@ -11,7 +11,7 @@
 import { THREE, G, bus, clamp, noise2 } from './core.js';
 import { ROADS, DESTS, NODES } from './roads.js';
 import { WORLD, creekX } from './relief.js';
-import { heightAt } from './terrain.js';
+import { heightAt, GRID } from './terrain.js';
 import { AP, engage, disengage } from './autopilot.js';
 import { VEH, originOf } from './vehicle.js';
 
@@ -40,7 +40,15 @@ function bakeBase() {
 const PAL = [[0, [86, 122, 84]], [0.2, [98, 134, 88]], [0.45, [128, 146, 96]], [0.7, [162, 150, 112]], [0.88, [176, 166, 150]], [1, [206, 202, 196]]];
 const pal = t => { for (let k = 1; k < PAL.length; k++) if (t <= PAL[k][0]) { const [a, A] = PAL[k - 1], [b, B] = PAL[k], f = (t - a) / (b - a); return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f]; } return PAL[PAL.length - 1][1]; };
 const LIGHTS = [[-0.6, 0.6, 1], [-0.1, 0.8, 0.45], [-0.9, -0.1, 0.35]].map(([lx, ly, w]) => { const n = Math.hypot(lx, ly, 1); return [lx / n, ly / n, 1 / n, w]; });
-function hrow(j) { const H = BK.H; if (j < 0 || j >= MAP || H[j * MAP + 1] !== 0 || H[j * MAP] !== 0) return; for (let i = 0; i < MAP; i++) { const [wx, wz] = fromMap(i + 0.5, j + 0.5); H[j * MAP + i] = heightAt(wx, wz) || 1e-6; } }
+function hSmooth(x, z) { // Catmull-Rom sampling of the terrain grid: no triangle facets on the map
+  const { n, step, h } = GRID; if (!h) return heightAt(x, z);
+  const fx = clamp((x - WORLD.x0) / step, 1, n - 3), fz = clamp((z - WORLD.z0) / step, 1, n - 3);
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
+  const cr = (a, b, c, d, t) => b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
+  const row = jj => cr(h[jj * n + i - 1], h[jj * n + i], h[jj * n + i + 1], h[jj * n + i + 2], u);
+  return cr(row(j - 1), row(j), row(j + 1), row(j + 2), v);
+}
+function hrow(j) { const H = BK.H; if (j < 0 || j >= MAP || H[j * MAP + 1] !== 0 || H[j * MAP] !== 0) return; for (let i = 0; i < MAP; i++) { const [wx, wz] = fromMap(i + 0.5, j + 0.5); H[j * MAP + i] = hSmooth(wx, wz) || 1e-6; } }
 /** bake up to `ms` milliseconds of rows */
 export function bakeStep(ms = 6) {
   if (typeof location !== 'undefined' && location.search.includes('nomap')) { BK.done = true; return true; }
@@ -147,6 +155,7 @@ function draw(ctx, W, H, full, dpr = 1) {
   for (const o of VEH.obstacles) { if (o.r < 0.35) continue; const [x, y] = SW(o.p.x, o.p.z); ctx.fillStyle = o.tag === 'tree' ? '#b06a2c' : '#ff7043'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1 * k; ctx.beginPath(); ctx.arc(x, y, Math.max(o.r / mpp, 2.5 * k), 0, 7); ctx.fill(); ctx.stroke(); }
   // destinations: pin + label, labels placed greedily without overlaps (selected / near first)
   _lab.length = 0;
+  if (full) _lab.push([0, 0, 70 * k, 240 * k], [W - 64 * k, 0, W, 64 * k], [W - 190 * k, H - 50 * k, W, H], [0, H - 40 * k, 330 * k, H]);
   const fs = (full ? 13 : 15) * k, ds = Object.values(DESTS);
   ctx.font = `700 ${fs}px "Noto Sans JP", sans-serif`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const order = ds.map(d => { const [x, y] = SW(d.x, d.z); return { d, x, y, pri: (TAB.sel === d.id ? 0 : AP.on && AP.dest === d.id ? 1 : 2) + Math.hypot(x - W / 2, y - H / 2) / (W + H) }; }).sort((a, b) => a.pri - b.pri);

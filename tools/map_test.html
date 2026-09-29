@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/style.css">
+<style>body{background:#000}</style></head>
+<body>
+<!-- Map-only harness (no WebGL): renders the tablet map UI with the real modules.
+     tools/map_test.html?sel=ridge&zoom=3&route=summit -->
+<script type="module">
+import * as T from '../js/tablet.js';
+import { setPose } from '../js/vehicle.js';
+import { DESTS } from '../js/roads.js';
+import { engage } from '../js/autopilot.js';
+const P = new URLSearchParams(location.search);
+const d = DESTS[P.get('at') || 'hollow']; setPose(d.x, d.z, d.rot);
+T.buildTablet({ add() {} }, 0.72, -4.3);
+while (!T.bakeStep(100));
+T.initTabletUI(document.body);
+if (P.has('route')) engage(P.get('route'));
+T.openTablet();
+if (P.has('zoom')) T.TAB.zoom = +P.get('zoom');
+if (P.has('sel')) T.TAB.sel = P.get('sel');
+T.updateTablet(1);
+window.__done = true;
+</script></body></html>
