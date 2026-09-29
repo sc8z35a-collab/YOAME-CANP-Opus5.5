@@ -23,50 +23,60 @@ const fromMap = (u, v) => [WORLD.x0 + u / PXM, WORLD.z1 - v / PXM];
 const ROAD_NAMES = Object.fromEntries(ROADS.map(r => [r.id, r.name]));
 
 // ---------------------------------------------------------------- base map (baked once)
+// Baked incrementally (a band of rows per frame) so loading never stalls: ~2 s of work spread
+// over the first seconds of play. The map shows the rows that are finished so far.
+const BK = { j: 0, H: null, img: null, x: null, done: false };
 function bakeBase() {
   const c = document.createElement('canvas'); c.width = c.height = MAP;
   const x = c.getContext('2d');
-  if (!x || !x.createImageData) { TAB.base = c; return; }
-  const img = x.createImageData(MAP, MAP), d = img.data;
-  // height field at map resolution (sampled once, reused for shading + contours)
-  const H = new Float32Array(MAP * MAP);
-  for (let j = 0; j < MAP; j++) for (let i = 0; i < MAP; i++) { const [wx, wz] = fromMap(i + 0.5, j + 0.5); H[j * MAP + i] = heightAt(wx, wz); }
-  let hmin = 1e9, hmax = -1e9; for (let k = 0; k < H.length; k++) { if (H[k] < hmin) hmin = H[k]; if (H[k] > hmax) hmax = H[k]; }
-  const e = 1 / PXM; // metres per pixel
-  // hypsometric palette (valley moss green -> forest -> ochre highlands -> grey rock)
-  const PAL = [[0, [86, 122, 84]], [0.2, [98, 134, 88]], [0.45, [128, 146, 96]], [0.7, [162, 150, 112]], [0.88, [176, 166, 150]], [1, [206, 202, 196]]];
-  const pal = t => { for (let k = 1; k < PAL.length; k++) if (t <= PAL[k][0]) { const [a, A] = PAL[k - 1], [b, B] = PAL[k], f = (t - a) / (b - a); return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f]; } return PAL[PAL.length - 1][1]; };
-  const L = [[-0.6, 0.6, 1], [-0.1, 0.8, 0.45], [-0.9, -0.1, 0.35]].map(([lx, ly, w]) => { const n = Math.hypot(lx, ly, 1); return [lx / n, ly / n, 1 / n, w]; });
-  for (let j = 1; j < MAP - 1; j++) for (let i = 1; i < MAP - 1; i++) {
-    const k = j * MAP + i, h = H[k];
-    const dx = (H[k + 1] - H[k - 1]) / (2 * e), dy = (H[k - MAP] - H[k + MAP]) / (2 * e); // +v is south
-    const nl = Math.hypot(dx, dy, 1), nx = -dx / nl, ny = -dy / nl, nz = 1 / nl;
-    let sh = 0, wsum = 0; for (const [lx, ly, lz, w] of L) { sh += Math.max(0, nx * lx + ny * ly + nz * lz) * w; wsum += w; }
-    sh = 0.35 + 0.8 * sh / wsum;
-    let [r, g, b] = pal(clamp((h - hmin) / (hmax - hmin)));
-    // forest canopy mottling (the whole map is forest; clearings/roads read brighter)
-    const [wx, wz] = fromMap(i, j);
-    const f = noise2(wx * 0.35, wz * 0.35) * 0.5 + noise2(wx * 1.1, wz * 1.1) * 0.5;
-    r *= 0.92 + f * 0.08; g *= 0.94 + f * 0.1; b *= 0.92 + f * 0.06;
-    // steep rock faces
-    const slope = Math.hypot(dx, dy); if (slope > 0.8) { const t = clamp((slope - 0.8) * 1.5); r += (150 - r) * t; g += (140 - g) * t; b += (130 - b) * t; }
-    // creek
-    const cd = Math.abs(wx - creekX(wz));
-    if (cd < 2.6) { r = 74; g = 140; b = 196; sh = 0.9 + sh * 0.1; } else if (cd < 3.4) { r = 60; g = 104; b = 140; }
-    // contours: 5 m, index every 25 m
-    const c5 = Math.floor(h / 5), cR = Math.floor(H[k + 1] / 5), cD = Math.floor(H[k + MAP] / 5);
-    let line = 0;
-    if (c5 !== cR || c5 !== cD) line = (Math.max(c5, cR, cD) % 5 === 0) ? 0.5 : 0.24;
-    d[k * 4] = r * sh * (1 - line); d[k * 4 + 1] = g * sh * (1 - line); d[k * 4 + 2] = b * sh * (1 - line * 0.8); d[k * 4 + 3] = 255;
+  TAB.base = c;
+  if (!x || !x.createImageData) { BK.done = true; return; }
+  BK.x = x; BK.img = x.createImageData(MAP, MAP); BK.H = new Float32Array(MAP * MAP); BK.j = 0;
+  // height range from a coarse pass
+  let hmin = 1e9, hmax = -1e9;
+  for (let j = 0; j < MAP; j += 16) for (let i = 0; i < MAP; i += 16) { const [wx, wz] = fromMap(i, j), h = heightAt(wx, wz); if (h < hmin) hmin = h; if (h > hmax) hmax = h; }
+  TAB.hmin = hmin; TAB.hmax = hmax;
+}
+const PAL = [[0, [86, 122, 84]], [0.2, [98, 134, 88]], [0.45, [128, 146, 96]], [0.7, [162, 150, 112]], [0.88, [176, 166, 150]], [1, [206, 202, 196]]];
+const pal = t => { for (let k = 1; k < PAL.length; k++) if (t <= PAL[k][0]) { const [a, A] = PAL[k - 1], [b, B] = PAL[k], f = (t - a) / (b - a); return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f]; } return PAL[PAL.length - 1][1]; };
+const LIGHTS = [[-0.6, 0.6, 1], [-0.1, 0.8, 0.45], [-0.9, -0.1, 0.35]].map(([lx, ly, w]) => { const n = Math.hypot(lx, ly, 1); return [lx / n, ly / n, 1 / n, w]; });
+function hrow(j) { const H = BK.H; if (j < 0 || j >= MAP || H[j * MAP + 1] !== 0 || H[j * MAP] !== 0) return; for (let i = 0; i < MAP; i++) { const [wx, wz] = fromMap(i + 0.5, j + 0.5); H[j * MAP + i] = heightAt(wx, wz) || 1e-6; } }
+/** bake up to `ms` milliseconds of rows */
+export function bakeStep(ms = 6) {
+  if (BK.done || !BK.H) return true;
+  const t0 = performance.now(), H = BK.H, d = BK.img.data, e = 1 / PXM, { hmin, hmax } = TAB;
+  const j0 = BK.j;
+  while (BK.j < MAP && performance.now() - t0 < ms) {
+    const j = BK.j; hrow(j - 1); hrow(j); hrow(j + 1);
+    if (j > 0 && j < MAP - 1) for (let i = 1; i < MAP - 1; i++) {
+      const k = j * MAP + i, h = H[k];
+      const dx = (H[k + 1] - H[k - 1]) / (2 * e), dy = (H[k - MAP] - H[k + MAP]) / (2 * e);
+      const nl = Math.hypot(dx, dy, 1), nx = -dx / nl, ny = -dy / nl, nz = 1 / nl;
+      let sh = 0, wsum = 0; for (const [lx, ly, lz, w] of LIGHTS) { sh += Math.max(0, nx * lx + ny * ly + nz * lz) * w; wsum += w; }
+      sh = 0.35 + 0.8 * sh / wsum;
+      let [r, g, b] = pal(clamp((h - hmin) / (hmax - hmin)));
+      const [wx, wz] = fromMap(i, j);
+      const f = noise2(wx * 0.35, wz * 0.35) * 0.5 + noise2(wx * 1.1, wz * 1.1) * 0.5;
+      r *= 0.92 + f * 0.08; g *= 0.94 + f * 0.1; b *= 0.92 + f * 0.06;
+      const slope = Math.hypot(dx, dy); if (slope > 0.8) { const t = clamp((slope - 0.8) * 1.5); r += (150 - r) * t; g += (140 - g) * t; b += (130 - b) * t; }
+      const cd = Math.abs(wx - creekX(wz));
+      if (cd < 2.6) { r = 74; g = 140; b = 196; sh = 0.9 + sh * 0.1; } else if (cd < 3.4) { r = 60; g = 104; b = 140; }
+      const c5 = Math.floor(h / 5), cR = Math.floor(H[k + 1] / 5), cD = Math.floor(H[k + MAP] / 5);
+      let line = 0; if (c5 !== cR || c5 !== cD) line = (Math.max(c5, cR, cD) % 5 === 0) ? 0.5 : 0.24;
+      d[k * 4] = r * sh * (1 - line); d[k * 4 + 1] = g * sh * (1 - line); d[k * 4 + 2] = b * sh * (1 - line * 0.8); d[k * 4 + 3] = 255;
+    }
+    BK.j++;
   }
-  x.putImageData(img, 0, 0);
-  // index contour elevation labels (sparse)
-  x.font = '600 15px "Noto Sans JP", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  for (let j = 60; j < MAP - 60; j += 170) for (let i = 60; i < MAP - 60; i += 170) {
-    const k = j * MAP + i, h = H[k];
-    if (Math.floor(h / 25) !== Math.floor(H[k + 3] / 25)) { x.fillStyle = 'rgba(40,34,20,.55)'; x.fillText(Math.round(h / 25) * 25 + '', i, j); }
+  BK.x.putImageData(BK.img, 0, 0, 0, Math.max(0, j0 - 1), MAP, BK.j - j0 + 2);
+  if (BK.j >= MAP) {
+    const x = BK.x; x.font = '600 15px "Noto Sans JP", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let j = 60; j < MAP - 60; j += 170) for (let i = 60; i < MAP - 60; i += 170) {
+      const k = j * MAP + i, h = H[k];
+      if (Math.floor(h / 25) !== Math.floor(H[k + 3] / 25)) { x.fillStyle = 'rgba(40,34,20,.55)'; x.fillText(Math.round(h / 25) * 25 + '', i, j); }
+    }
+    BK.done = true; BK.H = null; BK.img = null;
   }
-  TAB.base = c; TAB.hmin = hmin; TAB.hmax = hmax;
+  return BK.done;
 }
 
 // ---------------------------------------------------------------- live render (vector overlay in screen px)
@@ -214,6 +224,7 @@ export function buildTablet(camperGroup, FLOOR, ZF) {
 let drawT = 0;
 export function updateTablet(dt) {
   if (!TAB.ctx) return;
+  if (!BK.done) bakeStep(TAB.open ? 30 : 6);
   drawT -= dt; if (drawT > 0) return; drawT = TAB.open ? 0 : 0.25;
   if (!TAB.open) { draw(TAB.ctx, 640, 400, false); TAB.tex.needsUpdate = true; }
   TAB.screenMat.emissiveIntensity = 0.55 + G.night * 0.2;

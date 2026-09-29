@@ -175,7 +175,7 @@ async function init() {
     C.group.updateMatrixWorld(true);
   }
   if (P.get('cam') === 'chase') { const m = await import('./view.js'); m.setView('chase'); if (P.has('cyaw')) m.V.chase.yaw = parseFloat(P.get('cyaw')); }
-  if (P.has('tablet')) { const m = await import('./tablet.js'); m.openTablet(); if (P.has('sel')) { m.TAB.sel = P.get('sel'); } }
+  if (P.has('tablet')) { const m = await import('./tablet.js'); while (!m.bakeStep(50)); m.openTablet(); if (P.has('sel')) { m.TAB.sel = P.get('sel'); } }
   resize();
   updateWeather(0.016, camera);
   updateEnv();
