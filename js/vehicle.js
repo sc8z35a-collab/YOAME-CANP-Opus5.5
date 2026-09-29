@@ -41,7 +41,7 @@ const DEFL = 0.12;                                                 // static spr
 const K_SUS = [0, 1, 2, 3].map(i => (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE) * M * 9.81 / 2 / DEFL);
 const PRE = COMP0 - DEFL;                                          // spring preload offset (droop travel beyond free length is limited by the damper)
 const C_SUS = K_SUS.map((k, i) => 2 * 0.36 * Math.sqrt(k * (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE) * M / 2));
-const K_ARB = [32000, 24000];                                       // anti-roll bars front / rear (N/m)
+const K_ARB = [22000, 15000];                                       // anti-roll bars front / rear (N/m)
 const STEP = 1 / 180;
 const MAX_LOCK = 0.7, STEER_RATE = 1.25;                            // rad, rad/s (power steering rack)
 // tyres (LT 225/75R16-ish)
@@ -59,7 +59,8 @@ for (const y of [0.55, 1.3, 2.4]) for (const x of [-1.1, 0, 1.1]) { HP.push(new 
 for (const z of [-3, -0.5, 2]) HP.push(new THREE.Vector3(0, HB.y1, z), new THREE.Vector3(0, HB.y0, z));
 // buoyancy / drag columns under the hull (2 x 6)
 const COLS = [];
-for (const x of [-0.6, 0.6]) for (let k = 0; k < 6; k++) COLS.push(new THREE.Vector3(x, HB.y0, HB.z0 + (k + 0.5) * (HB.z1 - HB.z0) / 6));
+const BOX_Y = 0.6;                                                 // the sealed-ish cabin box starts above the open chassis
+for (const x of [-0.6, 0.6]) for (let k = 0; k < 6; k++) COLS.push(new THREE.Vector3(x, BOX_Y, HB.z0 + (k + 0.5) * (HB.z1 - HB.z0) / 6));
 const COL_A = (2 * HB.x) * (HB.z1 - HB.z0) / COLS.length, COL_W = Math.sqrt(COL_A);
 
 const wheelState = () => ({ t: SUS_LEN, contact: false, spin: 0, w: 0, sink: 0, dig: 0, abs: 0, slip: 0, sat: false, Fz: 0, comp: 0, kind: 'road', mu: 0.8, crr: 0.02, soft: 0, steer: 0, sx: 0, sy: 0, on: null, cp: new THREE.Vector3(), n: new THREE.Vector3(0, 1, 0) });
@@ -298,7 +299,7 @@ function step(dt) {
     if (on) { S0.kind = 'rock'; S0.mu = 0.55; S0.crr = 0.03; S0.soft = 0; on.hitT = G.t; }
     W.kind = S0.kind; W.mu = S0.mu; W.crr = S0.crr; W.soft = S0.soft; W.on = on;
     // sinkage: soft ground gives way under the tyre's load; wheel-spin digs a rut
-    const sinkT = S0.soft * 0.1 * clamp(W.Fz / 9000, 0, 2) + W.dig;
+    const sinkT = S0.soft * S0.soft * 0.2 * clamp(W.Fz / 9000, 0, 2) + W.dig;
     W.sink += (sinkT - W.sink) * Math.min(1, dt * 2.5);
     g -= W.sink;
     const t = (A.y - g) / up.y;
@@ -348,7 +349,7 @@ function step(dt) {
     // friction: surface (+wet); a dug-in tyre grips less
     const mu = W.mu * (1 - 0.35 * clamp(W.dig / 0.3));
     muSum += mu;
-    Tb += (W.crr + W.sink * 0.9) * Fz * WHEEL_R;               // rolling resistance + bulldozing soft ground
+    Tb += (W.crr + W.sink * 2.2) * Fz * WHEEL_R;               // rolling resistance + bulldozing soft ground
     // ABS: release a wheel that starts to lock under braking
     // TCS (not in 4L): brake a spinning driven wheel so an open diff still drives the other side
     const sv = W.w * WHEEL_R - vx;
@@ -387,7 +388,7 @@ function step(dt) {
     W.slip = slipV; if (W.sat) skid = Math.max(skid, slipV);
     // digging: a spinning tyre on soft ground throws the soil out and sinks; rolling on climbs out
     const spinV = Math.abs(w * WHEEL_R - vx);
-    if (W.soft > 0.15 && spinV > 1.2) W.dig = Math.min(0.36, W.dig + dt * 0.035 * W.soft * (spinV - 1.2));
+    if (W.soft > 0.15 && spinV > 1.0) W.dig = Math.min(0.4, W.dig + dt * 0.06 * W.soft * (spinV - 1.0));
     else W.dig = Math.max(0, W.dig - Math.abs(vx) * dt * 0.06 - dt * 0.002);
     if (W.sink > 0.18) stuck++;
   }
@@ -441,7 +442,7 @@ function step(dt) {
       if (dd < m.r) { const top = heightAt(pb.x, pb.z) + m.depth * (1 - smooth(m.r * 0.5, m.r, dd)); if (top - pb.y > depth) { depth = top - pb.y; rho = 1800; flow = m; } }
     }
     if (depth <= 0) continue;
-    depth = Math.min(depth, (HB.y1 - HB.y0) * Math.max(0.3, up.y));
+    depth = Math.min(depth, (HB.y1 - BOX_Y) * Math.max(0.3, up.y));
     subSum += depth;
     const cen = _v3.copy(pb).addScaledVector(up, depth * 0.5);
     const seal = rho > 1000 ? 1 : 1 - VEH.ingress * 0.88;          // flooded interior -> sinks
@@ -457,10 +458,14 @@ function step(dt) {
       F.add(fdv); T.add(_af.copy(cen).sub(VEH.pos).cross(fdv));
     }
   }
+  { const pc = localToWorld(_v.set(0, 0.35, -0.8), _v), dch = clamp(wl - (pc.y - 0.35), 0, 0.6);
+    if (dch > 0) { const wv = waterFlowAt(pc.x, pc.z, _fl2), rel = pointVel(pc, _r).sub(wv), sp = rel.length();
+      if (sp > 1e-3) { const fd = Math.min(0.5 * 1000 * 1.2 * dch * 7 * sp * sp, sp * M / dt * 0.2); const fdv = rel.multiplyScalar(-fd / sp); F.add(fdv); T.add(_af.copy(pc).sub(VEH.pos).cross(fdv)); } }
+    subSum += dch * COLS.length * 0.3; }
   VEH.submerged = clamp(subSum / COLS.length / 1.6);
   // water gets in through door seals / vents once it is above the floor
   const floorY = localToWorld(_v.set(0, 0.72, -0.5), _v).y;
-  VEH.ingress = clamp(VEH.ingress + (wl > floorY ? dt * 0.012 * clamp(wl - floorY, 0, 1.5) : -dt * 0.004));
+  VEH.ingress = clamp(VEH.ingress + (wl > floorY - 0.05 ? dt * 0.03 * clamp(wl - floorY + 0.15, 0, 1.5) : -dt * 0.004));
   // ---- air: drag + wind on the tall flat sides (centre of pressure 1.6 m up)
   const air = _r.set(0, 0, 0); if (G.windVec) air.copy(G.windVec); air.sub(VEH.v);
   const ax = air.dot(rt), az = air.dot(fw), ay = air.dot(up);

@@ -19,7 +19,9 @@ function launch(v, gear = 1) { // put the van at speed v (m/s) going straight
 const flat = () => reset('hollow', Math.PI);
 
 // 1) parked on a road grade with the handbrake: stands still
-{ reset('switch1'); const p0 = V.originOf().clone(); run(6); const d = V.originOf().distanceTo(p0);
+{ const R = (await import('../../js/roads.js')).ROADS.find(r => r.id === 'mount'); let bi = 1, bg = 0;
+  for (let i = 1; i < R.s.length - 1; i++) { const g = Math.abs(R.s[i + 1].h - R.s[i - 1].h) / 4; if (g > bg && !R.s[i].bridge) { bg = g; bi = i; } }
+  const a = R.s[bi], b = R.s[bi + 1]; reset('hollow'); V.setPose(a.x, a.z, Math.atan2(-(b.x - a.x), -(b.z - a.z)), 0.05); run(2); const p0 = V.originOf().clone(); run(6); const d = V.originOf().distanceTo(p0);
   ok(d < 0.1, 'parked on a grade holds (P + handbrake)', `drift ${d.toFixed(3)}m, grade ${(T.slopeAt(p0.x, p0.z) * 100).toFixed(0)}%`); }
 
 // 2) braking distance: wet > dry, both plausible (ABS)
@@ -49,14 +51,15 @@ function brakeDist(wet) {
 // 5) deep mud: spinning tyres dig in and the van gets stuck (2H), 4L crawls better
 function mudRun(range) {
   reset('hollow', Math.PI); const o = V.originOf(); G.wet = 1; G.rain = 1;
-  G.mudZones.push({ x: o.x, z: o.z + 8, r: 14, depth: 0, vx: 0, vz: 0 });
-  Object.assign(C, { hand: false, brake: 0, throttle: 1, range }); const z0 = o.z; let maxDig = 0;
-  run(15, () => { maxDig = Math.max(maxDig, ...VEH.wheels.map(W => W.dig)); });
-  return { d: V.originOf().z - z0, dig: maxDig };
+  G.mudZones.push({ x: o.x, z: o.z + 20, r: 60, depth: 0, vx: 0, vz: 0 });
+  Object.assign(C, { hand: false, brake: 0, throttle: 1, range }); let maxDig = 0;
+  run(20, () => { maxDig = Math.max(maxDig, ...VEH.wheels.map(W => W.dig)); });
+  const z1 = V.originOf().z; run(6); // progress over the last 6 s: dug in (stuck) or still crawling?
+  return { d: V.originOf().z - z1, dig: maxDig };
 }
 { const a = mudRun('2H'), b = mudRun('4L');
-  ok(a.dig > 0.05, 'full throttle in slide mud: wheels spin and dig ruts', `2H moved ${a.d.toFixed(1)}m dig ${(a.dig * 100).toFixed(0)}cm / 4L moved ${b.d.toFixed(1)}m dig ${(b.dig * 100).toFixed(0)}cm`);
-  ok(b.d > a.d, '4L + locker gets further than 2H in mud', ''); }
+  ok(a.dig > 0.05, 'full throttle in slide mud: wheels spin and dig ruts', `last 6s: 2H ${a.d.toFixed(1)}m dig ${(a.dig * 100).toFixed(0)}cm / 4L ${b.d.toFixed(1)}m dig ${(b.dig * 100).toFixed(0)}cm`);
+  ok(b.d > a.d, '2H digs itself in, 4L + locker keeps crawling', ''); }
 
 // 6) boulders: a small rock barely moves the van, a big fast one shoves it (momentum)
 function rockHit(r, v) {
