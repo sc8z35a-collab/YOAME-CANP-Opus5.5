@@ -92,7 +92,7 @@ function wallPanel(outline, holes, depth, mat, axis, offset) {
 }
 
 // Split long triangle edges (<= maxE metres) so vertex dents (damage.js) can bend big flat panels.
-function tessellate(geo, maxE = 0.14, maxIt = 7) {
+function tessellate(geo, maxE = 0.16, maxIt = 14) {
   let g = geo.index ? geo.toNonIndexed() : geo;
   for (let it = 0; it < maxIt; it++) {
     const P = g.attributes.position.array, N = g.attributes.normal?.array, UV = g.attributes.uv?.array;

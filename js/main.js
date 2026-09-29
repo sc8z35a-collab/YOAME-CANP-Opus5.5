@@ -16,6 +16,7 @@ import { initView, updateView, V } from './view.js';
 import { buildUI, updateUI, toast } from './ui.js';
 import { initAudio, updateAudio, sfx } from './audio.js';
 import { glassShared } from './glass.js';
+import { updateDamage, loadDamage, repairAll } from './damage.js';
 import { EffectComposer } from './lib/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from './lib/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './lib/addons/postprocessing/UnrealBloomPass.js';
@@ -154,6 +155,7 @@ async function init() {
   buildWeather(scene, renderer); W.renderer = renderer;
   buildTerrain(scene);
   buildCamper(scene);
+  if (!P.has('qa')) loadDamage();
   placeCamper(P.get('spot') || (() => { try { return localStorage.getItem('fc3d_spot'); } catch (e) { return null; } })() || 'hollow');
   buildTablet(C.group, FLOOR, ZF);
   await buildForest(scene);
@@ -221,6 +223,7 @@ function loop(now) {
   updateWeather(dt, camera);
   if (!G.state.over) { updateEvents(dt); updateAnimals(dt); }
   updateCamper(dt);
+  updateDamage(dt, VEH.scrapes);
   updateView(dt, camera);
   updateForest(camera.position);
   updateAudio(dt);
