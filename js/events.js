@@ -27,6 +27,8 @@ bus.on('impact', ({ from, power = 1, source, lp, ln, cause }) => {
     const d = from.clone().applyQuaternion(G.camper.quaternion.clone().invert()); d.y = 0; d.normalize();
     const l = new THREE.Vector3(d.x * 1.2, 1.1 + R() * 0.8, clamp(d.z * 4, -5.2, 3.2) + (R() - 0.5) * 1.5);
     bus.emit('dent', { lp: l, ln: d.clone().negate(), sev: clamp(power * 0.8, 0.1, 1.2), cause: source });
+    // a charging bear (~250 kg at 6 m/s) really shoves the van: impulse at shoulder height rocks it on its springs
+    if (source === 'bear') applyImpulse(G.camper.localToWorld(l.clone().setY(1.2)), from.clone().setY(0).normalize().multiplyScalar(-1500 * power));
   }
   const dmg = (source === 'bear' ? 9 : source === 'rock' ? 14 : source === 'tree' ? 22 : source === 'crash' ? 5 : 6) * power;
   // crashes / falls never finish the game (the map must never soft-lock): they bottom out at 8%

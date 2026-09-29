@@ -132,11 +132,14 @@ function updateDrive(dt) {
   if (G.driving && VEH.speed > 1) G.shake = Math.max(G.shake, 0.05 + VEH.speed * 0.008);
 }
 // wind: gust force on the tall flat side of the van (can topple it on a cliff edge in a storm)
+// wind: a real air velocity (m/s) fed to the vehicle aero model; storms gust to ~25 m/s, which
+// is enough to rock the tall box on its springs (and tip it on a cliff edge together with a slope)
 function updateRock(dt) {
-  const gust = G.wind > 0.7 ? Math.max(0, Math.sin(G.t * 0.9) * Math.sin(G.t * 0.37)) * (G.wind - 0.6) : 0;
-  G.windPush = G.windPush || new THREE.Vector3();
-  G.windPush.set(-0.5, 0, 0.8).multiplyScalar(gust * 5200);
-  G.rockAngle = C.group.rotation.z;
+  const gust = Math.max(0, Math.sin(G.t * 0.9) * Math.sin(G.t * 0.37 + 1.1)) * Math.max(0, G.wind - 0.5) * 2;
+  const sp = G.wind * 9 + gust * 12;
+  G.windVec = G.windVec || new THREE.Vector3();
+  G.windVec.set(-0.53, 0, 0.85).multiplyScalar(sp);
+  G.rockAngle = VEH.roll || 0;
 }
 
 bus.on('gameover', src => {
