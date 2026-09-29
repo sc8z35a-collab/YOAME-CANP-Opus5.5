@@ -129,7 +129,7 @@ function materials() {
   // painted cabinetry (satin cream lacquer over birch ply — faint grain in the normal only)
   M.cab = std({ color: 0xe9e3d6, roughness: 0.52, normalMap: tex('plywood_nor_gl'), normalScale: new THREE.Vector2(0.12, 0.12) });
   M.cabEdge = rep(pbr('plywood', { color: 0xf0dcc0, normalScale: 0.5 }), 2);
-  M.oak = rep(pbr('oak_veneer_01', { color: 0xe6c9a2, normalScale: 0.5 }), 1.1);          // worktop / table (oiled oak)
+  M.oak = rep(pbr('white_oak_veneer', { color: 0xf4e6d0, normalScale: 0.5 }), 1.1);          // worktop / table (oiled oak)
   M.oakDark = rep(pbr('oak_veneer_01', { color: 0x9a6e48, normalScale: 0.5 }), 1.1);
   M.wall = rep(pbr('ash_veneer', { color: 0xf1e7d8, normalScale: 0.35 }), 0.8);            // light ash wall boards
   M.tile = rep(pbr('long_white_tiles', { color: 0xf4f1ea, rough: 0.9, normalScale: 0.9 }), 1.6); // subway tile backsplash
@@ -412,7 +412,7 @@ export function buildCab(I, M, C) {
   drawGauges(0, 0, 0.7, 0.3);
   // ---- steering column + wheel (face tilted ~34deg up toward the driver)
   const tilt = -0.6, n = new THREE.Vector3(0, Math.sin(-tilt), Math.cos(tilt)); // wheel normal (toward driver)
-  const wc = new THREE.Vector3(bx, 1.64, -3.5);
+  const wc = new THREE.Vector3(bx, 1.53, -3.52);
   const along = d => wc.clone().addScaledVector(n, -d);
   const colP = along(0.14), col = rb(0.07, 0.07, 0.26, M.black, colP.x, colP.y, colP.z, 0.025, 3); col.rotation.x = tilt; g.add(col);
   const shP = along(0.19), shroud = rb(0.13, 0.11, 0.15, M.dash, shP.x, shP.y, shP.z, 0.04, 3); shroud.rotation.x = tilt; g.add(shroud);
