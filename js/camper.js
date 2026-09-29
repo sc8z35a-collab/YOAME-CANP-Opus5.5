@@ -5,6 +5,8 @@ import { tex, pbr, canvasTex } from './assets.js';
 import { makeGlass } from './glass.js';
 import { RoundedBoxGeometry } from './lib/addons/geometries/RoundedBoxGeometry.js';
 import { buildInteriorV3, updateInterior, bakeInteriorEnv, IN } from './interior.js';
+import { patchPaint } from './damage.js';
+import { mergeVertices } from './lib/addons/BufferGeometryUtils.js';
 export { bakeInteriorEnv, IN };
 
 export const FLOOR = 0.72;          // interior floor height (camper local)
@@ -89,6 +91,34 @@ function wallPanel(outline, holes, depth, mat, axis, offset) {
   return m;
 }
 
+// Split long triangle edges (<= maxE metres) so vertex dents (damage.js) can bend big flat panels.
+function tessellate(geo, maxE = 0.14, maxIt = 7) {
+  let g = geo.index ? geo.toNonIndexed() : geo;
+  for (let it = 0; it < maxIt; it++) {
+    const P = g.attributes.position.array, N = g.attributes.normal?.array, UV = g.attributes.uv?.array;
+    const op = [], on = [], ou = []; let split = false;
+    const v = (A, i, k) => [A[i * k], A[i * k + 1], A[i * k + 2]].slice(0, k);
+    const mid = (a, b) => a.map((x, j) => (x + b[j]) / 2);
+    const push = (tri) => { for (const t of tri) { op.push(...t.p); if (N) on.push(...t.n); if (UV) ou.push(...t.u); } };
+    for (let f = 0; f < P.length / 9; f++) {
+      const V = [0, 1, 2].map(j => ({ p: v(P, f * 3 + j, 3), n: N ? v(N, f * 3 + j, 3) : null, u: UV ? v(UV, f * 3 + j, 2) : null }));
+      const L = [0, 1, 2].map(j => { const a = V[j].p, b = V[(j + 1) % 3].p; return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); });
+      const m = L.indexOf(Math.max(...L));
+      if (L[m] <= maxE) { push(V); continue; }
+      split = true;
+      const a = V[m], b = V[(m + 1) % 3], c = V[(m + 2) % 3];
+      const M = { p: mid(a.p, b.p), n: N ? mid(a.n, b.n) : null, u: UV ? mid(a.u, b.u) : null };
+      push([a, M, c]); push([M, b, c]);
+    }
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(op, 3));
+    if (N) g.setAttribute('normal', new THREE.Float32BufferAttribute(on, 3));
+    if (UV) g.setAttribute('uv', new THREE.Float32BufferAttribute(ou, 2));
+    if (!split || op.length > 3 * 3 * 60000) break;
+  }
+  return mergeVertices(g);
+}
+
 function paintMaterial() {
   const m = new THREE.MeshPhysicalMaterial({
     color: 0xe8e4da, roughness: 0.42, metalness: 0.0, clearcoat: 0.7, clearcoatRoughness: 0.18,
@@ -121,6 +151,7 @@ function paintMaterial() {
       }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.95, gMud); roughnessFactor = mix(roughnessFactor, 0.15, uWet*.7);`);
+    patchPaint(sh); // dents + scratches (damage.js)
   };
   return m;
 }
@@ -232,6 +263,7 @@ export function buildCamper(scene) {
     const hs = holes(side);
     // skin: extrude depth goes toward -x after rotation; for L place at -XW+d
     const skin = wallPanel(sideOutline, hs, 0.02, paint, 'x', side === 'L' ? -XW + 0.02 : XW);
+    skin.geometry = tessellate(skin.geometry, 0.16);
     const inn = wallPanel([ZF, FLOOR, ZB, CEIL], hs, 0.1, panel, 'x', side === 'L' ? -XW + 0.12 : XW - 0.02);
     g.add(skin); inner.add(inn);
     // window rubber frames (outside)
@@ -245,6 +277,7 @@ export function buildCamper(scene) {
   const back = wallPanel([-XW, 0.55, XW, ROOF], holes('B'), 0.02, paint, 'z', ZB - 0.02);
   const backIn = wallPanel([-XW + 0.02, FLOOR, XW - 0.02, CEIL], holes('B'), 0.1, panel, 'z', ZB - 0.12);
   const front = wallPanel([-XW, 0.55, XW, ROOF], holes('F'), 0.02, paint, 'z', ZF);
+  back.geometry = tessellate(back.geometry, 0.16); front.geometry = tessellate(front.geometry, 0.16);
   const frontIn = wallPanel([-XW + 0.02, FLOOR, XW - 0.02, CEIL], holes('F'), 0.08, dashM, 'z', ZF + 0.02);
   g.add(back, front); inner.add(backIn, frontIn);
   for (const h of WINDOWS.filter(x => x.wall === 'B' || x.wall === 'F')) {
@@ -255,6 +288,7 @@ export function buildCamper(scene) {
   // roof (skin + ceiling)
   const roofHoles = holes('T');
   const roof = wallPanel([-XW, ZF, XW, ZB], roofHoles, 0.03, paint, 'y', ROOF);
+  roof.geometry = tessellate(roof.geometry, 0.2);
   const ceil = wallPanel([-XW, ZF, XW, ZB], roofHoles, ROOF - 0.03 - CEIL, ceilM, 'y', ROOF - 0.03);
   g.add(roof); inner.add(ceil);
   for (const h of WINDOWS.filter(x => x.wall === 'T')) {
