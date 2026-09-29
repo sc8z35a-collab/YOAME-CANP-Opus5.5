@@ -642,3 +642,104 @@ export function buildLockers(I, M, C) {
     }
   }
 }
+
+// ---------------------------------------------------------------- interior window surrounds
+export function buildWindowFrames(I, WINDOWS, windowLocal) {
+  const frameM = new THREE.MeshStandardMaterial({ color: 0xe8e2d6, roughness: 0.55 });
+  const blindM = new THREE.MeshStandardMaterial({ color: 0xd9d2c4, roughness: 0.8 });
+  for (const w of WINDOWS) {
+    if (w.wall === 'T' || w.wall === 'F') continue;
+    const g = new THREE.ExtrudeGeometry(ringShape(w.w, w.h, 0.05, 0.07), { depth: 0.02, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 2, curveSegments: 6 });
+    const grp = new THREE.Group();
+    grp.add(mesh(g, frameM));
+    grp.add(rb(w.w + 0.1, 0.045, 0.04, blindM, 0, w.h / 2 + 0.075, 0.02, 0.012, 2));      // blind cassette
+    const L = windowLocal(w);
+    grp.position.copy(L.p).addScaledVector(L.n, -0.14);
+    if (w.wall === 'L') grp.rotation.y = Math.PI / 2;
+    else if (w.wall === 'R') grp.rotation.y = -Math.PI / 2;
+    else if (w.wall === 'B') grp.rotation.y = Math.PI;
+    I.add(grp);
+  }
+  for (const w of WINDOWS.filter(x => x.wall === 'T')) {
+    const g = new THREE.ExtrudeGeometry(ringShape(w.w, w.h, 0.06, 0.05), { depth: 0.015, bevelEnabled: false, curveSegments: 4 }); g.rotateX(Math.PI / 2);
+    const m = mesh(g, frameM); m.position.set(w.c[0], 2.752, w.c[1]); I.add(m);
+  }
+}
+
+// ---------------------------------------------------------------- CC0 props (Poly Haven)
+const PROPS = [
+  // name, position (surface point), rotY, scale
+  ['vintage_electric_kettle', [0.8, K.top + 0.046, K.hob.z + 0.12], 1.9, 0.6],
+  ['pot_enamel_01', [0.79, K.top + 0.046, K.hob.z - 0.12], 0.4, 0.8],
+  ['wooden_cutting_board', [0.8, K.top, -0.86], Math.PI / 2, 0.7],
+  ['potted_plant_02', [0.93, K.top, 0.18], 0.8, 0.3],
+  ['tea_set_01', [-0.74, F + 0.741, -1.08], Math.PI / 2, 0.5],
+  ['wooden_bowl_01', [-0.92, F + 0.741, -0.62], 0, 0.6],
+  ['binoculars', [0.5, 1.515, -3.95], 2.6, 1.0],
+  ['throw_pillows_01', [0.0, F + 0.72, 1.9], Math.PI, 0.6],
+  ['wicker_basket_01', [0.55, 2.38, -3.75], 0.3, 0.9],
+  ['vintage_oil_lamp', [0.85, F + 0.975, 3.0], 0, 0.34],
+];
+export function loadProps(I) {
+  return Promise.all(PROPS.map(async ([name, p, ry, s]) => {
+    try {
+      const g = await glb(name);
+      const o = g.scene.clone(true);
+      o.scale.setScalar(s); o.rotation.y = ry; o.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(o);          // sit the lowest point on the surface
+      const c = bb.getCenter(new THREE.Vector3());
+      o.position.set(p[0] - c.x, p[1] - bb.min.y, p[2] - c.z);
+      o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; if (m.material.metalness > 0.3) IN.envMats.push(m.material); } });
+      o.name = 'prop:' + name; I.add(o); IN.props.push(o);
+      return o;
+    } catch (e) { console.warn('prop', name, e.message); }
+  }));
+}
+
+// ---------------------------------------------------------------- baked interior reflections
+let cubeRT = null;
+/** Render a cube map from inside the cabin so chrome / steel / glossy parts reflect the interior,
+ *  not the open sky. Call after assets load (and again whenever it matters, e.g. lights toggled). */
+export function bakeInteriorEnv(renderer, scene, camperGroup) {
+  if (!renderer || !camperGroup) return;
+  if (!cubeRT) cubeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
+  const cam = new THREE.CubeCamera(0.05, 60, cubeRT);
+  cam.position.set(0.1, 1.75, -1.0); camperGroup.add(cam); camperGroup.updateMatrixWorld(true);
+  for (const m of IN.envMats) m.envMap = null;
+  cam.update(renderer, scene);
+  camperGroup.remove(cam);
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = pm.fromCubemap(cubeRT.texture).texture; pm.dispose();
+  for (const m of IN.envMats) { m.envMap = env; m.envMapIntensity = 1; m.userData.ownEnv = true; m.needsUpdate = true; }
+  IN.env = env;
+}
+
+export function updateInterior(dt, S, lightLevel) {
+  // steering wheel follows the front-wheel steer angle (~14:1 → about ±1.5 turns lock to lock)
+  if (IN.wheel) IN.wheel.rotation.z += ((-(G.steerAngle || 0) * 9) - IN.wheel.rotation.z) * Math.min(1, dt * 10);
+  IN.gT = (IN.gT || 0) - dt;
+  if (IN.gT <= 0 && IN.gauges) {
+    IN.gT = 0.1;
+    const v = Math.abs(G.driveSpeed || 0) * 3.6, on = G.driving ? 1 : 0.25;
+    IN.rpm = (IN.rpm || 0) + (((G.driving ? 0.8 : 0) + v / 38) - (IN.rpm || 0)) * 0.3;
+    drawGauges(v, G.driving ? IN.rpm : 0, 0.72, on);
+  }
+  const cook = S.cooking > 0;
+  IN.hobFlames.forEach((f, i) => { f.visible = cook; if (cook) f.scale.y = 0.85 + Math.sin(G.t * 23 + i * 2) * 0.15; });
+  const k = 0.25 + 0.75 * Math.max(lightLevel, G.daylight ?? 1);
+  for (const m of IN.envMats) if (m.userData.ownEnv) m.envMapIntensity = k;
+}
+
+/** Build everything. Returns the materials so camper.js can reuse them (walls, curtains…). */
+export function buildInteriorV3(I, C, WINDOWS, windowLocal) {
+  const M = materials();
+  buildKitchen(I, M, C);
+  buildFridge(I, M);
+  buildCab(I, M, C);
+  buildDinette(I, M);
+  buildRear(I, M);
+  buildLockers(I, M, C);
+  buildWindowFrames(I, WINDOWS, windowLocal);
+  IN.ready = loadProps(I);
+  return M;
+}
