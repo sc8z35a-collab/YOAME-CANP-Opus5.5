@@ -43,6 +43,7 @@ const LIGHTS = [[-0.6, 0.6, 1], [-0.1, 0.8, 0.45], [-0.9, -0.1, 0.35]].map(([lx,
 function hrow(j) { const H = BK.H; if (j < 0 || j >= MAP || H[j * MAP + 1] !== 0 || H[j * MAP] !== 0) return; for (let i = 0; i < MAP; i++) { const [wx, wz] = fromMap(i + 0.5, j + 0.5); H[j * MAP + i] = heightAt(wx, wz) || 1e-6; } }
 /** bake up to `ms` milliseconds of rows */
 export function bakeStep(ms = 6) {
+  if (typeof location !== 'undefined' && location.search.includes('nomap')) { BK.done = true; return true; }
   if (BK.done || !BK.H) return true;
   const t0 = performance.now(), H = BK.H, d = BK.img.data, e = 1 / PXM, { hmin, hmax } = TAB;
   const j0 = BK.j;
