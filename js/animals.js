@@ -207,7 +207,7 @@ export function spawnBear(mode = 'prowl') {
   const b = Z.bear;
   const [x, z] = ringPoint(30, 36);
   b.spawnAt(x, z); b.state = mode; b.t = 0; b.aggro = mode === 'charge' ? 1 : 0.2; b.hits = 0; b.sniffed = false;
-  b.sniffAt = null; b.qaHold = false; b.rear = 0; b.hitCd = 0; b.chaseT = 0; // no stale state from the previous visit
+  b.sniffAt = null; b.qaHold = false; b.rear = 0; b.hitCd = 0; b.chaseT = 0; b.leaveT = 0; // no stale state from the previous visit
   bus.emit('animal', 'bear');
   return true;
 }
@@ -313,7 +313,8 @@ export function updateAnimals(dt) {
       const a = Math.atan2(b.pos.z - c.z, b.pos.x - c.x);
       b.steer(dt, c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70, b.state === 'flee' ? 6 : 1.6);
       b.rear += (0 - b.rear) * dt * 3;
-      if (dist > 55) { b.despawn(); bus.emit('bearleft'); }
+      b.leaveT = (b.leaveT || 0) + dt;
+      if (dist > 55 || b.leaveT > 60) { b.leaveT = 0; b.despawn(); bus.emit('bearleft'); }
     }
     b.anim(dt);
   }
@@ -326,12 +327,13 @@ export function updateAnimals(dt) {
       const r = 12 + Math.sin(w.t * 0.3) * 3;
       w.steer(dt, c.x + Math.cos(ang) * r, c.z + Math.sin(ang) * r, 2.4);
       w.play('Walk');
-      if (w.t > 45 || st.light > 0.9 || st.noise > 0.6) w.state = 'leave';
+      if (w.t > 45 || st.light > 0.9 || st.noise > 0.6 || G.flash > 0.5) { w.state = 'leave'; w.walkT = 0; }
     } else {
       const a = Math.atan2(w.pos.z - c.z, w.pos.x - c.x);
       w.steer(dt, c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70, 6);
       w.play('Run');
-      if (distToCamper(w) > 55) w.despawn();
+      w.walkT = (w.walkT || 0) + dt;
+      if (distToCamper(w) > 55 || w.walkT > 40) w.despawn(); // (a wolf wedged against the rim/trees never despawned)
     }
     w.anim(dt);
   }
@@ -356,7 +358,7 @@ export function scareAll(power = 1) {
     if (b.aggro < 0.3 || power > 1.2) { b.state = 'flee'; bus.emit('bearscared'); }
   }
   for (const d of [...Z.deer, ...Z.fawns]) if (d.active && d.state !== 'flee') d.state = 'graze', d.t = 1e3, d.visit = 1e3; // leave
-  for (const w of Z.wolves) if (w.active) w.state = 'leave';
+  for (const w of Z.wolves) if (w.active && w.state !== 'leave') { w.state = 'leave'; w.walkT = 0; }
 }
 
 export function nearestAnimal() {
