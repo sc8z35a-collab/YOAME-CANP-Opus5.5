@@ -149,6 +149,8 @@ function draw(ctx, W, H, full, dpr = 1) {
   const fs = (full ? 13 : 15) * k, ds = Object.values(DESTS);
   ctx.font = `700 ${fs}px "Noto Sans JP", sans-serif`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const order = ds.map(d => { const [x, y] = SW(d.x, d.z); return { d, x, y, pri: (TAB.sel === d.id ? 0 : AP.on && AP.dest === d.id ? 1 : 2) + Math.hypot(x - W / 2, y - H / 2) / (W + H) }; }).sort((a, b) => a.pri - b.pri);
+  // pin dots are obstacles for every label (labels used to be printed over neighbouring pins)
+  for (const { d, x, y } of order) { const r = (TAB.sel === d.id ? 7.5 : 5.5) * k + 1.5 * k; _lab.push([x - r, y - r, x + r, y + r]); }
   for (const { d, x, y } of order) {
     if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
     const sel = TAB.sel === d.id, here = AP.at === d.id || (!AP.on && Math.hypot(p.x - d.x, p.z - d.z) < 6), tgt = AP.on && AP.dest === d.id;
@@ -164,6 +166,7 @@ function draw(ctx, W, H, full, dpr = 1) {
     let placed = null;
     for (const [lx, ly] of cand) {
       const box = [lx - 3 * k, ly - fs * 0.62, lx + tw + 3 * k, ly + fs * 0.62];
+      if (box[0] < 0 || box[1] < 0 || box[2] > W || box[3] > H) continue; // would be clipped by the screen edge
       if (!_lab.some(b => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) { placed = [lx, ly]; _lab.push(box); break; }
     }
     if (!placed && !sel) continue;
