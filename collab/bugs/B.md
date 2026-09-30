@@ -46,3 +46,23 @@
 - 場所: js/terrain.js RAILS（柱が橋台の陸上区間 a-1..b+1 まで伸びる）× js/roads.js 'west' 取り付け（半径5.5m）
 - 症状: hollow→westEnd 166s（うち約100s は迂回）、bridgeE→bridgeW 140s、bridgeW→meadow 168s。`tools/agents/b/railhit.mjs` で当たるのは陸上の柱 #6/#19 と端の #18
 - B で試したこと: 道路線形の引き直し4案・北口の別分岐・look-ahead 短縮と橋前減速・柱の外側オフセット → いずれも根治せず。INBOX で E に柱の撤去/朝顔形を依頼
+
+### B-08 [B] レッカー（キャンプ地へ戻す）/再配置の後も、前の状態が残る（ハンドル切ったまま・TCS/スリップ警告が点灯）
+- 場所: js/vehicle.js setPose
+- 症状: 事故直後に「キャンプ地へ戻す」で移送すると、ハンドルが切れたまま、TCS ブレーキ・skid/stuck/submerged が残り HUD に「スリップ」「スタック」「渡河」が出続ける。ロックアップ/トルク値も残る
+- 原因: setPose が位置・速度・一部の車輪値しかリセットしていない
+- 修正: steer/ctrl.steer/throttle、車輪 tcs/slip/sat/steer、drive lock/torque/abs/tcs、skid/stuck/submerged/latG/lonG、scrapes キューをクリア
+- 検証: `tools/agents/b/rescue.mjs`（直後に全て 0、1秒後も前輪角 0）
+
+### B-09 [B] ウインチの固定点に到達できないと 120 秒間同じ方向に引っ張り続ける／ブロック中は固定点 -1 でクラッシュし得る
+- 場所: js/autopilot.js startWinch / winch
+- 原因: 最寄りノードが全て一時ブロック中だと best=-1 のまま `NODES[-1].x` で TypeError。固定点が木の裏などで到達不能でも 120 秒タイムアウトまで待つ
+- 修正: best<0 ならブロックを忘れて選び直し。60 秒で届かなければその固定点をブロックして別の固定点へ 1 回だけ切り替え
+- 検証: block.mjs（ウインチ3回で脱出）、drive/fall PASS
+
+### B-10 [A] B-02 の副作用：雨天で「揺すり」が効く前に即再計画→遠回り／ウインチ（雨の hollow→westEnd が FAIL, ウインチ7回）
+- 場所: js/autopilot.js stuck 判定
+- 症状: WET=1 の drive_test で hollow→westEnd FAIL（600s, winch 7）、cliff→wr2 484s（winch 3）。元コードは 92s/160s
+- 原因: 揺すり中の後退を「前進なし」と数える修正により、ぬかるみで1回揺すれば抜けられる場面でも毎回すぐ再計画→ブロック→遠回り
+- 修正: 揺すり後に前進で抜けたら stuckT を戻す。揺すりは2回まで許し、それでも駄目なら再計画（完全封鎖では従来どおりウインチへ）
+- 検証: 晴れ drive_test 全PASS（hollow→westEnd 80s, cliff→wr2 139s。元コードより速い）、WET=1 全PASS（93s / 162s）、block.mjs でウインチまで段階的に移行、physics 8/8、fall PASS
