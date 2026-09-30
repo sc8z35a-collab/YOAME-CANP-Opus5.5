@@ -287,7 +287,8 @@ function buildFireflies(scene) {
     vertexShader: `attribute float ph; uniform float uTime; varying float vB;
       void main(){ vec3 p = position + vec3(sin(uTime*0.3+ph)*1.2, sin(uTime*0.5+ph*2.)*0.4, cos(uTime*0.27+ph)*1.2);
         vB = pow(max(sin(uTime*1.3 + ph*3.), 0.), 6.);
-        vec4 mv = modelViewMatrix*vec4(p,1.); gl_Position = projectionMatrix*mv; gl_PointSize = 90./-mv.z; }`,
+        vec4 mv = modelViewMatrix*vec4(p,1.); gl_Position = projectionMatrix*mv; gl_PointSize = min(90./max(-mv.z, 0.01), 28.);
+        vB *= smoothstep(0.4, 1.5, -mv.z); }`, // (a firefly drifting past the lens became a 900px blob)
     fragmentShader: `uniform float uAmt; varying float vB; void main(){ float d=length(gl_PointCoord-.5); float a=1.-smoothstep(0.,.5,d);
         gl_FragColor = vec4(vec3(0.75,1.0,0.35)*3.0, a*a*vB*uAmt); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -396,7 +397,8 @@ export function updateWeather(dt, camera) {
   const moonI = 0.22 * G.night * moonUp * (1 - storm * 0.9);
   W.sun.intensity = sunI + moonI;
   W.sun.color.setRGB(1, lerp(0.95, 0.62, dusk), lerp(0.9, 0.42, dusk));
-  if (useMoon) W.sun.color.setRGB(0.62, 0.72, 1.0);
+  // cross-fade to moonlight instead of switching the colour in one frame at night = 0.5
+  W.sun.color.lerp(tmpC2.setRGB(0.62, 0.72, 1.0), smooth(0.3, 0.7, G.night));
   W.hemi.intensity = lerp(0.05, 1.0, G.daylight) * lerp(1, 0.7, storm) + 0.02;
   W.hemi.color.setRGB(lerp(0.3, 0.72, G.daylight), lerp(0.35, 0.8, G.daylight), lerp(0.55, 0.95, G.daylight));
 
