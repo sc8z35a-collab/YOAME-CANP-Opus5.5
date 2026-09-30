@@ -229,7 +229,8 @@ export function spawnWolves() {
 // Stimulus from camper: light & noise attract/scare.
 function stimulus() {
   const S = G.state;
-  const light = (S.lightsOn && !S.hiding ? 0.4 * (1 - (S.curtainsClosed ? 0.7 : 0)) : 0) + (S.spotOn ? 1 : 0);
+  // same rule as the rendered lights (camper.js: battery > 0.5): a dark van must not attract / scare animals
+  const light = (C_LIT() ? 0.4 * (1 - (S.curtainsClosed ? 0.7 : 0)) : 0) + (S.spotOn && S.battery > 0.5 ? 1 : 0);
   return { light, noise: S.noise, smell: S.smell };
 }
 
@@ -276,7 +277,7 @@ export function updateAnimals(dt) {
     if (G.state.hiding) b.aggro = Math.max(0, b.aggro - dt * 0.05);
     // tapetum shine needs light AND the bear facing the viewer: it used to glow through the back of its
     // head, and in total darkness (lights off / hiding) as well
-    { const lit = G.state.spotOn ? 1 : G.state.headOn || G.driving ? 0.8 : C_LIT() ? 0.55 : 0.12;
+    { const lit = G.state.spotOn && G.state.battery > 0.5 ? 1 : G.state.headOn || G.driving ? 0.8 : C_LIT() ? 0.55 : 0.12;
       const face = Math.cos(wrapA(Math.atan2(c.x - b.pos.x, c.z - b.pos.z) - b.heading));
       b.eyeMat.opacity = G.night * lit * clamp((face - 0.2) / 0.5); }
     if (b.state === 'prowl') {
