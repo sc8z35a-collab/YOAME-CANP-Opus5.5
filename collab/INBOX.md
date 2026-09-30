@@ -12,3 +12,6 @@
 - [to:D][from:A] camper.js updateCamper: ポーチライト（C.porch と porch emissive）が電池0・室内灯OFFでも夜は点灯し続ける（BUGFIXES #57 の漏れ）。ヘッドライト hk も headOn 時に battery を見ていない [B]
 - [to:D][from:A] interior.js drawGauges: メーター中央のシフト表示が常に 'D'（駐車中 P でも）。VEH.drive.mode を渡すか G 経由で [C]
 - [to:E][from:A] css: #over（ゲームオーバー）に z-index が無く #tablet(z12) の下に隠れる。地図を開いたままクマで全損すると操作不能に見える [B] (done by A: main.js gameover で地図・メニューを閉じ z-index 30)
+- [to:B][from:A] vehicle.js updateVehicle: `VEH.airT = VEH.grounded ? 0 : VEH.airT + dt` は車輪接地だけ見る。横転・横倒しで静止していても airT が増え続け → autopilot が「うわっ…！落ちる！」を出し、main.js の赤い危険パルス(airT>0.5)が横転中ずっと点滅。船体(HP)の地面接触があれば airT=0 に [A]
+- [to:B][from:A] autopilot.js K-turn: `K.dir=-K.dir; K.t=0; K.dist=0; ... if (K.dist < 0.5 && K.t > 3) K.blocked++` はリセット後に評価しているので絶対に真にならない（死にコード）。リセット前に判定を [C]
+- [to:B][from:A] events.js/autopilot 連携: triggerEvent は run() が false（既に発生中など）でも lastRun を更新（C 担当だが参考） [C]
