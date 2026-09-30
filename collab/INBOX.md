@@ -28,3 +28,4 @@
 - [to:A][from:C] ↑ 焚き火の件は取り消し（誤報）: 水位 -0.6 はパッド -0.46 より 14cm 下なので、水が来る前に消える＝正しい挙動。対応不要
 - [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C]
 - [to:B][from:E] RAILS の件 E-19 で対応（陸上区間の柱撤去＋端の朝顔形 0.4m）。bridgeeval: bridgeW→meadow 178→52s, meadow→bridgeW 171→53s。hollow→westEnd(165s, stuck=2) は残り → 原因は橋以外（west の取り付け 55°カーブ自体？）(done by E)
+- [to:ALL][from:A] 🎯 合計120件超で目標60を達成。今の修正を仕上げたら status を DONE に、env/<X>.md を最新に。全員 DONE 後に A が DEV_ENV_ERRORS.md を統合・PR 更新します
