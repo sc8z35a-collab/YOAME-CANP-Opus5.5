@@ -73,7 +73,8 @@ export function initAudio() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { A.on = false; c.suspend(); } else { c.resume(); A.on = true; }
   });
-  bus.on('thunder', ({ dist, delay }) => setTimeout(() => thunder(dist), Math.min(delay, 4) * 1000));
+  // (a strike while the tab is hidden must not queue up and all go off at once on return)
+  bus.on('thunder', ({ dist, delay }) => { if (A.on) setTimeout(() => A.on && thunder(dist), Math.min(delay, 4) * 1000); });
   bus.on('bearcharge', () => sfx('growl', 1));
   bus.on('animal', k => { if (k === 'wolf') setTimeout(() => howl(), 1500); if (k === 'bear') setTimeout(() => sfx('growl', 0.5), 4000); });
   bus.on('glasscrack', () => sfx('glass', 1));
@@ -103,7 +104,7 @@ function tone(dest, f0, f1, dur, type = 'sine', peak = 0.2, a = 0.01) {
   o.connect(g).connect(dest); env(g, t, a, peak, dur); o.start(t); o.stop(t + dur + a + 0.1);
 }
 
-function tick() { burst(A.inside, { f: 2500 + Math.random() * 3000, q: 4, d: 0.03 + Math.random() * 0.04, peak: 0.04 + Math.random() * 0.05 * G.rain }); }
+function tick() { if (G.camInside === false) return; burst(A.inside, { f: 2500 + Math.random() * 3000, q: 4, d: 0.03 + Math.random() * 0.04, peak: 0.04 + Math.random() * 0.05 * G.rain }); }
 
 function thunder(dist) {
   const near = clamp(1 - dist / 400);
@@ -214,10 +215,10 @@ export function updateAudio(dt) {
   if (!A.on) return;
   const N = A.nodes, t = A.ctx.currentTime, S = G.state;
   const set = (p, v, k = 0.3) => p.setTargetAtTime(v, t, k);
-  const r = G.rain;
-  set(N.roof.g.gain, r * 0.22); set(N.roof.f.frequency, 900 + r * 900);
-  set(N.roofLow.g.gain, r * 0.18);
-  set(N.rainOut.g.gain, r * 0.05);
+  const r = G.rain, inCab = G.camInside !== false; // on foot / chase cam: you hear the forest, not the roof
+  set(N.roof.g.gain, r * 0.22 * (inCab ? 1 : 0.15)); set(N.roof.f.frequency, 900 + r * 900);
+  set(N.roofLow.g.gain, r * 0.18 * (inCab ? 1 : 0.15));
+  set(N.rainOut.g.gain, r * (inCab ? 0.05 : 0.2));
   set(N.wind.g.gain, clamp(G.wind * 0.12 + Math.max(0, G.wind - 0.7) * 0.2)); set(N.wind.f.frequency, 300 + G.wind * 500, 0.8);
   const cd = G.camper ? Math.abs(G.camper.position.x - creekX(G.camper.position.z)) + Math.max(0, G.camper.position.y - G.waterLevel) * 2 : 20;
   // loudness relative to the normal creek surface (WATER_BASE); the old -1.55 base made it silent
@@ -237,7 +238,8 @@ export function updateAudio(dt) {
   A.kettleT = Math.max(0, (A.kettleT || 0) - dt);
   if (A.kettleT > 0 && A.kettleT < 6 && Math.random() < 0.3) tone(A.inside, 2400 + Math.random() * 200, 2600, 0.2, 'sine', 0.02 * (6 - A.kettleT) / 6);
   // hiding: outside gets quieter/muffled when curtains closed
-  set(A.outside.frequency, S.hiding ? 900 : 2400 - (G.state.curtainsClosed ? 800 : 0));
+  // walls muffle the outside only while you are inside (it stayed muffled when standing in the forest)
+  set(A.outside.frequency, !inCab ? 16000 : S.hiding ? 900 : 2400 - (G.state.curtainsClosed ? 800 : 0));
   // bear footsteps & breathing when close
   const b = Z.bear;
   if (b?.active && G.camper) {

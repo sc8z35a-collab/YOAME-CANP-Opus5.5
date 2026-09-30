@@ -42,7 +42,7 @@ export function initView(canvas) {
     const p = look.get(e.pointerId); if (!p) return;
     if (look.size === 1) {
       const k = 2.8 / window.innerHeight * (V.fov / 70);
-      if (V.cam === 'chase') { V.chase.yaw -= (e.clientX - p.x) * k; V.chase.pitch = clamp((V.chase.pitch || 0.35) + (e.clientY - p.y) * k, 0.05, 1.2); }
+      if (V.cam === 'chase') { V.chase.touchT = G.t; V.chase.yaw -= (e.clientX - p.x) * k; V.chase.pitch = clamp((V.chase.pitch || 0.35) + (e.clientY - p.y) * k, 0.05, 1.2); }
       else { PL.yaw += (e.clientX - p.x) * k; PL.pitch += (e.clientY - p.y) * k; }
     } else if (look.size === 2) {
       p.x = e.clientX; p.y = e.clientY;
@@ -69,7 +69,13 @@ export function updateView(dt, camera) {
   G.shakeV.set((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   if (V.cam === 'chase') {
     // third-person drone camera orbiting the van (world-up, so falls/rolls read clearly)
-    const c = cam.position, pitch = V.chase.pitch ?? 0.35, yaw = V.chase.yaw + cam.rotation.y * 0;
+    // while driving the drone swings back behind the van (3 s after the last manual orbit drag);
+    // parked it stays where the player put it
+    if (G.driving && G.t - (V.chase.touchT ?? -1e9) > 3 && Math.abs(G.driveSpeed || 0) > 1) {
+      const d = Math.atan2(Math.sin(camperHeading() - V.chase.yaw), Math.cos(camperHeading() - V.chase.yaw));
+      V.chase.yaw += d * (1 - Math.exp(-dt * 1.2));
+    }
+    const c = cam.position, pitch = V.chase.pitch ?? 0.35, yaw = V.chase.yaw;
     _t.set(c.x, c.y + 1.6, c.z);
     _p.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(V.chase.dist).add(_t);
     _p.y = Math.max(_p.y, heightAt(_p.x, _p.z) + 1.2);

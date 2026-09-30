@@ -133,17 +133,6 @@ function draw(ctx, W, H, full, dpr = 1) {
   ctx.setLineDash([3 * k, 3 * k]); ctx.strokeStyle = G.waterLevel > -1.2 ? '#ff6b5a' : '#6ec1ff'; ctx.lineWidth = rw * 0.6;
   for (const r of ROADS) { let on = false; ctx.beginPath(); r.s.forEach(q => { const [x, y] = SW(q.x, q.z); if (q.ford) { on ? ctx.lineTo(x, y) : ctx.moveTo(x, y); on = true; } else on = false; }); ctx.stroke(); }
   ctx.setLineDash([]);
-  // road names along the road (full map, zoomed in enough)
-  if (full && TAB.labels && z > 1.4) {
-    ctx.font = `600 ${11 * k}px "Noto Sans JP", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (const r of ROADS) {
-      const i = Math.floor(r.s.length * 0.42), a = r.s[i], b = r.s[Math.min(r.s.length - 1, i + 3)];
-      const [x0, y0] = SW(a.x, a.z), [x1, y1] = SW(b.x, b.z); let ang = Math.atan2(y1 - y0, x1 - x0); if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
-      if (x0 < 0 || y0 < 0 || x0 > W || y0 > H) continue;
-      ctx.save(); ctx.translate(x0, y0 - rw * 1.4); ctx.rotate(ang);
-      ctx.lineWidth = 3 * k; ctx.strokeStyle = 'rgba(20,16,10,.85)'; ctx.strokeText(r.name, 0, 0); ctx.fillStyle = '#fff4d8'; ctx.fillText(r.name, 0, 0); ctx.restore();
-    }
-  }
   // planned route (glowing cyan)
   if (AP.on && AP.path.length) {
     ctx.beginPath(); AP.path.slice(AP.idx).forEach((q, i) => { const [x, y] = SW(q.x, q.z); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
@@ -180,6 +169,28 @@ function draw(ctx, W, H, full, dpr = 1) {
     const [lx, ly] = placed || cand[0];
     ctx.lineWidth = 3.6 * k; ctx.strokeStyle = 'rgba(16,12,8,.9)'; ctx.strokeText(d.name, lx, ly);
     ctx.fillStyle = sel ? '#ffd79a' : '#fffaf0'; ctx.fillText(d.name, lx, ly);
+  }
+  // road names along the road (full map, zoomed in enough). Drawn after the destination labels and
+  // skipped where they would overlap one of them (they used to print straight through pin labels).
+  if (full && TAB.labels && z > 1.4) {
+    ctx.font = `600 ${11 * k}px "Noto Sans JP", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const r of ROADS) {
+      const tw = ctx.measureText(r.name).width, th = 11 * k;
+      for (const f of [0.42, 0.3, 0.55, 0.2, 0.68, 0.12, 0.8]) { // first spot along the road that is on screen and free
+        const i = Math.floor(r.s.length * f), a = r.s[i], b = r.s[Math.min(r.s.length - 1, i + 3)];
+        const [x0, y0] = SW(a.x, a.z), [x1, y1] = SW(b.x, b.z); let ang = Math.atan2(y1 - y0, x1 - x0); if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+        // offset beside the road along its normal (a fixed screen-up offset put the label ON north–south roads)
+        const off = rw / 2 + 9 * k, cx = x0 + Math.sin(ang) * off, cy = y0 - Math.cos(ang) * off;
+        const c = Math.abs(Math.cos(ang)), sn = Math.abs(Math.sin(ang));
+        const hw = (c * tw + sn * th) / 2 + 2 * k, hh = (sn * tw + c * th) / 2 + 2 * k, box = [cx - hw, cy - hh, cx + hw, cy + hh];
+        if (box[0] < 0 || box[1] < 0 || box[2] > W || box[3] > H) continue;
+        if (_lab.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
+        _lab.push(box);
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.lineWidth = 3 * k; ctx.strokeStyle = 'rgba(20,16,10,.85)'; ctx.strokeText(r.name, 0, 0); ctx.fillStyle = '#fff4d8'; ctx.fillText(r.name, 0, 0); ctx.restore();
+        break;
+      }
+    }
   }
   // camper: heading cone + arrow
   // screen: +x = east (+x world), +y = south (-z world). The arrow is drawn pointing to -y (up),

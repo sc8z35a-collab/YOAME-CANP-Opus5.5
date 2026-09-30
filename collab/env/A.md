@@ -30,3 +30,13 @@
 - 原因: 1GB RAM で chrome-headless-shell の GPU(swiftshader) プロセスが RSS 500MB + レンダラ 250MB。地形 480m×480m・森 1900 本・4096 シャドウマップ等で溢れる
 - 解決法: 本編撮影は避け、軽量世界 `tools/camper_preview.html`（RSS 約 300MB）で見た目確認。どうしても本編なら `q=m&nomap&noevents` + `--js-flags=--max-old-space-size=384`、他エージェントと時間をずらす。固まったら `pkill -f chrome-headless-shell`
 - 補足: Bash ツールの既定タイムアウトは 120 秒。重い処理は `run_in_background: true` + ログファイル
+
+### 7. リセットは繰り返し起こる（1セッションで2回以上）— 作った直後のツールが未 push で消えた
+- 症状: 新規作成した `tools/ui_harness.html` / `tools/uishot.py`（検証済み）が次のリセットで消失
+- 解決法: **新規ファイルは動作確認の前に一度 push**。再構築は1コマンド:
+  `git fetch -q && git checkout -q genspark_ai_developer && git pull -q; (pip install -q playwright pillow numpy; python3 -m playwright install chromium; sudo python3 -m playwright install-deps chromium) &` → http.server を background で起動
+
+### 8. コマンド実行中に作業ディレクトリが丸ごと作り直され `fatal: not a git repository` / `No such file`
+- 症状: 同じ Bash 呼び出しの途中から `collab/env/A.md: No such file or directory`、`fatal: not a git repository`。直後に見ると `/home/user/webapp` の mtime が新しく、中身は再クローン済み
+- 原因: 同じサンドボックスを共有する別エージェント（または環境の復旧処理）が webapp を削除→再クローンした。シェルの cwd は削除済みの inode を指したまま
+- 解決法: 毎回 `cd /home/user/webapp &&` を先頭に付け直す（古い cwd を使い続けない）。**共有サンドボックスでは `rm -rf webapp` 系の復旧を行わない**（`git fetch && git checkout && git pull` のみ）。未 push の変更は消えるので即 push

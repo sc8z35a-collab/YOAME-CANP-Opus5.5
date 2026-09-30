@@ -89,3 +89,83 @@
 - 修正: バッテリー切れで heater も停止
 
 ### C-20 [C] 未使用の G.rockV を毎回加算（デッドコード）→ 削除
+
+### C-21 [B] 雷の閃光ライトが常にワールド原点方向を照らす
+- 場所: weather.js buildWeather（boltLight）
+- 原因: DirectionalLight.target をシーンに追加しておらず matrixWorld が更新されない → strike() で target.position を動かしても無効
+- 修正: scene.add(bolt, bolt.target)
+
+### C-22 [B] 月が西から昇り東に沈む（太陽と逆）
+- 場所: weather.js updateWeather moonDir
+- 原因: 太陽は x=+cos（6時に +x=東）、月は x=-cos（18:30 に -x=西から出る）。node で時刻ごとの x を確認
+- 修正: 符号を揃え東から昇るように
+
+### C-23 [B] 星・ホタル・雨の波紋のシェーダが GLSL 未定義動作（smoothstep(edge0>edge1)）
+- 場所: weather.js starDome / buildFireflies / buildRain splash
+- 原因: GLSL ES 仕様では edge0>=edge1 の smoothstep は undefined。ANGLE/一部モバイルGPUで星やホタルが消える/四角くなる
+- 修正: 1.-smoothstep(0.,.5,d) 形式に
+
+### C-24 [A] ホタルが沢から外れた場所・地中・空中に出る
+- 場所: weather.js fireflies
+- 原因: キャンプ地付近の固定配置を z 方向にだけ 60m 刻みでずらしていた。蛇行する沢の x も地面の高さも追従しない
+- 修正: チャンクごとに creekX(z)/heightAt でワールド座標に再配置
+
+### C-25 [B] 車の真下（床下）に雨の波紋が出る
+- 場所: weather.js placeSplashes
+- 修正: 車体の足跡内の波紋を非表示
+
+### C-26 [B] 起動直後に沢が 50cm 増水していて1分かけて引く
+- 場所: core.js G.waterLevel=-1.55（旧仕様）→ 平常 WATER_BASE=-2.05
+- 修正: buildWeather で平常水位に初期化（core.js は A 担当なので weather 側で吸収）
+
+### C-27 [C] 不明な ?weather= で W.mode が不正値になり天気表示が空欄・target が崩れる
+- 修正: 未知の天気は clear に
+
+### C-28 [C] 霧の晴れ上がり文言が「雨が上がった」になる（C-18 と別経路: 霧→晴れ）
+- 修正: 遷移元ごとの文言（C-18 と同コミット系列）
+
+### C-29 [B] 駐車中のヘッドライトが電池を消費しない（一晩中点けっぱなしでも無料）
+- 場所: events.js powerTick
+- 修正: 駐車中は 0.15 消費。電池切れで消灯
+
+### C-30 [B] くもりが二度と晴れない
+- 場所: events.js EVENTS.clearup
+- 原因: cloudy の重み 0、stormroll は cloudy→rain のみ → くもりからは雨にしか行けない
+- 修正: cloudy も clearup 対象に
+
+### C-31 [B] メニューから発生させたイベントが拒否（発生中）でもクールダウンを消費
+- 場所: events.js triggerEvent（A が INBOX で指摘）
+- 修正: run() が false のときは lastRun を更新しない
+
+### C-32 [B] 走行中にシカ/クマ/オオカミの訪問イベントが起き、車の周囲の「輪」に出現→すぐ置いていかれる
+- 修正: 2m/s 超で走行中は動物イベントの重み 0
+
+### C-33 [B] 車外（歩行・追跡カメラ）でも屋根を叩く雨音とこもった外音のまま
+- 場所: audio.js updateAudio / tick
+- 修正: G.camInside で屋根音を絞り外の雨音を上げ、ローパスを開放
+
+### C-34 [B] 倒木メッシュの使い回しで、目の前の倒木が消えて別の場所に瞬間移動
+- 場所: events.js startTreeFall（C-16 の再修正）
+- 修正: 前の倒木から 60m 以上離れてから再利用
+
+### C-35 [B] 星が雲の上に描かれる（くもり/雨の夜でも雲を透かして星が見える）
+- 場所: weather.js starDome
+- 原因: 星 Points(renderOrder -8) は雲ドーム(-9)の後に加算描画され、星側は一様な (1-uCloud) でしか減衰しない
+- 修正: ドームと同じ雲被覆関数 cloudCov を星のシェーダでも評価して隠す
+
+### C-36 [B] 洪水の水面がマップ南北端に届かない
+- 場所: weather.js buildWater
+- 原因: 水面 420m 四方（中心 20,-10）＜ワールド 480m（z -250..230）。z<-220 / z>200 では沢が干上がって見える・洪水が来ない
+- 修正: WORLD から大きさと中心を計算
+
+### C-37 [C] タブを隠している間の雷がたまり、復帰時にまとめて鳴る
+- 修正: A.on のときだけ予約・発火
+
+### C-38 [B] 早送り中はイベント種別ごとのクールダウンが 30 倍長い
+- 場所: events.js updateEvents（lastRun は実時間 G.t、全体クールダウンはゲーム時間）
+- 修正: ゲーム時間 E.gt で統一
+
+### C-39 [B] 早送りしてもバッテリー・ソーラー充電・野外修理が等倍
+- 場所: events.js powerTick
+- 症状: 30倍で一晩を早送りしても電池がほぼ減らない
+- 修正: dt に timeMul を掛ける

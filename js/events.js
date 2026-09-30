@@ -238,7 +238,9 @@ function buildFallingTree(scene) {
 }
 export function startTreeFall() {
   // one tree at a time while it falls; once it has landed (or long after) another one may come down
-  if (!treeMesh || (E.fallen && !E.fallen.done && !(E.fallen.hit && E.fallen.t > 15))) return false;
+  // (the single tree mesh is reused, so the previous one may only be recycled once it is out of sight)
+  const F = E.fallen;
+  if (!treeMesh || (F && !F.done && !(F.hit && F.t > 15 && G.camper.position.distanceTo(F.base) > 60))) return false;
   removeObstacles('tree');
   const c = G.camper.position, a = Math.atan2(-VEH.fwd.x, -VEH.fwd.z);
   // while driving, the tree comes down across the road AHEAD (a road block the autopilot must handle)
@@ -301,25 +303,28 @@ function updateTree(dt) {
 // ---------------------------------------------------------------- power
 export function powerTick(dt) {
   const S = G.state;
-  const draw = (S.lightsOn && !S.hiding ? 0.05 : 0) + (S.spotOn ? 0.35 : 0) + (S.heater ? 0.12 : 0) + (S.cooking > 0 ? 0.1 : 0) + 0.01;
+  dt *= G.timeMul || 1; // fast-forward: a night passes in seconds, so battery / solar / repair must scale too
+  // headlights run off the house battery while parked (350 cd x2 used to be free all night)
+  const draw = (S.lightsOn && !S.hiding ? 0.05 : 0) + (S.spotOn ? 0.35 : 0) + (S.headOn && !G.driving ? 0.15 : 0) + (S.heater ? 0.12 : 0) + (S.cooking > 0 ? 0.1 : 0) + 0.01;
   const solar = G.daylight * (1 - G.cloud * 0.8) * 0.22;
   const gen = S.generator ? 0.5 : 0;
   S.battery = clamp(S.battery + (solar + gen - draw) * dt * 0.35, 0, 100);
   // slow field repair while parked safely (tools + generator power); never while driving or flooded
   if (!G.driving && (G.submerge || 0) < 0.3 && S.hull < 100) S.hull = Math.min(100, S.hull + dt * (S.generator ? 0.12 : 0.03));
-  if (S.battery <= 0.01 && (S.lightsOn || S.spotOn || S.heater)) { S.lightsOn = false; S.spotOn = false; S.heater = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
+  if (S.battery <= 0.01 && (S.lightsOn || S.spotOn || S.heater || S.headOn && !G.driving)) { S.lightsOn = false; S.spotOn = false; S.heater = false; if (!G.driving) S.headOn = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
 }
 
 // ---------------------------------------------------------------- director
 const EVENTS = {
-  deer: { w: () => (G.hour > 5 && G.hour < 9 || G.hour > 16 && G.hour < 20) ? 3 : 0.6, run: spawnDeer, cd: 60 },
-  bear: { w: () => (isNight() ? 1.6 : 0.4) * (1 + G.state.smell * 2), run: () => { const ok = spawnBear('prowl'); if (ok) warn('…何かが外を歩いている。重い足音', 'warn'); return ok; }, cd: 120 },
-  wolves: { w: () => isNight() && W.mode !== 'storm' ? 0.8 : 0, run: () => { const ok = spawnWolves(); if (ok) warn('遠吠えが近づいてくる…', 'warn'); return ok; }, cd: 110 },
+  deer: { w: () => G.driving && VEH.speed > 2 ? 0 : (G.hour > 5 && G.hour < 9 || G.hour > 16 && G.hour < 20) ? 3 : 0.6, run: spawnDeer, cd: 60 },
+  bear: { w: () => G.driving && VEH.speed > 2 ? 0 : (isNight() ? 1.6 : 0.4) * (1 + G.state.smell * 2), run: () => { const ok = spawnBear('prowl'); if (ok) warn('…何かが外を歩いている。重い足音', 'warn'); return ok; }, cd: 120 },
+  wolves: { w: () => !(G.driving && VEH.speed > 2) && isNight() && W.mode !== 'storm' ? 0.8 : 0, run: () => { const ok = spawnWolves(); if (ok) warn('遠吠えが近づいてくる…', 'warn'); return ok; }, cd: 110 },
   landslide: { w: () => G.rainAccum > 0.4 ? 1.4 * G.rainAccum : 0, run: startLandslide, cd: 240 },
   flood: { w: () => G.rainAccum > 0.35 ? 1.5 * G.rainAccum : 0, run: startFlood, cd: 260 },
   tree: { w: () => W.mode === 'storm' ? 0.9 : 0, run: startTreeFall, cd: 400 },
   stormroll: { w: () => W.mode === 'rain' ? 0.6 : W.mode === 'clear' || W.mode === 'cloudy' ? 0.35 : 0.1, run: () => { const from = W.mode, m = from === 'rain' ? 'storm' : from === 'storm' ? 'rain' : R() < 0.5 ? 'rain' : 'cloudy'; if (m === from) return false; setWeather(m); warn(from === 'storm' ? '風が弱まってきた。嵐は峠を越えたようだ' : { rain: '雨が降り出した…屋根を叩く音が心地いい', storm: '風が強まってきた。嵐になりそうだ', cloudy: '雲が広がってきた' }[m], 'info'); return true; }, cd: 150 },
-  clearup: { w: () => W.mode === 'storm' || W.mode === 'rain' ? 0.4 : W.mode === 'fog' ? 0.8 : 0, run: () => { const from = W.mode; setWeather(from === 'fog' || R() < 0.5 ? 'clear' : 'fog'); warn(W.mode === 'fog' ? '雨が上がり、霧が森を包み込んでいく' : from === 'fog' ? '霧が晴れてきた' : '雨が上がった。森が静かになる', 'info'); return true; }, cd: 150 },
+  // (cloudy had weight 0 here and stormroll only goes cloudy->rain, so an overcast sky could never clear)
+  clearup: { w: () => W.mode === 'storm' || W.mode === 'rain' || W.mode === 'cloudy' ? 0.4 : W.mode === 'fog' ? 0.8 : 0, run: () => { const from = W.mode; setWeather(from === 'fog' || R() < 0.5 ? 'clear' : 'fog'); warn(W.mode === 'fog' ? '雨が上がり、霧が森を包み込んでいく' : from === 'fog' ? '霧が晴れてきた' : '雨が上がった。森が静かになる', 'info'); return true; }, cd: 150 },
 };
 const lastRun = {};
 
@@ -359,8 +364,8 @@ export function triggerEvent(name) {
   }
   if (name === 'flood' && P.has('qa')) { startFlood(); E.flood.t = 40; G.waterLevel = E.flood.peak; return; }
   if (name === 'landslide' && P.has('qa')) { startLandslide(); return; }
-  e.run && e.run();
-  lastRun[name] = G.t;
+  const ok = e.run ? e.run() : false;
+  if (ok !== false) lastRun[name] = E.gt || 0; // a refused run (already in progress) must not reset the cooldown
 }
 
 export function updateEvents(dt) {
@@ -379,11 +384,14 @@ export function updateEvents(dt) {
   if (P.has('noevents')) return;
   // director
   E.cooldown -= dt * G.timeMul;
+  E.gt = (E.gt || 0) + dt * G.timeMul;
   if (E.cooldown > 0 || threat > 0) return;
-  const pool = Object.entries(EVENTS).filter(([k, e]) => !(lastRun[k] && G.t - lastRun[k] < e.cd)).map(([k, e]) => [k, e.w()]).filter(x => x[1] > 0);
+  // per-kind cooldowns in (scaled) game seconds like E.cooldown; with real G.t a 30x fast-forward kept
+  // the weather/animal cooldowns 30x too long compared to the in-game clock
+  const pool = Object.entries(EVENTS).filter(([k, e]) => !(lastRun[k] !== undefined && E.gt - lastRun[k] < e.cd)).map(([k, e]) => [k, e.w()]).filter(x => x[1] > 0);
   const tot = pool.reduce((a, b) => a + b[1], 0);
   if (!tot) { E.cooldown = 10; return; }
   let r = R() * tot;
-  for (const [k, w] of pool) { r -= w; if (r <= 0) { const ok = EVENTS[k].run(); if (ok !== false) lastRun[k] = G.t; break; } }
+  for (const [k, w] of pool) { r -= w; if (r <= 0) { const ok = EVENTS[k].run(); if (ok !== false) lastRun[k] = E.gt || 0; break; } }
   E.cooldown = 35 + R() * 50;
 }
