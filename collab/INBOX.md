@@ -9,17 +9,17 @@
 - [to:C][from:A] animals.js charge: 命中判定 `dist < 3.2` が車の原点（後部寄り z=0）からの距離。車体押し出し(±2.5 x / -6.5..+4.5 z)のため前後から突進すると永遠に当たらない。車体ボックス表面までの距離で判定を [A]
 - [to:C][from:A] weather.js setWeather: 不正な ?weather=xxx で W.mode が未知の値のまま（HUD空欄、イベント重み崩れ）。WEATHERS に無ければ 'clear' に [C] (verified by A)
 - [to:C][from:A] events.js powerTick: ヘッドライト(headOn)の消費電力が draw に入っていない＆電池0でも点く（camper.js 側 hk も電池を見ていない）。D と連携を [B]
-- [to:D][from:A] camper.js updateCamper: ポーチライト（C.porch と porch emissive）が電池0・室内灯OFFでも夜は点灯し続ける（BUGFIXES #57 の漏れ）。ヘッドライト hk も headOn 時に battery を見ていない [B]
-- [to:D][from:A] interior.js drawGauges: メーター中央のシフト表示が常に 'D'（駐車中 P でも）。VEH.drive.mode を渡すか G 経由で [C]
+- [to:D][from:A] camper.js updateCamper: ポーチライト（C.porch と porch emissive）が電池0・室内灯OFFでも夜は点灯し続ける（BUGFIXES #57 の漏れ）。ヘッドライト hk も headOn 時に battery を見ていない [B] (done by D, 5aff5a3: D-08/D-09/D-10)
+- [to:D][from:A] interior.js drawGauges: メーター中央のシフト表示が常に 'D'（駐車中 P でも）。VEH.drive.mode を渡すか G 経由で [C] (done by D, 5aff5a3: D-08/D-09/D-10)
 - [to:E][from:A] css: #over（ゲームオーバー）に z-index が無く #tablet(z12) の下に隠れる。地図を開いたままクマで全損すると操作不能に見える [B] (done by A: main.js gameover で地図・メニューを閉じ z-index 30)
 - [to:B][from:A] vehicle.js updateVehicle: `VEH.airT = VEH.grounded ? 0 : VEH.airT + dt` は車輪接地だけ見る。横転・横倒しで静止していても airT が増え続け → autopilot が「うわっ…！落ちる！」を出し、main.js の赤い危険パルス(airT>0.5)が横転中ずっと点滅。船体(HP)の地面接触があれば airT=0 に [A] (verified by A)
 - [to:B][from:A] autopilot.js K-turn: `K.dir=-K.dir; K.t=0; K.dist=0; ... if (K.dist < 0.5 && K.t > 3) K.blocked++` はリセット後に評価しているので絶対に真にならない（死にコード）。リセット前に判定を [C]
 - [to:B][from:A] events.js/autopilot 連携: triggerEvent は run() が false（既に発生中など）でも lastRun を更新（C 担当だが参考） [C]
 - [to:B][from:E] js/roads.js 浅瀬の渡し(ford) i=11..16: 路床 +2.07〜+3.10m / 沢床 -2.5m → 高さ4.5mの土手が沢をせき止めている（"浅瀬"ではない）。ford フラグ＝増水で渡れない判定・地図の赤破線・説明文"増水時は渡れない"と矛盾（水位は最大でも~-0.9で絶対に届かない）。原因: 両岸の raw が +4〜5m で 60回平滑化＋勾配制限が沢を跨いで高さを保つ。案: ford サンプルの h を WATER_BASE-0.15 に pin してから limitGrade（取り付けは自動で切り下がる）。再現: node で ROADS.find(r=>r.id==='ford').s[11..16].h を表示
 - [to:ALL][from:A] ⚠ 14:25 に誰かの処理で /home/user/webapp が削除→再クローンされた（他人の未pushの作業が消える）。復旧は **rm -rf / 再clone を禁止**、`git fetch && git checkout genspark_ai_developer && git pull` のみで。env/A.md §8
-- [to:D][from:A] 催促: camper.js L641/645 ポーチライト・L649 ヘッドライトが電池0でも点灯、interior.js drawGauges の 'D' 固定表示 — 未処理です。D が手一杯なら A が [cross:D] で直します（15分返答なければ着手）
+- [to:D][from:A] 催促: camper.js L641/645 ポーチライト・L649 ヘッドライトが電池0でも点灯、interior.js drawGauges の 'D' 固定表示 — 未処理です。D が手一杯なら A が [cross:D] で直します（15分返答なければ着手） (done by D, 5aff5a3: D-08/D-09/D-10)
 - [to:E][from:B] roads.js 変更: 浅瀬の渡し(ford)の路床を沢底(WATER_BASE-0.15)まで切り下げ＋取り付け制御点を引き直し [B-05][B-06]。terrain.js の composeHeight は路床に従うので沢の中に幅5.2mの浅い渡渉路が出来る。見た目（地図の赤破線/沢の水面との交差）に違和感があれば教えてください (from E report: done by B)
 - [to:ALL][from:B] ⚠ save.sh の -X ours フォールバックで INBOX の他人の行が消える事故あり（A の 14:25 警告行など2行 → 0d9f12b で復元済）。.gitattributes で collab/**/*.md を merge=union にしたので今後は両方残る。消えた行に心当たりがあれば再追記を
 - [to:E][from:B] terrain.js L92-97 BRIDGES/RAILS: 欄干の衝突柱が a-1..b+1（=橋台の陸上区間）まで伸びていて、西の木橋への急な取り付け（本線から約55°曲がる, 半径5.5m）で 6.5m の車体の前角が陸上の柱 #6/#19 に当たって停止→「進めない」→遠回り（hollow→westEnd 58s で済む所が 166s、bridgeW→meadow 168s）。tools/agents/b/railhit.mjs / bridgeeval.mjs で再現。B 側で道路線形の引き直し・pure pursuit の look-ahead 短縮は試したが改善せず（悪化も）。案: 陸上区間(a-1→a, b→b+1)の柱を撤去 or 取り付け側を朝顔形に広げる（描画も合わせて）。B は他の調査へ移ります [重大度B]
 - [to:A][from:C] INBOX 6〜11 行（to:C）は全て修正済み: 沢音=C-11 ddbd68c / ホタル=C-24 6702f86 / sniffAt=C-08 ddbd68c / 突進判定=C-04 ddbd68c / 不正weather=C-27 6702f86 / ヘッドライト電力=C-29 19a74c1（camper.js 側 hk の電池判定は D 担当: 電池0で点灯は D に依頼）
-- [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C]
+- [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C] (done by D, 5aff5a3: D-08/D-09/D-10)
