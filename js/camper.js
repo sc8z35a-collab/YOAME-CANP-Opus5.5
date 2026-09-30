@@ -1,6 +1,6 @@
 // Camper van: exterior shell (painted, muddy), windows with rain glass, full interior
 // (dinette, kitchen, bed, cab, alcove), warm lighting, fairy lights, curtains, wall clock.
-import { THREE, G, U, P, rng, fmtTime } from './core.js';
+import { THREE, G, U, P, rng, bus } from './core.js';
 import { tex, pbr, canvasTex } from './assets.js';
 import { makeGlass } from './glass.js';
 import { RoundedBoxGeometry } from './lib/addons/geometries/RoundedBoxGeometry.js';
@@ -246,16 +246,10 @@ export function buildCamper(scene) {
   const chrome = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2, metalness: 1 });
   const panel = pbr('ash_veneer', { color: 0xf0e4d2, repeat: 0.6, normalScale: 0.35 });   // light ash wall boards
   const ceilM = pbr('rough_linen', { arm: false, color: 0xeee8dc, repeat: 0.7, normalScale: 0.5 }); // padded headliner
-  const oak = pbr('oak_veneer_01', { repeat: 1, color: 0xd9b48a, normalScale: 0.6 });
-  const oakDark = pbr('oak_veneer_01', { repeat: 1, color: 0x8a5a35, normalScale: 0.6 });
   const floorM = pbr('laminate_floor_02', { repeat: 1, normalScale: 0.7, color: 0xe8dccb });
   floorM.map.repeat.set(1.3, 2.5); floorM.normalMap.repeat.set(1.3, 2.5); floorM.aoMap.repeat.set(1.3, 2.5);
-  const leather = pbr('leather_white', { color: 0x7a4a2a, repeat: 1, normalScale: 0.6 });
-  const linen = pbr('rough_linen', { arm: false, color: 0xf4eee3, repeat: 1.5 });
-  const fleece = pbr('knitted_fleece', { arm: false, color: 0xb8433a, repeat: 2 });
-  // backsplash: pastel sage tiles at real ~10cm scale (0.33m wide panel -> repeat set on the mesh UVs)
-  const tile = pbr('square_tiled_wall', { color: 0xc9ddd2, repeat: 1, rough: 0.35 });
-  for (const t of [tile.map, tile.normalMap, tile.aoMap]) t.repeat.set(2.2, 0.7);
+  // (v2 oak/leather/linen/fleece/tile materials removed: the v3 interior builds its own, these only cost
+  //  ~15 extra texture downloads on the loading screen)
   const steel = pbr('metal_plate', { metal: 1, color: 0xd8dde0, rough: 0.5, repeat: 0.5 });
   const darkPlastic = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.6 });
   const dashM = new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.75 });
@@ -444,7 +438,7 @@ export function buildCamper(scene) {
   }
 
   g.userData.wheels = C.wheels;
-  buildInterior(inner, { oak, oakDark, leather, linen, fleece, tile, steel, darkPlastic, dashM, panel, chrome });
+  buildInterior(inner, { steel, darkPlastic, dashM, panel, chrome });
   scene.add(g);
   return g;
 }
@@ -623,6 +617,9 @@ function occludeInterior(root) {
     m.needsUpdate = true;
   });
 }
+
+// the repair kit also replaces cracked panes (they used to stay shattered forever after 修理)
+bus.on('repair', () => { for (const m of Object.values(C.glass)) { const u = m.material.userData.u; if (u) u.uCrack.value = 0; } });
 
 export function setCurtains(v, instant = false) {
   C.curtainTarget = v;

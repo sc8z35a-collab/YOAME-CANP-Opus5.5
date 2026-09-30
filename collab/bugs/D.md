@@ -127,3 +127,19 @@
 - 修正: 初期表示は state.radio に従う。ラジオ画面を emissives に登録し ON=1 / OFF=0.25 / 電池0=0
 - 検証: cshot でヘッドユニット撮影（v_radio.jpg: OFF 時 "---" が暗く表示）
   - 追記: D-20 の編集で `clk.rotation.y` が行末コメント内に入って無効化（時計が裏向き＝文字盤が見えない）という自己退行を起こしていたので修正（v_clock2.jpg で確認）
+
+### D-29 [B] 起動時に未使用の v2 室内マテリアル6種を生成し、テクスチャ約15枚を余計にダウンロード
+- 場所: js/camper.js buildCamper()（oak/oakDark/leather/linen/fleece/tile）
+- 症状: ロード画面が長い（1GB/モバイルで顕著）。buildInterior に渡すが v3 は自前の M を使うので一切参照されない
+- 修正: 生成を削除（見た目変化なし）
+
+### D-30 [B] 「修理」で凹み・傷は直るがヒビの入った窓ガラスはそのまま
+- 場所: js/damage.js repairAll() / camper.js
+- 修正: repairAll が 'repair' を emit、camper.js で全ガラスの uCrack=0
+- 検証: node ハーネスで uCrack 1 → repairAll → 0
+
+### D-31 [A] 保存データの凹みが32個を超えるとデータテクスチャで傷スロットを上書き／壊れた保存で状態が半端に
+- 場所: js/damage.js loadDamage()
+- 原因: 読み込み時に ND/NS 上限を適用していない（texel 2*32 以降は傷の領域）。`j.s` が null 等だと dents 差し替え後に例外 → 傷は旧状態のまま
+- 修正: 要素を検証しつつ末尾 ND/NS 件に切り詰め
+- 検証: node で 40 件保存 → 旧コード 40 / 新コード 32

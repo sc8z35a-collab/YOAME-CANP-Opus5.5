@@ -118,7 +118,10 @@ export function updateDamage(dt, scrapes) {
   }
   if (saveT > 0 && (saveT -= dt) <= 0) save();
 }
-export function repairAll() { DMG.dents.length = 0; DMG.scratches.length = 0; DMG.dirty = true; }
+export function repairAll() {
+  DMG.dents.length = 0; DMG.scratches.length = 0; DMG.dirty = true;
+  bus.emit('repair'); // camper.js swaps the cracked panes too
+}
 function save() {
   try {
     const r = v => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
@@ -128,9 +131,14 @@ function save() {
 export function loadDamage() {
   try {
     const j = JSON.parse(localStorage.getItem('fc3d_dmg') || 'null'); if (!j) return;
+    // validate: corrupt / older saves must not overflow the fixed texel slots (dent #33 used to overwrite
+    // scratch #0 in the data texture) nor abort half-way (s: null threw after the dents were replaced)
+    const ok3 = a => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
     const V = a => new THREE.Vector3(...a);
-    DMG.dents = j.d.map(([c, n, r, depth]) => ({ c: V(c), n: V(n), r, depth }));
-    DMG.scratches = j.s.map(([a, b, w, k]) => ({ a: V(a), b: V(b), w, k }));
+    const d = (Array.isArray(j.d) ? j.d : []).filter(e => Array.isArray(e) && ok3(e[0]) && ok3(e[1]) && Number.isFinite(e[2]) && Number.isFinite(e[3])).slice(-ND);
+    const sc = (Array.isArray(j.s) ? j.s : []).filter(e => Array.isArray(e) && ok3(e[0]) && ok3(e[1]) && Number.isFinite(e[2]) && Number.isFinite(e[3])).slice(-NS);
+    DMG.dents = d.map(([c, n, r, depth]) => ({ c: V(c), n: V(n), r, depth }));
+    DMG.scratches = sc.map(([a, b, w, k]) => ({ a: V(a), b: V(b), w, k }));
     DMG.dirty = true;
   } catch (e) {}
 }
