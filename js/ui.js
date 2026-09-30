@@ -208,7 +208,7 @@ export function buildUI() {
   $('#ctxBtn').onclick = () => {
     initAudio();
     const f = focusSpot(G.camper); if (!f) return;
-    if (f.id === 'stand') standUp();
+    if (f.id === 'stand') { if (G.driving && Math.abs(G.driveSpeed || 0) > 4) return toast('走行中は座っていよう', 'warn'); standUp(); }
     else if (f.id === 'enter') goInside(G.camper);
     else if (f.door) { if (G.driving && VEH.speed > 0.8) return toast('走行中は外に出られない', 'warn'); goOutside(G.camper); }
     else if (f.tablet) openTablet();
