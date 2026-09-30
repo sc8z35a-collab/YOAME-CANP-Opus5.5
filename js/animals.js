@@ -355,7 +355,8 @@ export function scareAll(power = 1) {
   const b = Z.bear;
   if (b.active) {
     b.aggro = Math.max(0, b.aggro - 0.35 * power);
-    if (b.aggro < 0.3 || power > 1.2) { b.state = 'flee'; bus.emit('bearscared'); }
+    // (repeated horn presses re-emitted 'bearscared' and stacked the same toast / reset a leaving bear)
+    if ((b.aggro < 0.3 || power > 1.2) && b.state !== 'flee' && b.state !== 'leave') { b.state = 'flee'; b.sniffAt = null; b.leaveT = 0; bus.emit('bearscared'); }
   }
   for (const d of [...Z.deer, ...Z.fawns]) if (d.active && d.state !== 'flee') d.state = 'graze', d.t = 1e3, d.visit = 1e3; // leave
   for (const w of Z.wolves) if (w.active && w.state !== 'leave') { w.state = 'leave'; w.walkT = 0; }
