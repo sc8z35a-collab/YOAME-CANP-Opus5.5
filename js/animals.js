@@ -24,6 +24,7 @@ const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
 // grazing = speed 0 but steer() still turns toward target: aim 3 m ahead so the animal keeps its facing
 // (a target it has just overshot made arriving deer spin round 180 degrees)
 function holdHeading(a) { a.target.set(a.pos.x + Math.sin(a.heading) * 3, 0, a.pos.z + Math.cos(a.heading) * 3); }
+const C_LIT = () => G.state.lightsOn && !G.state.hiding && G.state.battery > 0.5;
 export const anyActive = list => list.some(a => a && a.active);
 
 // normalize a GLB so its height is `h` and feet sit at y=0, facing +z
@@ -273,7 +274,11 @@ export function updateAnimals(dt) {
     // aggression drivers: smell (food), low light hiding reduces, spotlight/horn scare
     if (st.smell > 0.3) b.aggro = Math.min(1, b.aggro + dt * 0.04 * st.smell);
     if (G.state.hiding) b.aggro = Math.max(0, b.aggro - dt * 0.05);
-    b.eyeMat.opacity = G.night * (G.state.spotOn ? 1 : 0.55);
+    // tapetum shine needs light AND the bear facing the viewer: it used to glow through the back of its
+    // head, and in total darkness (lights off / hiding) as well
+    { const lit = G.state.spotOn ? 1 : G.state.headOn || G.driving ? 0.8 : C_LIT() ? 0.55 : 0.12;
+      const face = Math.cos(wrapA(Math.atan2(c.x - b.pos.x, c.z - b.pos.z) - b.heading));
+      b.eyeMat.opacity = G.night * lit * clamp((face - 0.2) / 0.5); }
     if (b.state === 'prowl') {
       const ang = b.t * 0.12 + 1.0;
       const r = 14 - Math.min(8, b.t * 0.15);
