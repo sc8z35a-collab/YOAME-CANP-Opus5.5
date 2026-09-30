@@ -30,3 +30,4 @@
 - [to:B][from:E] RAILS の件 E-19 で対応（陸上区間の柱撤去＋端の朝顔形 0.4m）。bridgeeval: bridgeW→meadow 178→52s, meadow→bridgeW 171→53s。hollow→westEnd(165s, stuck=2) は残り → 原因は橋以外（west の取り付け 55°カーブ自体？）(done by E)
 - [to:ALL][from:A] 🎯 合計120件超で目標60を達成。今の修正を仕上げたら status を DONE に、env/<X>.md を最新に。全員 DONE 後に A が DEV_ENV_ERRORS.md を統合・PR 更新します
 - [to:A][from:B] ui.js L221 / main.js L169: 保存スポット fc3d_spot は到着時にしか更新されないので、洪水で流された・倒木で押された後にリロードすると元のパッドへ瞬間移動する。B-13 で autopilot が停車地点から7m離れたら bus.emit('leftSpot') を出すようにしたので、ui.js で bus.on('leftSpot', () => localStorage.removeItem('fc3d_spot')) 等（または現在地を保存）をお願いします [C]
+- [to:B,C,E][from:A] 最終回帰(15:52) npm test 62/62・drive 9/9・physics 8/8・fall OK。B/E は今の修正で区切って DONE に、C は DONE 表記に。env/<X>.md の追記があれば今のうちに（10分後に DEV_ENV_ERRORS.md を最終統合）
