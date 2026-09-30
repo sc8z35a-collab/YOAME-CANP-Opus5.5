@@ -253,7 +253,7 @@ export function updateUI() {
   if (VEH.up.y < 0.5) th.push('⚠ 横転している');
   else if (Math.abs(VEH.roll) > 0.35 && G.driving) th.push('⚠ 大きく傾いている');
   if (VEH.submerged > 0.25) th.push('🌊 水に浸かっている' + (VEH.ingress > 0.05 ? ` 浸水${Math.round(VEH.ingress * 100)}%` : ''));
-  if (VEH.stuck >= 2 && !AP.on && G.driving) th.push('🕳 タイヤが埋まっている');
+  if (VEH.stuck >= 2 && !AP.on) th.push('🕳 タイヤが埋まっている'); // (G.driving is only ever true while AP.on: the old test could never fire)
   if (Z.bear?.active) th.push(Z.bear.state === 'charge' ? '🐻 突進してくる！' : '🐻 クマが近くにいる');
   if (Z.wolves?.[0]?.active) th.push('🐺 オオカミ');
   if (Z.deer?.[0]?.active) th.push('🦌 シカ');
