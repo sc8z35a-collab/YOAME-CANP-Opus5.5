@@ -65,6 +65,7 @@ bash tools/save.sh "fix(vehicle): ..."    # add + commit + pull --rebase + push�
 | `python3 tools/cshot.py "<query>" out.jpg [w h]` | **キャンピングカーだけの軽量プレビュー世界**（`tools/camper_preview.html`）の撮影。数十秒 |
 | `python3 tools/page_shot.py` / `tools/ishot.py` / `tools/map_shot.py` | 既存の各種撮影 |
 | `tools/qa_errors.py` | コンソールエラー収集 |
+| `python3 tools/uishot.py -b name "open=menu&tab=car" ...` | **HUD/メニュー/地図の DOM だけ**を WebGL 無しで撮影（1枚5秒, 軽い）。`open=menu|sheet|tablet|drive|over` |
 | 画像を Read ツールで開く | 撮影した jpg/png をそのまま目視確認できる |
 
 ### camper_preview の主なパラメータ
@@ -93,3 +94,4 @@ bash tools/save.sh "fix(vehicle): ..."    # add + commit + pull --rebase + push�
 - [A] サンドボックスは予告なくリセットされる（作業ツリーが main 初期状態に戻る）。**修正1件ごとに save.sh**。復旧手順は collab/env/A.md §5。
 - [A] 軽量撮影: `python3 tools/cshot.py -b name "view=ext&night=1" ...`（http.server を 8080 で起動しておくこと）。
 - [A] **本編 index.html のヘッドレス撮影は 1GB でメモリ枯渇し、サンドボックス全体（他エージェントの git も）が固まる**。見た目確認は camper_preview を優先。本編が必要なら事前に `free -m` で available>600MB を確認し、`q=m` で1枚ずつ。
+- [A] サンドボックスは既に2回リセットされた。**新規ファイルも作ったら即 save.sh**（未 push のツールが2回消えた）。

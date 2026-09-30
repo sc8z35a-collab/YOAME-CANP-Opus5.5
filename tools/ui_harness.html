@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>ui harness</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../css/style.css"></head>
+<body style="background:#2b3a2a">
+<canvas id="c"></canvas><div id="ui"></div><div id="over" class="hidden"></div><div id="intro" class="hidden"></div>
+<script type="module">
+// DOM-only harness for HUD / menus / tablet (no WebGL rendering, no terrain mesh): cheap headless UI QA.
+//   tools/ui_harness.html?open=menu|sheet|tablet|drive|over&tab=car|play&sel=<dest>&dest=<dest>&frames=20&spot=<dest>
+import { G, P, bus, THREE } from '../js/core.js';
+const errs = []; window.__ERRS = errs;
+window.addEventListener('error', e => errs.push('ERR ' + e.message));
+window.addEventListener('unhandledrejection', e => errs.push('REJ ' + (e.reason?.message || e.reason)));
+const scene = new THREE.Scene(); G.scene = scene;
+const { buildCamper, C, FLOOR, ZF } = await import('../js/camper.js');
+buildCamper(scene);
+const { setPose, updateVehicle } = await import('../js/vehicle.js');
+const { SPOTS } = await import('../js/terrain.js');
+const s = SPOTS[P.get('spot') || 'hollow']; setPose(s.x, s.z, s.rot, 0.05); updateVehicle(0, C.group); C.group.updateMatrixWorld(true);
+const TB = await import('../js/tablet.js');
+TB.buildTablet(C.group, FLOOR, ZF);
+const { initPlayer, updatePlayer } = await import('../js/player.js'); initPlayer();
+const { buildUI, updateUI, toast } = await import('../js/ui.js');
+buildUI();
+const AP = await import('../js/autopilot.js');
+const open = P.get('open');
+if (open === 'menu') { document.getElementById('menuBtn').click(); if (P.has('tab')) document.querySelector(`#mtabs [data-tab="${P.get('tab')}"]`).click(); }
+if (open === 'sheet') document.getElementById('actToggle').click();
+if (open === 'tablet') { while (!TB.bakeStep(200)); TB.openTablet(); if (P.has('sel')) TB.TAB.sel = P.get('sel'); }
+if (open === 'drive') AP.engage(P.get('dest') || 'ridge');
+if (open === 'over') bus.emit('gameover', 'bear');
+toast('テスト通知：ハーネス起動', 'info', 60000);
+const N = +(P.get('frames') || 20);
+for (let i = 0; i < N; i++) {
+  G.frame++; G.dt = 1 / 30; G.t += 1 / 30;
+  if (G.driving) { AP.updateAutopilot(1 / 30); updateVehicle(1 / 30, C.group); }
+  updatePlayer(1 / 30, C.group, G.driving); TB.updateTablet(1 / 30); updateUI();
+  await new Promise(r => setTimeout(r, 10));
+}
+window.__INFO = { hud: document.getElementById('tm')?.textContent, ctx: document.getElementById('ctxBtn')?.textContent, errs };
+document.title = 'done';
+</script></body></html>
