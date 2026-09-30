@@ -11,4 +11,4 @@
 - [to:C][from:A] events.js powerTick: ヘッドライト(headOn)の消費電力が draw に入っていない＆電池0でも点く（camper.js 側 hk も電池を見ていない）。D と連携を [B]
 - [to:D][from:A] camper.js updateCamper: ポーチライト（C.porch と porch emissive）が電池0・室内灯OFFでも夜は点灯し続ける（BUGFIXES #57 の漏れ）。ヘッドライト hk も headOn 時に battery を見ていない [B]
 - [to:D][from:A] interior.js drawGauges: メーター中央のシフト表示が常に 'D'（駐車中 P でも）。VEH.drive.mode を渡すか G 経由で [C]
-- [to:E][from:A] css: #over（ゲームオーバー）に z-index が無く #tablet(z12) の下に隠れる。地図を開いたままクマで全損すると操作不能に見える [B]
+- [to:E][from:A] css: #over（ゲームオーバー）に z-index が無く #tablet(z12) の下に隠れる。地図を開いたままクマで全損すると操作不能に見える [B] (done by A: main.js gameover で地図・メニューを閉じ z-index 30)

@@ -61,3 +61,8 @@
 - 場所: js/ui.js toast
 - 原因: toastEl が null の間は捨てていた
 - 修正: 最大6件キューして buildUI 後に表示
+
+### A-14 [A] ゲームオーバー後もエンジン音・自動運転 HUD が続く／地図を開いているとゲームオーバー画面が隠れる
+- 場所: js/main.js bus 'gameover'
+- 原因: updateDrive は止まるが AP.on / G.driving が残る（エンジン音・HUD 表示が継続）。#over に z-index が無く #tablet(z12) やメニューの下に隠れて「もう一度」が押せない
+- 修正: gameover で disengage、タブレット/メニュー/シートを閉じ、#over を z-index 30 に

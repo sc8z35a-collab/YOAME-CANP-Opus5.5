@@ -151,9 +151,12 @@ function updateRock(dt) {
 
 bus.on('gameover', src => {
   if (G.state.over) return; G.state.over = true;
+  disengage(); // the engine / drive HUD / autopilot must stop with the game
+  import('./tablet.js').then(m => m.TAB.open && m.closeTablet()); // the map overlay (z-index 12) would hide the game-over panel
+  for (const id of ['menu', 'sheet', 'intro']) document.getElementById(id)?.classList.add('hidden');
   const why = { bear: 'クマの攻撃で車体が壊れた…', flood: '濁流に飲み込まれた…', rock: '土砂に埋もれた…', tree: '倒木が屋根を突き破った…' }[src] || '限界だ…';
   document.getElementById('over').innerHTML = `<div class="panel"><h2>${why}</h2><p>${G.day}日目 ${Math.floor(G.hour)}時 / 生き延びた夜: ${G.state.nightsSurvived}</p><button data-touch class="chip wide" onclick="location.reload()">もう一度</button></div>`;
-  document.getElementById('over').classList.remove('hidden');
+  const ov = document.getElementById('over'); ov.style.zIndex = 30; ov.classList.remove('hidden');
 });
 
 // ---------------------------------------------------------------- start
