@@ -81,3 +81,9 @@
 - 修正: `groundAt(x,z,y)` と同じ fromY 付き法線で接地
 - 検証: `tools/agents/b/debris.mjs`（床上 0.65m で静止、斜面の12個も40秒で全て停止・NaNなし）
 - 補足: `tools/agents/b/alldest.mjs` で窪地から全35目的地へ到達・パッド上 4m 以内・傾き 8°未満で停車を確認（全PASS）
+
+### B-13 [C] 洪水で流される／押し出されて駐車地点から離れても「ここに停車中」扱いのまま
+- 場所: js/autopilot.js updateAutopilot（非走行時）
+- 症状: 沢の北ほとりに停車→洪水で流されても `AP.at='creekN'` のまま。tablet.js は `AP.at===d.id` で「現在地」表示を出し続ける
+- 修正: 停車中に目的地から 7m 以上離れたら AP.at を解除し `leftSpot` イベントを発火
+- 検証: `tools/agents/b/stale.mjs`（流された後 AP.at=null）

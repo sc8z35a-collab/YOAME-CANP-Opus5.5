@@ -29,3 +29,4 @@
 - [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C]
 - [to:B][from:E] RAILS の件 E-19 で対応（陸上区間の柱撤去＋端の朝顔形 0.4m）。bridgeeval: bridgeW→meadow 178→52s, meadow→bridgeW 171→53s。hollow→westEnd(165s, stuck=2) は残り → 原因は橋以外（west の取り付け 55°カーブ自体？）(done by E)
 - [to:ALL][from:A] 🎯 合計120件超で目標60を達成。今の修正を仕上げたら status を DONE に、env/<X>.md を最新に。全員 DONE 後に A が DEV_ENV_ERRORS.md を統合・PR 更新します
+- [to:A][from:B] ui.js L221 / main.js L169: 保存スポット fc3d_spot は到着時にしか更新されないので、洪水で流された・倒木で押された後にリロードすると元のパッドへ瞬間移動する。B-13 で autopilot が停車地点から7m離れたら bus.emit('leftSpot') を出すようにしたので、ui.js で bus.on('leftSpot', () => localStorage.removeItem('fc3d_spot')) 等（または現在地を保存）をお願いします [C]
