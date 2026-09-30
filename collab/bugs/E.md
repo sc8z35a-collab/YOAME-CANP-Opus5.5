@@ -106,3 +106,9 @@
 - 症状: 本線から 55° 曲がる急な取り付けで、6.5m の車体前角が陸上区間の柱(#6/#19)に当たり「進めない」→ 再計画で遠回り。bridgeW→meadow 178s, meadow→bridgeW 171s
 - 修正: 柱は床板区間（両端サンプルが bridge）のみ＋両端 1m を 0.4m 外へ広げる（朝顔形）。描画の欄干も同じ区間に揃えた（見えない柱/柱の無い欄干の不一致も解消）
 - 検証: tools/agents/b/bridgeeval.mjs 修正前→後: bridgeW→meadow 178s→52s (rail3→0, stuck3→0), meadow→bridgeW 171s→53s, 他4ルートは同等（165/140/150/47s）。npm test 全 PASS
+
+### E-20 [B] 下草・岩の GLB「バリエーション詰め合わせ」を丸ごと1点に配置 → 植物が整列した列/格子で生え、描画数が3〜6倍
+- 場所: js/forest.js instanceGLB()（glbParts の全パーツを各点にインスタンス）
+- 症状: Poly Haven の fern_02 は 2×2 格子(1m間隔)、weed_plant_02 は 0.5m 間隔で5本一列、nettle 6本一列、shrub_03 4本一列、rock_moss_set_01 は6個の巨岩が 6m×4m に並ぶ。各配置点にこれが丸ごと置かれ、森の地面に「定規で並べた」ような植物の列・岩の隊列が見える。インスタンス数も 3〜6 倍（q=m でシダだけ 732点×4=2928）
+- 修正: `variants:true` で各点にバリエーションを1つだけ（原点に再センタリング）割当て。密度を保つためシダ・雑草の点数は約2倍に（それでも描画数は約 1/2〜1/3）
+- 検証: GLB のノード translation を解析（fern 4 / weed 5 / nettle 6 / shrub_03 4 / moss 6 / branches 3 バリエーション）、node で import 成功、npm test

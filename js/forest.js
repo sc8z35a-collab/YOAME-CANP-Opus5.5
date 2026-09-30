@@ -204,8 +204,22 @@ export async function buildForest(scene) {
 // works, and small plants are distance-culled (maxDist) every few frames.
 export const chunks = [];
 const CELL = 32, _tq = new THREE.Quaternion(), _ax = new THREE.Vector3();
-async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true, wind = 0, yOff = 0, tilt = 0.1, colliderR = 0, maxDist = 400, align = 0 } = {}) {
-  const parts = await glbParts(name);
+// variants: the Poly Haven plant/rock packs are several variants laid out side by side (fern 2x2 grid,
+// weeds 5 in a row 0.5m apart, nettles 6, shrub_03 4, moss rocks 6 over 6m). Instancing ALL parts at
+// every point planted each pack as a regimented row and multiplied density/draw cost by 3-6x.
+// With variants:true every point gets ONE variant, re-centred on its own origin.
+async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true, wind = 0, yOff = 0, tilt = 0.1, colliderR = 0, maxDist = 400, align = 0, variants = false } = {}) {
+  const all = await glbParts(name);
+  if (variants && all.length > 1) {
+    const v = new THREE.Vector3();
+    all.forEach(part => { part.geo.computeBoundingBox(); const b = part.geo.boundingBox; b.getCenter(v); part.geo.translate(-v.x, 0, -v.z); });
+    const groups = all.map(() => []); pts.forEach((p, i) => groups[Math.floor(((p.r * 7919) % 1) * all.length) % all.length].push(p));
+    for (let k = 0; k < all.length; k++) if (groups[k].length) await instanceParts(scene, [all[k]], groups[k], { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align });
+    return;
+  }
+  return instanceParts(scene, all, pts, { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align });
+}
+async function instanceParts(scene, parts, pts, { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align }) {
   const dummy = new THREE.Object3D();
   const cells = new Map();
   for (const p of pts) { const k = Math.floor(p.x / CELL) + ',' + Math.floor(p.z / CELL); (cells.get(k) || cells.set(k, []).get(k)).push(p); }
@@ -262,29 +276,29 @@ export function updateForest(cam) {
 async function buildUnderstory(scene, hi) {
   const k = hi ? 1 : 0.6;
   const shady = (x, z) => clearOf(x, z, 7.5, 2.6, 3.5);
-  const ferns = place(Math.round(1000 * k), 71, (x, z, R) => shady(x, z) && slopeAt(x, z) < 0.8 && R() < 0.5 + fbm(x * 0.04, z * 0.04) * 0.9);
+  const ferns = place(Math.round(1800 * k), 71, (x, z, R) => shady(x, z) && slopeAt(x, z) < 0.8 && R() < 0.5 + fbm(x * 0.04, z * 0.04) * 0.9);
   // dense ferns near the camper clearing edge (seen from windows)
   const ring = place(Math.round(220 * k), 72, (x, z) => { const d = Math.hypot(x, z); return d > 7.5 && d < 20 && shady(x, z); });
-  await instanceGLB(scene, 'fern_02', ferns.concat(ring), { scale: [0.9, 1.7], wind: 1.2, shadow: hi, maxDist: 55 });
+  await instanceGLB(scene, 'fern_02', ferns.concat(ring), { scale: [0.9, 1.7], wind: 1.2, shadow: hi, maxDist: 55, variants: true });
   const shrubs = place(Math.round(560 * k), 73, (x, z, R) => shady(x, z) && R() < 0.6);
-  await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi, maxDist: 70 });
-  await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi, maxDist: 70 });
-  const weeds = place(Math.round(900 * k), 74, (x, z) => {
+  await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi, maxDist: 70, variants: true });
+  await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi, maxDist: 70, variants: true });
+  const weeds = place(Math.round(1800 * k), 74, (x, z) => {
     if (trackDist(x, z) < 3.2) return false; // never on the road bed (pads sit right on the road)
     for (const s in SPOTS) { const d = Math.hypot(x - SPOTS[s].x, z - SPOTS[s].z); if (d > 5 && d < 15) return true; }
     const cd = Math.abs(x - creekX(z)); return cd > 3 && cd < 7;
   });
-  await instanceGLB(scene, 'weed_plant_02', weeds.filter((_, i) => i % 2), { scale: [0.8, 1.4], wind: 1.6, shadow: false, maxDist: 40 });
-  await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false, maxDist: 40 });
+  await instanceGLB(scene, 'weed_plant_02', weeds.filter((_, i) => i % 2), { scale: [0.8, 1.4], wind: 1.6, shadow: false, maxDist: 40, variants: true });
+  await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false, maxDist: 40, variants: true });
   const rocks = place(Math.round(160 * k), 75, (x, z, R) => clearOf(x, z, 9, 6, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
-  await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.1, maxDist: 120 });
+  await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.1, maxDist: 120, variants: true });
   // pebbles along the creek and the road verges — but not on the bed where the road fords the creek
   const small = place(Math.round(500 * k), 76, (x, z) => { const td = trackDist(x, z); return td > 2.8 && (Math.abs(x - creekX(z)) < 5.5 || td < 5); });
   await instanceGLB(scene, 'rock_07', small, { scale: [0.8, 2.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
   const logs = place(80, 77, (x, z) => clearOf(x, z, 10, 6, 4) && slopeAt(x, z) < 0.9);
   await instanceGLB(scene, 'dead_tree_trunk', logs, { scale: [1.2, 2.2], yOff: 0.05, tilt: 0.05, colliderR: 1, align: 1.45 });
   await instanceGLB(scene, 'tree_stump_01', place(90, 78, (x, z) => clearOf(x, z, 8, 5.5, 4)), { scale: [0.8, 1.3], yOff: -0.05, colliderR: 0.8 });
-  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 3.2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40 });
+  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 3.2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40, variants: true });
 }
 
 // Camp props around the parked camper (placed in world, relative to hollow spot)
