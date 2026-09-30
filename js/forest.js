@@ -228,6 +228,7 @@ async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true
         }
         dummy.updateMatrix();
         im.setMatrixAt(i, dummy.matrix);
+        if (colliderR) partColliders(part.geo, dummy.matrix, colliderR);
       });
       im.castShadow = shadow; im.receiveShadow = true;
       im.computeBoundingSphere();
@@ -235,7 +236,23 @@ async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true
       chunks.push({ m: im, x: cx, z: cz, d: maxDist + CELL * 0.7 });
     });
   }
-  if (colliderR) pts.forEach(p => colliders.push({ x: p.x, z: p.z, r: colliderR }));
+}
+// Colliders from the real footprint of each part (multi-rock sets have their boulders metres away from
+// the instance origin, and a 3-6m log is not a 1m circle): a row of circles along the part's long axis.
+const _c0 = new THREE.Vector3(), _cs = new THREE.Vector3();
+export function partColliders(geo, m, maxR) {
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const b = geo.boundingBox, ex = (b.max.x - b.min.x) / 2, ez = (b.max.z - b.min.z) / 2;
+  if (b.max.y - b.min.y < 0.12 && Math.max(ex, ez) < 0.4) return; // tiny: not an obstacle
+  const alongX = ex >= ez, half = alongX ? ex : ez, cy = (b.min.y + b.max.y) / 2;
+  const r0 = Math.min(alongX ? ez : ex, maxR * 1.6);
+  const n = Math.max(1, Math.round(half / Math.max(r0, 0.3)));
+  for (let k = 0; k < n; k++) {
+    const t = n === 1 ? 0.5 : k / (n - 1), off = -half + r0 + (2 * half - 2 * r0) * t;
+    _c0.set((b.min.x + b.max.x) / 2 + (alongX ? (n === 1 ? 0 : off) : 0), cy, (b.min.z + b.max.z) / 2 + (alongX ? 0 : (n === 1 ? 0 : off))).applyMatrix4(m);
+    const sc = _cs.setFromMatrixScale(m).x;
+    colliders.push({ x: _c0.x, z: _c0.z, r: Math.max(0.3, (n === 1 ? Math.max(ex, ez) : r0) * sc * 0.9) });
+  }
 }
 export function updateForest(cam) {
   if (G.frame % 10) return;
