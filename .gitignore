@@ -9,3 +9,4 @@ build/qa_errors_base.py
 build/shots/
 dist/
 node_modules/
+build/err.txt
