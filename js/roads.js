@@ -98,7 +98,14 @@ for (const d of DEF) {
   const joins = [];
   for (const end of [0, n - 1]) {
     const hit = nearestSample(s[end].x, s[end].z);
-    if (hit && hit.d < 4) { h[end] = hit.r.s[hit.i].h; pinned[end] = true; joins.push([end, hit]); }
+    if (hit && hit.d < 4) {
+      h[end] = hit.r.s[hit.i].h; pinned[end] = true; joins.push([end, hit]);
+      // while the branch still runs inside the other road's bed, follow that bed's height: otherwise the
+      // two beds side by side form a ridge / side slope at the junction that tips or grounds the van
+      for (let k = 1; k < 8; k++) { const j = end ? end - k : k; if (j <= 0 || j >= n - 1) break;
+        const q = nearestSample(s[j].x, s[j].z, [hit.r]); if (!q || q.d > ROAD_HALF * 1.3) break;
+        const qa = q.r.s[q.i]; h[j] = qa.h; pinned[j] = true; }
+    }
   }
   // destination pads on this road: flat windows
   const pads = [];
