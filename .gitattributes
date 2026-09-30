@@ -1,0 +1,3 @@
+# append-only shared logs: a concurrent append from two agents keeps both lines (never drops one side)
+collab/INBOX.md merge=union
+collab/**/*.md merge=union
