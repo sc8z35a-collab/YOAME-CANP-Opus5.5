@@ -162,8 +162,11 @@ export function setPose(x, z, rot, drop = 0.15) {
   _q.setFromUnitVectors(_v.set(0, 1, 0), n); VEH.q.premultiply(_q);
   VEH.pos.set(x, y, z).add(_v.copy(COM).applyQuaternion(VEH.q));
   VEH.v.set(0, 0, 0); VEH.w.set(0, 0, 0); VEH.airT = 0; VEH.sleeping = false; VEH.ingress = 0; VEH.acc = 0;
-  VEH.wheels.forEach(W => { W.w = 0; W.sink = 0; W.dig = 0; W.abs = 0; W.sx = W.sy = 0; W.t = SUS_LEN - COMP0; });
-  Object.assign(VEH.drive, { mode: 'P', gear: 1, rpm: IDLE, shiftT: 0 });
+  VEH.wheels.forEach(W => { W.w = 0; W.sink = 0; W.dig = 0; W.abs = 0; W.tcs = 0; W.slip = 0; W.sat = false; W.steer = 0; W.sx = W.sy = 0; W.t = SUS_LEN - COMP0; });
+  Object.assign(VEH.drive, { mode: 'P', gear: 1, rpm: IDLE, shiftT: 0, lock: false, torque: 0, abs: false, tcs: false });
+  // nothing of the old pose may leak into the new one (tow / respawn): wheels straight, no stale warnings
+  VEH.steer = 0; VEH.ctrl.steer = 0; VEH.ctrl.throttle = 0; VEH.skid = 0; VEH.stuck = 0; VEH.submerged = 0; VEH.latG = VEH.lonG = 0;
+  VEH.scrapes.length = 0; VEH.hullGround = 0;
 }
 
 const _em = new THREE.Vector3();
