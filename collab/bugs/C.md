@@ -221,3 +221,12 @@
 - `node tools/agents/animal_test.mjs`: 6 PASS。**修正前コードで同テスト → 雌ジカ 1.55m・正面から突進するクマが20秒当たらず charge のまま** を確認（C-04/C-43 の再現）
 - `tools/weather_check.html` + `tools/wshot.py`: 全天気でシェーダエラー 0
 - `npm test`: 全 PASS
+
+### C-52 [C] 電池切れで真っ暗な車でも、動物は「明かりがついている」と判断する
+- 場所: animals.js stimulus / アイシャイン
+- 原因: S.lightsOn だけを見ていた（描画は battery>0.5 で消灯）
+- 修正: 描画と同じ条件（C_LIT）
+
+### C-53 [B] 行き止まり（northEnd/southEnd はワールド端から45m）では動物が外周の山の中・世界の外に出現/逃走
+- 場所: animals.js ringPoint / flee・leave 目標
+- 修正: inWorld() で外周 24m 内側にクランプ（node で z=-205 に停車→クマ出現 z=-170 を確認）
