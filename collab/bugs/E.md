@@ -112,3 +112,16 @@
 - 症状: Poly Haven の fern_02 は 2×2 格子(1m間隔)、weed_plant_02 は 0.5m 間隔で5本一列、nettle 6本一列、shrub_03 4本一列、rock_moss_set_01 は6個の巨岩が 6m×4m に並ぶ。各配置点にこれが丸ごと置かれ、森の地面に「定規で並べた」ような植物の列・岩の隊列が見える。インスタンス数も 3〜6 倍（q=m でシダだけ 732点×4=2928）
 - 修正: `variants:true` で各点にバリエーションを1つだけ（原点に再センタリング）割当て。密度を保つためシダ・雑草の点数は約2倍に（それでも描画数は約 1/2〜1/3）
 - 検証: GLB のノード translation を解析（fern 4 / weed 5 / nettle 6 / shrub_03 4 / moss 6 / branches 3 バリエーション）、node で import 成功、npm test
+
+### E-21 [B] 地図の「ここへ自動運転」が拒否されても何も起きない（理由が見えない）
+- 場所: js/tablet.js #tabGo onclick
+- 症状: 現在地を選ぶ／車体が壊れている／ルート無しで押すと engage() が false。理由はトーストで出るが、トーストは #ui(z無し) 内で地図 #tablet(z12, 暗幕) の下に隠れて見えない → ボタンが壊れているように見える
+- 修正: 拒否時は AP.msg を地図パネル内に警告表示。現在地は最初から「現在地」表示で無効化
+- 検証: map_test.html で hollow 選択 → disabled=True「現在地」。強制クリックで「⚠ もう「沢沿いの窪地」にいる」がパネルに出る
+
+### E-22 [C] キャンバス #c が 100vw×100vh 指定で、モバイルのアドレスバー表示中に縦に引き伸ばされる
+- 場所: css/style.css #c
+- 原因: renderer は innerWidth/innerHeight で描画、CSS は 100vh（URLバーを含む大きい方の高さ）→ 縦方向に拡大表示＋下端が切れる。デスクトップでは 100vw がスクロールバー幅を含む
+- 修正: `width:100%;height:100%`（position:fixed; inset:0 と一致）。パネルの max-height も 92dvh を併記
+
+tools/dash_test.html を追加（車内ダッシュボード小画面の撮影用）

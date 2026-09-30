@@ -1,7 +1,9 @@
 :root{--safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);--glass:rgba(12,16,14,.46);--line:rgba(255,236,200,.16);--txt:#f4ead8;--amber:#ffb45e}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{margin:0;height:100%;overflow:hidden;background:#050807;color:var(--txt);font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c","Noto Sans JP",system-ui,sans-serif;touch-action:none;overscroll-behavior:none}
-#c{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+/* 100% (not 100vw/100vh): on mobile 100vh includes the collapsing URL bar while the renderer is sized to
+   innerHeight, so the canvas was stretched vertically (and 100vw adds the scrollbar width on desktop) */
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
 #ui{position:fixed;inset:0;pointer-events:none}
 #ui button,#ui .panel{pointer-events:auto}
 button{font:inherit;color:inherit;border:0;cursor:pointer}
@@ -20,7 +22,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .toast.danger{border-color:rgba(255,90,60,.8);background:rgba(60,10,6,.7);font-weight:700}
 #menu,#drivePanel,#over,#intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);pointer-events:auto}
 .hidden{display:none!important}
-.panel{background:rgba(16,20,18,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:20px;padding:16px 20px;max-height:92vh;overflow:auto;min-width:340px;max-width:80vw}
+.panel{background:rgba(16,20,18,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:20px;padding:16px 20px;max-height:92vh;max-height:92dvh;overflow:auto;min-width:340px;max-width:80vw}
 .panel h2,.panel h3{margin:0 0 10px;font-size:18px;color:var(--amber)}
 .row{display:flex;align-items:center;gap:12px;margin:6px 0}
 .row>span{width:64px;font-size:13px;opacity:.75}
@@ -163,3 +165,4 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #qSeg button,#rangeSeg button{min-height:40px}
 @media (max-height:380px){.gauge b{width:34px}#spot{display:none}.panel.sheet{gap:10px}.sgrid{grid-template-columns:repeat(2,50px)}.abtn{width:50px;height:50px}.abtn small{font-size:8.5px}.menu section{min-height:0}#sheet{padding-bottom:66px}}
 @media (max-width:760px){.sgrid{grid-template-columns:repeat(1,52px)}}
+.tstats span.twarn{background:rgba(255,120,60,.25);color:#ffd0a8}

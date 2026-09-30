@@ -285,7 +285,8 @@ function refreshPanel(rebuild = false) {
     info.innerHTML = `<b>${d.name}</b><small>${d.desc}</small>
       <div class="tstats"><span>📏 ${Math.round(km)} m</span><span>⛰ ${dh >= 0 ? '+' : ''}${Math.round(dh)} m</span><span>🛣 ${ROAD_NAMES[d.road]}</span></div>`;
     const going = AP.on && AP.dest === d.id; // already heading there: re-engaging would restart the route / progress bar
-    go.disabled = going; go.textContent = going ? '走行中' : 'ここへ自動運転';
+    const here = !AP.on && km < 4;              // engage() refuses this anyway ("もう…にいる")
+    go.disabled = going || here; go.textContent = going ? '走行中' : here ? '現在地' : 'ここへ自動運転';
   } else {
     info.innerHTML = AP.on ? `<b>▶ ${DESTS[AP.dest].name}</b><div class="tstats"><span>残り ${Math.round(AP.remain)} m</span><span>約 ${eta(AP.remain)}</span></div>`
       : '<b>目的地を選ぶ</b><small>地図の●をタップ、またはリストから選択</small>';
@@ -362,7 +363,14 @@ export function initTabletUI(root) {
   el.querySelector('#tabMe').onclick = () => { const p = originOf(new THREE.Vector3()); [TAB.cu, TAB.cv] = toMap(p.x, p.z); };
   el.querySelector('#tabLbl').onclick = () => { TAB.labels = !TAB.labels; refreshPanel(); };
   el.querySelectorAll('#tabSort button').forEach(b => b.onclick = () => { TAB.sort = b.dataset.sort; refreshPanel(true); });
-  el.querySelector('#tabGo').onclick = () => { if (TAB.sel && engage(TAB.sel)) { closeTablet(); bus.emit('seatForDrive'); } refreshPanel(); };
+  el.querySelector('#tabGo').onclick = () => {
+    if (!TAB.sel) return;
+    if (engage(TAB.sel)) { closeTablet(); bus.emit('seatForDrive'); refreshPanel(); return; }
+    // refused (already here / hull broken / no route): the toast is drawn UNDER the tablet backdrop, so
+    // show the reason in the panel itself — before, the button just did nothing
+    refreshPanel();
+    if (AP.msg) document.getElementById('tabInfo').insertAdjacentHTML('beforeend', `<div class="tstats"><span class="twarn">⚠ ${AP.msg}</span></div>`);
+  };
   el.querySelector('#tabStop').onclick = () => { disengage('自動運転を止めた'); refreshPanel(); };
   el.querySelector('#tabClose').onclick = closeTablet;
   bus.on('arrived', () => TAB.open && refreshPanel(true));
