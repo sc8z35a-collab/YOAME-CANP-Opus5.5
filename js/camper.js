@@ -227,7 +227,10 @@ export function drawRadio(text, alert = false) {
   if (!C.radio) return;
   const t = C.radio.material.emissiveMap, c = t.userData.ctx;
   c.fillStyle = alert ? '#200800' : '#081408'; c.fillRect(0, 0, 256, 64);
-  c.fillStyle = alert ? '#ff8a3a' : '#7dffa0'; c.font = 'bold 26px monospace'; c.fillText(text.slice(0, 14), 10, 42);
+  // shrink to fit: CJK glyphs are ~1em wide, so a 12-char warning at 26px (312px) ran off the 256px display
+  c.fillStyle = alert ? '#ff8a3a' : '#7dffa0'; let fs = 26; c.font = `bold ${fs}px monospace`;
+  const tw = c.measureText(text).width; if (tw > 236) { fs = Math.max(12, Math.floor(fs * 236 / tw)); c.font = `bold ${fs}px monospace`; }
+  c.textBaseline = 'middle'; c.fillText(text, 10, 32, 236);
   t.needsUpdate = true;
 }
 
@@ -504,7 +507,8 @@ function buildInterior(I, M) {
   add(clk); C.clock = clk; drawClock();
   clk.position.set(-0.176, F + 1.25, 1.2); // beside the mirror (z 0.77..1.07), not on it clk.rotation.y = Math.PI / 2;
   const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.113, 0.01, 10, 40), M.chrome); bezel.position.copy(clk.position); bezel.position.x += 0.004; bezel.rotation.y = Math.PI / 2; add(bezel);
-  drawRadio('FM 81.3 森');
+  drawRadio(G.state.radio ? 'FM 81.3 森' : '---'); // the radio starts switched off
+  C.emissives.push({ m: C.radio.material, base: 1.0, kind: 'radio' });
   // rug
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 1.3), new THREE.MeshStandardMaterial({ map: kilimTex(), roughness: 1, normalMap: tex('knitted_fleece_nor_gl', { repeat: 3 }) }));
   rug.rotation.x = -Math.PI / 2; rug.position.set(0.05, F + 0.004, -0.6); rug.receiveShadow = true; add(rug);
@@ -645,6 +649,7 @@ export function updateCamper(dt) {
     if (e.kind === 'lantern') k *= flick;
     if (e.kind === 'fairy') k *= 0.85 + 0.15 * Math.sin(G.t * 2.0);
     if (e.kind === 'porch') k = porchOn ? 1 : 0;
+    if (e.kind === 'radio') k = S.battery > 0 ? (S.radio ? 1 : 0.25) : 0;
     if (e.kind === 'dash') k = (G.driving ? 1 : 0.15) * (S.battery > 0 || G.driving ? 1 : 0);
     e.m.emissiveIntensity = e.base * k;
   }

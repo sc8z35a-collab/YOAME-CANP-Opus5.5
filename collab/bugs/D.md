@@ -117,3 +117,12 @@
 
 ### D-26 [C] bakeInteriorEnv を再実行するたび PMREM テクスチャがリーク
 - 修正: 旧 IN.env を dispose
+
+### D-27 [B] ラジオ表示の警報文がはみ出して切れる（「大雨警報 土砂災害に警戒」等）
+- 場所: js/camper.js drawRadio()
+- 原因: 26px 固定・slice(0,14)。CJK は 1字≒1em なので 12字で 312px > 256px キャンバス
+- 修正: measureText で幅に合わせて縮小（最小12px）＋ maxWidth 指定
+
+### D-28 [C] ラジオOFF（初期状態）でも "FM 81.3 森" が常時発光表示・電池0でも光る
+- 修正: 初期表示は state.radio に従う。ラジオ画面を emissives に登録し ON=1 / OFF=0.25 / 電池0=0
+- 検証: cshot でヘッドユニット撮影（v_radio.jpg: OFF 時 "---" が暗く表示）
