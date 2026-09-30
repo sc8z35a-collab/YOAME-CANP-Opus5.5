@@ -196,3 +196,28 @@
 
 ### C-46 検証: 天気専用軽量ページ tools/weather_check.html + tools/wshot.py を追加
 - 晴れ夜: 星・月OK / くもり夜: 星が雲に隠れる（C-35）/ 嵐+落雷: シェーダ8本エラーなし。水位初期値 -2.05（C-26）
+
+### C-47 [B] クマの目の反射（アイシャイン）が直径 3mm で見えない
+- 場所: animals.js Bear constructor
+- 原因: 目の球は fitModel の inner（GLB は高さ約10.2単位 → scale 0.113）の子。0.03 の球が 3.4mm に
+- 修正: 半径を親スケールで割り戻す（animal_test で世界半径 3.00cm を確認）
+
+### C-48 [B] クマの目が後頭部越しに光る／真っ暗でも光る
+- 修正: 光源（投光器・ヘッドライト・室内灯）と、クマが車の方を向いている度合いで不透明度を決定
+
+### C-49 [B] ホタルがカメラのすぐ前を横切ると画面いっぱいの緑の円になる
+- 場所: weather.js buildFireflies
+- 原因: gl_PointSize = 90/-z（z=0.1m で 900px）
+- 修正: 28px 上限＋1.5m 以内はフェード
+
+### C-50 [C] 夜 0.5 を境に太陽光の色が1フレームで青白く切り替わる
+- 修正: night 0.3→0.7 でクロスフェード
+
+### C-51 [C] ゲームオーバー後もクマの足音・鼻息と洪水の轟音が鳴り続ける
+- 原因: gameover で updateAnimals/updateEvents は止まるが updateAudio は動いたまま
+- 修正: S.over で停止
+
+### 検証まとめ（C）
+- `node tools/agents/animal_test.mjs`: 6 PASS。**修正前コードで同テスト → 雌ジカ 1.55m・正面から突進するクマが20秒当たらず charge のまま** を確認（C-04/C-43 の再現）
+- `tools/weather_check.html` + `tools/wshot.py`: 全天気でシェーダエラー 0
+- `npm test`: 全 PASS
