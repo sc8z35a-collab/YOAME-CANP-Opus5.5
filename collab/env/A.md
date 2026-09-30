@@ -40,3 +40,11 @@
 - 症状: 同じ Bash 呼び出しの途中から `collab/env/A.md: No such file or directory`、`fatal: not a git repository`。直後に見ると `/home/user/webapp` の mtime が新しく、中身は再クローン済み
 - 原因: 同じサンドボックスを共有する別エージェント（または環境の復旧処理）が webapp を削除→再クローンした。シェルの cwd は削除済みの inode を指したまま
 - 解決法: 毎回 `cd /home/user/webapp &&` を先頭に付け直す（古い cwd を使い続けない）。**共有サンドボックスでは `rm -rf webapp` 系の復旧を行わない**（`git fetch && git checkout && git pull` のみ）。未 push の変更は消えるので即 push
+
+### 9. 本編撮影は `q=m&nomap` 640x300 でも起動から約25秒で available 40MB まで落ちる
+- 症状: 起動直後に空きメモリが急落し、放置するとサンドボックス全体が固まる（他エージェントの git も巻き添え）
+- 解決法: `bash tools/memguard.sh &` を並走（available<60MB で chrome-headless-shell を自動 kill）。本編の見た目確認は `tools/camper_preview.html`（車体）・`tools/ui_harness.html`（DOM）・node テスト（ロジック）に分割して検証する
+
+### 10. 3回目のリセット（ユーザー中断のたびに発生）: 未 push のファイル作成＋コミットが消えた
+- 症状: `bash tools/save.sh` の実行中に中断 → 再開時は main 初期状態、memguard.sh と env 追記が消失
+- 解決法: 中断はいつでも起こる前提で「ファイル作成 → 即 save.sh（単独コマンド）」。長いコマンドチェーンにまとめない
