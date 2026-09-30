@@ -183,7 +183,7 @@ export function buildUI() {
   const canvas = document.getElementById('c');
   canvas.addEventListener('pointerdown', e => {
     if (jid !== null || e.clientX > window.innerWidth * 0.42 || TAB.open) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'mouse') return; // PC: WASD + mouse-look (view.js); the virtual stick is touch only
     jid = e.pointerId; jx = e.clientX; jy = e.clientY; initAudio();
     joy.style.left = jx + 'px'; joy.style.top = jy + 'px'; joy.classList.add('on');
   });
@@ -197,11 +197,12 @@ export function buildUI() {
   const jend = e => { if (e.pointerId !== jid) return; jid = null; PL.move.x = PL.move.y = 0; knob.style.transform = ''; joy.classList.remove('on'); };
   window.addEventListener('pointerup', jend); window.addEventListener('pointercancel', jend);
   // keyboard (PC dev convenience): WASD + mouse drag
-  const keys = new Set();
-  window.addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'KeyE') $('#ctxBtn').click(); if (e.code === 'KeyM') TAB.open ? closeTablet() : openTablet(); if (e.code === 'Escape') closeAll(); updKeys(); });
+  const keys = new Set(); let runToggle = false;
+  window.addEventListener('keydown', e => { keys.add(e.code); if (e.repeat) return updKeys(); if (e.code === 'KeyE') $('#ctxBtn').click(); if (e.code === 'KeyM') TAB.open ? closeTablet() : openTablet(); if (e.code === 'Escape') { closeAll(); if (TAB.open) closeTablet(); } updKeys(); });
+  window.addEventListener('blur', () => { keys.clear(); updKeys(); }); // alt-tab while holding W: don't walk forever
   window.addEventListener('keyup', e => { keys.delete(e.code); updKeys(); });
-  function updKeys() { if (jid !== null) return; PL.move.x = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0); PL.move.y = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0); PL.run = keys.has('ShiftLeft'); }
-  $('#runBtn').onclick = () => { PL.run = !PL.run; $('#runBtn').classList.toggle('on', PL.run); };
+  function updKeys() { if (jid !== null) return; PL.move.x = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0); PL.move.y = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0); PL.run = keys.has('ShiftLeft') || keys.has('ShiftRight') || runToggle; }
+  $('#runBtn').onclick = () => { runToggle = !runToggle; PL.run = runToggle; $('#runBtn').classList.toggle('on', runToggle); };
   // ---- context action (sit / lie / stand / door / tablet)
   $('#ctxBtn').onclick = () => {
     initAudio();

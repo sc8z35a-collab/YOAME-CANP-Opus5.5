@@ -28,3 +28,21 @@
 ### A-05 [C] `?t=` に不正値で時刻が NaN（空・照明・HUD が永久に壊れる）
 - 場所: js/core.js G.hour
 - 修正: isFinite チェック + 0..24 に正規化（t=25 等も翌日扱いで破綻しない）
+
+### A-06 [B] PC: 画面左側をマウスドラッグすると「歩く」と「見回す」が同時に動く
+- 場所: js/ui.js joystick pointerdown / js/view.js
+- 原因: view.js は mouse なら左半分も look に使うが、ui.js も mouse 左ボタンでジョイスティックを出していた
+- 修正: 仮想スティックはタッチ専用（PC は WASD）
+
+### A-07 [B] Esc で地図（タブレット）が閉じない
+- README の「Esc 閉じる」と不一致。closeAll がタブレットを閉じない → Esc で closeTablet も
+
+### A-08 [B] 🏃 走るトグルがキー入力のたびに解除される
+- 原因: updKeys が毎回 `PL.run = keys.has('ShiftLeft')` で上書き。ShiftRight 未対応
+- 修正: runToggle を保持して OR
+
+### A-09 [B] ウィンドウのフォーカスを失うとキーが押しっぱなし扱い（勝手に歩き続ける）
+- 修正: window blur で keys をクリア
+
+### A-10 [B] E / M を押し続けるとキーリピートで座る⇔立つ・地図の開閉が連打される
+- 修正: `e.repeat` は移動キー更新だけ
