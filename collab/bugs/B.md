@@ -41,3 +41,8 @@
 - 原因: 分岐が本線に鋭角（約35°）で取り付き、2本の路床の間の地形が 0.58m の尾根になっていた（`fordeval.mjs` の worst side ridge）
 - 修正: 取り付け制御点を本線に沿わせて引き直し（[7,-112],[2,-118],[-4,-122] → [8,-111],[1,-113],[-5,-118]）。尾根 0.58→0.17m、勾配 19.5%（上限内）
 - 検証: swEnd→fordE 76s（再計画なし）、fordW→creekS 163s→42s、drive/physics/fall/npm test 全PASS
+
+### B-07 [B]（調査のみ・E へ引き継ぎ）西の木橋の入口で欄干の柱に引っかかり、毎回「進めない」→遠回り
+- 場所: js/terrain.js RAILS（柱が橋台の陸上区間 a-1..b+1 まで伸びる）× js/roads.js 'west' 取り付け（半径5.5m）
+- 症状: hollow→westEnd 166s（うち約100s は迂回）、bridgeE→bridgeW 140s、bridgeW→meadow 168s。`tools/agents/b/railhit.mjs` で当たるのは陸上の柱 #6/#19 と端の #18
+- B で試したこと: 道路線形の引き直し4案・北口の別分岐・look-ahead 短縮と橋前減速・柱の外側オフセット → いずれも根治せず。INBOX で E に柱の撤去/朝顔形を依頼
