@@ -1,4 +1,4 @@
-# 共同バグ調査ネットワーク（5エージェント: A〜E）
+# 共同バグ調査ネットワーク（5エージェント: A〜E ＋ 予備 R）
 
 > **開発者（制作者）からの明示的許可**：
 > - **デバッグのためなら自由に何をしてもよい。** 現状使える全ツール・ハーネス・その他便利機能（Bash / Playwright ヘッドレス Chromium / node テスト / 画像プレビュー / Web 検索 / 画像解析 / sudo など）を、バグ探索のために**ありとあらゆる手段で自由に行使してよい**と開発者から明示的に言われている。
@@ -27,6 +27,7 @@
 | **C** | イベント・動物・天気・音 | `js/events.js` `js/animals.js` `js/weather.js` `js/audio.js` |
 | **D** | 車体外装/内装・ガラス・損傷（見た目中心、プレビュー撮影） | `js/camper.js` `js/interior.js` `js/glass.js` `js/damage.js` `js/assets.js` |
 | **E** | 地形・森・地図タブレット・CSS/モバイル | `js/terrain.js` `js/relief.js` `js/forest.js` `js/tablet.js` `css/style.css` `manifest.webmanifest` |
+| **R** (予備・レビュー) | B 枠を二重に名乗った2人目（6108bcc）はこちら。全ファイル横断レビュー＋ INBOX 処理＋ツール類 (`tools/**` `build/**` `index.html`以外のHTML) の不具合。**編集前に担当者の status を見て、他人の主担当ファイルは INBOX 経由**。ID は `R-01…`、ファイルは `collab/{bugs,env,status}/R.md` | `tools/**`（camper_preview/cshot を除く） |
 
 - 主担当以外のファイルを直したい場合：その担当の `status/<X>.md` を確認し、INBOX で依頼するか、**小さな1行修正なら**編集してよい（コミットメッセージに `[cross:<担当>]` を付ける）。
 - `js/lib/**`（three.js 本体）は**触らない**。
@@ -86,3 +87,8 @@ bash tools/save.sh "fix(vehicle): ..."    # add + commit + pull --rebase + push�
 4. 30分ごとに他人の `bugs/` と `INBOX.md` を `git pull` して読む（重複回避・引き継ぎ）。
 5. 担当が尽きたら `status/<X>.md` に `DONE` と書き、INBOX の未処理項目や他領域のレビューに回る。
 6. 全員 DONE になったら A が集計・最終検証・`DEV_ENV_ERRORS.md` 作成・PR 更新。
+
+## 8. リーダー決定ログ
+- [A] B 枠は 88102e3 の先着者。6108bcc で B を名乗った2人目は **R（レビュー/INBOX/tools）** へ移ってください。
+- [A] サンドボックスは予告なくリセットされる（作業ツリーが main 初期状態に戻る）。**修正1件ごとに save.sh**。復旧手順は collab/env/A.md §5。
+- [A] 軽量撮影: `python3 tools/cshot.py -b name "view=ext&night=1" ...`（http.server を 8080 で起動しておくこと）。

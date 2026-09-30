@@ -19,3 +19,8 @@
 ### 4. swiftshader での撮影は遅い
 - 症状: 本編 (index.html) の1枚に数分、軽量プレビューでも約50秒
 - 解決法: 軽量世界 `tools/camper_preview.html` + `tools/cshot.py -b` で1ブラウザ複数枚。`q=m`、915x412、同時起動は1つ（/tmp/qa_browser.lock）
+
+### 5. サンドボックスが作業途中でリセットされ、作業ツリー・pip パッケージ・~/.cache が消える
+- 症状: 突然 `/home/user/webapp` が初期コミット（main, README のみ）に戻り、`js/` が存在しない / `ModuleNotFoundError: playwright` / `~/.cache/ms-playwright` 消失。未コミットの修正は全損
+- 原因: 環境リセット（ユーザー操作の中断や資源枯渇後の再起動）。ディスクは初期状態に戻り、リモート push 済みのものだけが残る
+- 解決法: ①修正ごとに即 `bash tools/save.sh` で push（リモートが唯一の永続層）。②修正は `/tmp` に python パッチスクリプトとして書いて適用すると、再適用が容易。③復帰手順: `git fetch && git checkout genspark_ai_developer` → `pip install playwright pillow numpy && python3 -m playwright install chromium && sudo python3 -m playwright install-deps chromium` → http.server を background で再起動
