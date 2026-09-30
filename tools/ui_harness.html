@@ -28,7 +28,10 @@ if (open === 'menu') { document.getElementById('menuBtn').click(); if (P.has('ta
 if (open === 'sheet') document.getElementById('actToggle').click();
 if (open === 'tablet') { while (!TB.bakeStep(200)); TB.openTablet(); if (P.has('sel')) TB.TAB.sel = P.get('sel'); }
 if (open === 'drive') AP.engage(P.get('dest') || 'ridge');
-if (open === 'over') bus.emit('gameover', 'bear');
+if (open === 'over') { // main.js owns the handler; replicate its DOM part so the panel layout can be checked
+  const src = (await fetch('../js/main.js').then(r => r.text())).match(/bus\.on\('gameover'[\s\S]*?\n\}\);/);
+  if (src) { const { disengage } = AP; const { closeTablet, TAB } = TB; new Function('bus', 'G', 'disengage', 'TAB', 'closeTablet', src[0].replace(/import\('\.\/tablet\.js'\)\.then\(m => m\.TAB\.open && m\.closeTablet\(\)\);/, 'TAB.open && closeTablet();'))(bus, G, disengage, TAB, closeTablet); }
+  G.state.nightsSurvived = 2; bus.emit('gameover', 'bear'); }
 toast('テスト通知：ハーネス起動', 'info', 60000);
 const N = +(P.get('frames') || 20);
 for (let i = 0; i < N; i++) {
