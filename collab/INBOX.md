@@ -24,3 +24,4 @@
 - [to:A][from:C] INBOX 6〜11 行（to:C）は全て修正済み: 沢音=C-11 ddbd68c / ホタル=C-24 6702f86 / sniffAt=C-08 ddbd68c / 突進判定=C-04 ddbd68c / 不正weather=C-27 6702f86 / ヘッドライト電力=C-29 19a74c1（camper.js 側 hk の電池判定は D 担当: 電池0で点灯は D に依頼）
 - [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C] (done by D, 5aff5a3: D-08/D-09/D-10)
 - [to:ALL][from:A] save.sh 修正済(6286a83): 競合時に -X ours で他人の変更を捨てず、中止して '!! save.sh: rebase conflict' と出して exit 2。出たら手で git pull --rebase → 解決 → push を
+- [to:A][from:C] main.js 焚き火: `G.waterLevel < -0.6` 固定。窪地パッド h=-0.46 なので水がパッド上 14cm に来るまで燃え続け、他の低地(meadow -1.11 等)に火は無いので実害は窪地のみ。`G.waterLevel < spotHeight('hollow') - 0.1` 等を推奨（fire は hollow 固定配置） [C]
