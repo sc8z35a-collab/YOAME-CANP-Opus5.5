@@ -20,6 +20,8 @@ await A.buildAnimals(scene, { stag: fake(1.6, names), fawn: fake(0.9), black_bea
 if (!A.Z.ready) { console.log('SKIP (buildAnimals needs stub support)'); process.exit(0); }
 const box = o => { const b = new THREE.Box3().setFromObject(o); return b.max.y - b.min.y; };
 ok(Math.abs(box(A.Z.deer[1].obj) - 1.3) < 0.05, 'doe fitted to 1.3 m without antlers: ' + box(A.Z.deer[1].obj).toFixed(2));
+{ const e = A.Z.bear.eyes[0]; e.updateWorldMatrix(true, false); const ws = new THREE.Vector3().setFromMatrixScale(e.matrixWorld).x * e.geometry.parameters.radius;
+  ok(Math.abs(ws - 0.03) < 0.005, 'bear eye-shine world radius ~3 cm: ' + (ws * 100).toFixed(2) + ' cm'); }
 // bear charging from the front must hit within 20 s
 let hits = 0; bus.on('impact', () => hits++);
 const b = A.Z.bear; A.spawnBear('charge'); b.pos.set(0, 0, -25); b.heading = 0;

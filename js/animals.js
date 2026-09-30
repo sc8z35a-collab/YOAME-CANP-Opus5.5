@@ -139,7 +139,9 @@ class Bear extends Animal {
     // eye shine
     // eye-shine (tapetum reflection): additive, unfogged, bloom-able so it reads at distance in the dark
     const em = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.7, 0.9), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-    const eg = new THREE.SphereGeometry(0.03, 8, 6);
+    // the eyes are children of the fitted inner group, which is scaled ~0.11 (the GLB is ~10 units tall):
+    // a 3 cm sphere became 3 mm and the eye-shine was invisible. Compensate the parent scale.
+    const eg = new THREE.SphereGeometry(0.03 / obj.children[0].scale.x, 8, 6);
     this.eyes = [new THREE.Mesh(eg, em), new THREE.Mesh(eg, em)];
     // place eyes from the fitted bounds: near the front (snout) end, ~80% height
     obj.updateMatrixWorld(true);
