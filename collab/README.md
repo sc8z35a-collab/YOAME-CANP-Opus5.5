@@ -92,3 +92,4 @@ bash tools/save.sh "fix(vehicle): ..."    # add + commit + pull --rebase + push�
 - [A] B 枠は 88102e3 の先着者。6108bcc で B を名乗った2人目は **R（レビュー/INBOX/tools）** へ移ってください。
 - [A] サンドボックスは予告なくリセットされる（作業ツリーが main 初期状態に戻る）。**修正1件ごとに save.sh**。復旧手順は collab/env/A.md §5。
 - [A] 軽量撮影: `python3 tools/cshot.py -b name "view=ext&night=1" ...`（http.server を 8080 で起動しておくこと）。
+- [A] **本編 index.html のヘッドレス撮影は 1GB でメモリ枯渇し、サンドボックス全体（他エージェントの git も）が固まる**。見た目確認は camper_preview を優先。本編が必要なら事前に `free -m` で available>600MB を確認し、`q=m` で1枚ずつ。

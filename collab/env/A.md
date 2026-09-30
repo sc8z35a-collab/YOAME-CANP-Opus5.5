@@ -24,3 +24,9 @@
 - 症状: 突然 `/home/user/webapp` が初期コミット（main, README のみ）に戻り、`js/` が存在しない / `ModuleNotFoundError: playwright` / `~/.cache/ms-playwright` 消失。未コミットの修正は全損
 - 原因: 環境リセット（ユーザー操作の中断や資源枯渇後の再起動）。ディスクは初期状態に戻り、リモート push 済みのものだけが残る
 - 解決法: ①修正ごとに即 `bash tools/save.sh` で push（リモートが唯一の永続層）。②修正は `/tmp` に python パッチスクリプトとして書いて適用すると、再適用が容易。③復帰手順: `git fetch && git checkout genspark_ai_developer` → `pip install playwright pillow numpy && python3 -m playwright install chromium && sudo python3 -m playwright install-deps chromium` → http.server を background で再起動
+
+### 6. 本編 (index.html) のヘッドレス撮影でメモリ枯渇 → サンドボックス全体がスラッシング
+- 症状: `free -m` の available が 20MB、load average 11、`git push` や `pgrep` すら 100 秒以上かかる。Bash ツールが 120 秒でタイムアウト
+- 原因: 1GB RAM で chrome-headless-shell の GPU(swiftshader) プロセスが RSS 500MB + レンダラ 250MB。地形 480m×480m・森 1900 本・4096 シャドウマップ等で溢れる
+- 解決法: 本編撮影は避け、軽量世界 `tools/camper_preview.html`（RSS 約 300MB）で見た目確認。どうしても本編なら `q=m&nomap&noevents` + `--js-flags=--max-old-space-size=384`、他エージェントと時間をずらす。固まったら `pkill -f chrome-headless-shell`
+- 補足: Bash ツールの既定タイムアウトは 120 秒。重い処理は `run_in_background: true` + ログファイル
