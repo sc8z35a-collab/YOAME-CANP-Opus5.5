@@ -84,7 +84,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .tstats{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
 .tstats span{font-size:11px;background:rgba(255,255,255,.07);border-radius:8px;padding:2px 7px}
 .tabbtns{display:flex;gap:6px}.tabbtns .chip{flex:1;margin:0}
-.chip.go{background:rgba(79,209,255,.28);border-color:rgba(79,209,255,.8);font-weight:800;font-size:14px}
+.chip.go{background:rgba(79,209,255,.28);border-color:rgba(79,209,255,.8);font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
 .chip.go:disabled{opacity:.35}
 .chip.stop{background:rgba(255,90,60,.25);border-color:rgba(255,120,90,.7);font-weight:700;flex:0 0 auto}
 .seg{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;padding:2px}
@@ -95,7 +95,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .tli em{font-style:normal;font-size:11px;opacity:.6}
 .tli.on{background:rgba(255,180,94,.3);border-color:rgba(255,190,110,.6)}
 .tgrp{font-size:11px;color:#cdbb9a;margin:6px 4px 1px;font-weight:700}
-@media (max-height:380px){.tabside{width:min(34vw,250px)}#tabInfo small{font-size:10.5px}.tli{min-height:36px;font-size:11.5px}.tablegend{display:none}}
+@media (max-height:380px){.chip.go{font-size:12.5px}.tabside{width:min(34vw,250px)}#tabInfo small{font-size:10.5px}.tli{min-height:36px;font-size:11.5px}.tablegend{display:none}}
 
 /* ---- HUD v3 layout */
 .pill{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px}

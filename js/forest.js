@@ -269,7 +269,7 @@ export function partColliders(geo, m, maxR) {
   }
 }
 export function updateForest(cam) {
-  if (G.frame % 10) return;
+  if (G.frame % 10 && G.frame > 2) return; // also on the first frames (QA shots render only 6 frames: culling never ran)
   for (const c of chunks) c.m.visible = Math.hypot(c.x - cam.x, c.z - cam.z) < c.d;
 }
 
@@ -316,7 +316,8 @@ async function buildProps(scene) {
   camp.table = await put('outdoor_table_chair_set_01', 3.6, -1.8, 1.3);
   camp.generator = await put('portable_generator', 2.7, 5.2, 2.0);
   await put('metal_jerrycan', 3.3, 5.8, 0.4);
-  colliders.push({ x: s.x + 5.2, z: s.z + 3.2, r: 0.9 }, { x: s.x + 3.6, z: s.z - 1.8, r: 1.0 });
+  colliders.push({ x: s.x + 5.2, z: s.z + 3.2, r: 0.9 }, { x: s.x + 3.6, z: s.z - 1.8, r: 1.0 },
+    { x: s.x + 2.7, z: s.z + 5.2, r: 0.45 }, { x: s.x + 3.3, z: s.z + 5.8, r: 0.3 }); // generator + jerrycan (walked through before)
   // embers / fire light (lit at night by events/ui)
   const fl = new THREE.PointLight(0xff7a2a, 0, 12, 1.6);
   fl.position.set(s.x + 5.2, heightAt(s.x + 5.2, s.z + 3.2) + 0.6, s.z + 3.2);

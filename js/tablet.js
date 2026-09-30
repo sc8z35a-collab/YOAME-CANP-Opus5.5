@@ -172,7 +172,8 @@ function draw(ctx, W, H, full, dpr = 1) {
       if (!_lab.some(b => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) { placed = [lx, ly]; _lab.push(box); break; }
     }
     if (!placed && !sel) continue;
-    const [lx, ly] = placed || cand[0];
+    // selected label is forced: prefer a candidate that stays on screen even if it overlaps
+    const [lx, ly] = placed || cand.find(([cx, cy]) => cx - 3 * k >= 0 && cx + tw + 3 * k <= W && cy - fs * 0.62 >= 0 && cy + fs * 0.62 <= H) || cand[0];
     ctx.lineWidth = 3.6 * k; ctx.strokeStyle = 'rgba(16,12,8,.9)'; ctx.strokeText(d.name, lx, ly);
     ctx.fillStyle = sel ? '#ffd79a' : '#fffaf0'; ctx.fillText(d.name, lx, ly);
   }
