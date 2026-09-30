@@ -5,7 +5,7 @@ import { tex, pbr, canvasTex } from './assets.js';
 import { makeGlass } from './glass.js';
 import { RoundedBoxGeometry } from './lib/addons/geometries/RoundedBoxGeometry.js';
 import { buildInteriorV3, updateInterior, bakeInteriorEnv, IN } from './interior.js';
-import { patchPaint } from './damage.js';
+import { patchPaint, DMG } from './damage.js';
 import { mergeVertices } from './lib/addons/BufferGeometryUtils.js';
 export { bakeInteriorEnv, IN };
 
@@ -125,9 +125,11 @@ function paintMaterial() {
     roughnessMap: tex('metal_plate_arm'), normalMap: tex('metal_plate_nor_gl'), normalScale: new THREE.Vector2(0.08, 0.08),
   });
   m.onBeforeCompile = sh => {
-    sh.uniforms.uWet = U.uWet;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOP = position;');
+    sh.uniforms.uWet = U.uWet; sh.uniforms.uPaintInv = DMG.u.uCamInv;
+    // livery / mud are laid out in camper-local metres: most paint meshes (hood, nose, trims, posts)
+    // are offset by mesh.position, so object-space 'position' would smear mud over the whole hood
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP; uniform mat4 uPaintInv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOP = (uPaintInv * modelMatrix * vec4(position, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vOP; uniform float uWet;
       float ph(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
@@ -283,6 +285,7 @@ export function buildCamper(scene) {
   for (const h of WINDOWS.filter(x => x.wall === 'B' || x.wall === 'F')) {
     const fr = frameRing(h.w, h.h, rubber);
     fr.position.set(h.c[0], h.c[1], h.wall === 'B' ? ZB + 0.005 : ZF - 0.005);
+    if (h.wall === 'F') fr.rotation.y = Math.PI; // extrude outward (-z), not back into the wall skin
     g.add(fr);
   }
   // roof (skin + ceiling)
@@ -336,7 +339,7 @@ export function buildCamper(scene) {
   const spare = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.22, 28), new THREE.MeshStandardMaterial({ color: 0x1e3a30, roughness: 0.55 }));
   spare.rotation.x = Math.PI / 2; spare.position.set(-0.45, 1.25, ZB + 0.13); spare.castShadow = true; g.add(spare);
   // roof A/C unit & vent
-  g.add(rbox(0.7, 0.24, 0.9, new THREE.MeshStandardMaterial({ color: 0xdedbd2, roughness: 0.5 }), 0, ROOF + 0.14, -1.9 + 0.95, 0.08, 3));
+  g.add(rbox(0.7, 0.24, 0.9, new THREE.MeshStandardMaterial({ color: 0xdedbd2, roughness: 0.5 }), 0, ROOF + 0.14, -2.1, 0.08, 3)); // clear of skylight sky1 (z -1.5..-0.8)
   // soft contact shadow under the chassis (blob; sells grounding on soft forest floor)
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 7.6), new THREE.MeshBasicMaterial({
     alphaMap: blobShadowTex(), transparent: true, depthWrite: false, opacity: 0.75, color: 0x000000,
@@ -535,7 +538,7 @@ function buildInterior(I, M) {
           float folds = 7.0 / aW;                                   // ~folds per metre of flat width
           float depth = mix(0.035, 0.012, uCurtain);               // deeper folds when bunched
           float ph = position.x * folds * 6.2832;
-          float hemY = (0.5 - uv.y);                                // 0 top .. 1 bottom
+          float hemY = (1.0 - uv.y);                                // 0 top .. 1 bottom
           transformed.x = x;
           transformed.z += sin(ph) * depth * (0.7 + 0.3 * hemY) + uSway * hemY * hemY * 0.03
                          + sin(uTime * 1.3 + position.y * 3.0 + position.x * 5.0) * 0.002;

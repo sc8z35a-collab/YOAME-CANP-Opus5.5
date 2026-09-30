@@ -726,7 +726,7 @@ export function bakeInteriorEnv(renderer, scene, camperGroup) {
 
 export function updateInterior(dt, S, lightLevel) {
   // steering wheel follows the front-wheel steer angle (~14:1 → about ±1.5 turns lock to lock)
-  if (IN.wheel) IN.wheel.rotation.z += ((-(G.steerAngle || 0) * 9) - IN.wheel.rotation.z) * Math.min(1, dt * 10);
+  if (IN.wheel) IN.wheel.rotation.z += (((G.steerAngle || 0) * 9) - IN.wheel.rotation.z) * Math.min(1, dt * 10);
   IN.gT = (IN.gT || 0) - dt;
   if (IN.gT <= 0 && IN.gauges) {
     IN.gT = 0.1;

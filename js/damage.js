@@ -124,6 +124,7 @@ export function loadDamage() {
 const GLSL_COMMON = /* glsl */`
   #define ND ${ND}
   #define NS ${NS}
+  #define DENT_MAX 0.017
   uniform highp sampler2D uDmg; uniform int uNd; uniform int uNs;
   vec4 dmgT(int i) { return texelFetch(uDmg, ivec2(i, 0), 0); }
   uniform mat3 uCamRot; uniform mat4 uCamInv;
@@ -138,7 +139,11 @@ const GLSL_DENT = /* glsl */`
       vec3 q = p - A.xyz; float r = A.w;
       float f = exp(-dot(q, q) / (r * r * 0.5));
       d += B.xyz * B.w * f; }
-    return d;
+    // the painted skin is only 2-3cm thick and the interior wall panel sits right behind it: a deeper
+    // push would drive the skin through that panel and show it from outside as a dark disk.
+    // Soft-clamp the geometric depth; the shading (dent slope + crumples) sells the rest.
+    float L = length(d);
+    return L > 1e-5 ? d * (DENT_MAX * tanh(L / DENT_MAX) / L) : d;
   }
 `;
 export function patchPaint(sh) {
@@ -201,6 +206,8 @@ export function patchPaint(sh) {
       normal = normalize(normal + (gv - normal * dot(gv, normal)) * .6);
       #include <clearcoat_normal_fragment_begin>
       clearcoatNormal = normalize(clearcoatNormal + (gv - clearcoatNormal * dot(gv, clearcoatNormal)) * .6);`)
-    .replace('#include <clearcoat_fragment>', `#include <clearcoat_fragment>
-      material.clearcoat *= 1. - max(gScr, gScuff * .6);`);
+    .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+      #ifdef USE_CLEARCOAT
+        material.clearcoat *= 1. - max(gScr, gScuff * .6);   // bare / scuffed paint loses its lacquer
+      #endif`);
 }
