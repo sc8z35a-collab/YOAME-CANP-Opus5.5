@@ -88,7 +88,7 @@ export function engage(destId) {
   const p = originOf(_o);
   if (Math.hypot(p.x - d.x, p.z - d.z) < 4 && VEH.speed < 0.5) { say('もう「' + d.name + '」にいる'); return false; }
   if (G.state.hull < 3) { say('車体が壊れて動かない…（しばらく休むと少し直る）', 'danger'); return false; }
-  AP.dest = destId; AP.on = true; AP.mode = 'drive'; AP.stuckT = 0; AP.stuckN = 0; AP.slow = false; AP.at = null; AP.winchRetry = false;
+  AP.dest = destId; AP.on = true; AP.mode = 'drive'; AP.stuckT = 0; AP.stuckN = 0; AP.slow = false; AP.at = null; AP.winchRetry = false; AP.rockN = 0;
   AP.blockedNodes.clear();
   G.driving = true; G.state.noise = Math.max(G.state.noise, 0.8);
   if (VEH.up.y < 0.7) { AP.mode = 'right'; AP.rightT = 0; say('車体を起こしてから、ゆっくり発進する', 'warn'); }
@@ -275,13 +275,19 @@ export function updateAutopilot(dt) {
   if (G.rangeMode && G.rangeMode !== 'auto') { c.range = G.rangeMode; AP.rangeT = 0; }
   else if (want !== c.range) { AP.rangeT = (AP.rangeT || 0) + dt; if (AP.rangeT > (want === '2H' ? 6 : 0.5)) { AP.rangeT = 0; if (want === '4L' && Math.abs(spd) > 2.4) { c.throttle = 0; c.brake = 0.4; } else c.range = want; } } else AP.rangeT = 0;
   // ---- stuck: back up with opposite lock, mark ahead as blocked, replan; repeated -> winch
-  // (while rocking back, the reverse motion itself must not count as progress)
-  if (AP.stuckT > 4 || (Math.abs(spd) < 0.35 && vt > 1)) AP.stuckT += dt; else AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
+  // (while rocking back, reversing is not progress; driving forward again afterwards is)
+  const rocking = AP.stuckT > 4 && AP.stuckT < 6.5;
+  if (rocking || (Math.abs(spd) < 0.35 && vt > 1)) AP.stuckT += dt;
+  else if (spd > 0.35 || AP.stuckT <= 4) AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
   if (Math.abs(spd) > 2) { AP.goodT = (AP.goodT || 0) + dt; if (AP.goodT > 20) { AP.goodT = 0; AP.stuckN = 0; } }
   // stuck: rock the van (reverse a little with opposite lock, then go again) like a real driver
   if (AP.stuckT > 4 && AP.stuckT < 6.5) { c.throttle = -0.45; c.steer = -c.steer; c.brake = 0; }
+  // a rock or two usually frees a van that is only bogged down; after that it really is blocked
+  if (AP.stuckT >= 6.5 && (AP.rockN || 0) < 2) { AP.rockN = (AP.rockN || 0) + 1; AP.stuckT = 0; }
+  if (Math.abs(spd) > 2) AP.rockGood = (AP.rockGood || 0) + dt; else AP.rockGood = 0;
+  if (AP.rockGood > 4) AP.rockN = 0;
   if (AP.stuckT >= 6.5) {
-    AP.stuckT = 0; AP.stuckN = (AP.stuckN || 0) + 1;
+    AP.stuckT = 0; AP.rockN = 0; AP.stuckN = (AP.stuckN || 0) + 1;
     for (let i = AP.idx; i < Math.min(path.length, AP.idx + 8); i++) if (path[i].n >= 0) AP.blockedNodes.set(path[i].n, G.t + 90);
     if (AP.stuckN > 2) { AP.stuckN = 0; return startWinch(); }
     plan(true); say('進めない…別の道を探す', 'warn');
