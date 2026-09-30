@@ -454,6 +454,7 @@ function frameRing(w, h, mat, t = 0.04) {
 }
 
 // ---------------------------------------------------------------- interior
+const CUR_INSET = 0.195;
 function buildInterior(I, M) {
   const F = FLOOR;
   const add = (...o) => { o.forEach(x => I.add(x)); return o[0]; };
@@ -558,13 +559,19 @@ function buildInterior(I, M) {
       const geo = new THREE.PlaneGeometry(pw, ch, Math.max(24, Math.round(pw * 90)), 6);
       // anchor at x=0 (window edge), extend toward the centre; mirror 2nd panel
       geo.translate(pw / 2, 0, 0);
-      if (k === 1) geo.scale(-1, 1, 1);
+      if (k === 1) { // mirror the 2nd panel; scale(-1) reverses the winding, so flip it back (otherwise the
+        // front face points at the wall and DoubleSide shades it with an inverted normal: a near-black twin)
+        geo.scale(-1, 1, 1); const ix = geo.index.array;
+        for (let t = 0; t < ix.length; t += 3) { const q = ix[t + 1]; ix[t + 1] = ix[t + 2]; ix[t + 2] = q; }
+      }
       geo.setAttribute('aW', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(pw), 1));
       const m = new THREE.Mesh(geo, curtainM); m.castShadow = true; m.receiveShadow = true;
       m.frustumCulled = false; // vertex shader moves verts outside the static bounds
       const pivot = new THREE.Group();
       pivot.add(m);
-      const inset = w.wall === 'T' ? (ROOF - CEIL) + 0.02 : 0.16;
+      // wall curtains hang just in front of the interior window surround (frame x 1.035..1.065, blind
+      // cassette to 1.02): at 0.16 they cut through the frame ring and the rail vanished inside the cassette
+      const inset = w.wall === 'T' ? (ROOF - CEIL) + 0.02 : CUR_INSET;
       pivot.position.copy(L.p).addScaledVector(L.n, -inset);
       // panel plane faces into the van; place anchor on the window's left (k=0) or right (k=1) edge
       const edge = (k === 0 ? -1 : 1) * cw / 2;
@@ -582,7 +589,7 @@ function buildInterior(I, M) {
       const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, cw + 0.08, 8), M.chrome);
       rod.rotation.z = Math.PI / 2;
       const rp = new THREE.Group(); rp.add(rod);
-      rp.position.copy(L.p).addScaledVector(L.n, -0.16); rp.position.y += ch / 2 + 0.005;
+      rp.position.copy(L.p).addScaledVector(L.n, -CUR_INSET); rp.position.y += ch / 2 + 0.03; // above the cassette
       if (w.wall === 'F') { rp.position.z += 0.25; rp.position.y -= 0.02; } // same offset as the windshield curtain panels
       if (w.wall === 'L' || w.wall === 'R') rp.rotation.y = Math.PI / 2;
       I.add(rp);
