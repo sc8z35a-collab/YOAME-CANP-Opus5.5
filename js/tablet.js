@@ -182,8 +182,10 @@ function draw(ctx, W, H, full, dpr = 1) {
     ctx.fillStyle = sel ? '#ffd79a' : '#fffaf0'; ctx.fillText(d.name, lx, ly);
   }
   // camper: heading cone + arrow
+  // screen: +x = east (+x world), +y = south (-z world). The arrow is drawn pointing to -y (up),
+  // so rotating by θ makes it point to (sin θ, -cos θ) — we need that to equal (fwd.x, -fwd.z).
   const yaw = Math.atan2(VEH.fwd.x, VEH.fwd.z);
-  ctx.save(); ctx.translate(pu * sc + W / 2 - cu * sc, pv * sc + H / 2 - cv * sc); ctx.rotate(Math.PI - yaw);
+  ctx.save(); ctx.translate(pu * sc + W / 2 - cu * sc, pv * sc + H / 2 - cv * sc); ctx.rotate(yaw);
   const cone = ctx.createRadialGradient(0, 0, 0, 0, 0, 46 * k); cone.addColorStop(0, 'rgba(255,210,74,.45)'); cone.addColorStop(1, 'rgba(255,210,74,0)');
   ctx.fillStyle = cone; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 46 * k, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); ctx.fill();
   ctx.fillStyle = VEH.up.y < 0.6 ? '#ff5b3a' : '#ffd24a'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2 * k;

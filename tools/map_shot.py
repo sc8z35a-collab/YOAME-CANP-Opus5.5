@@ -12,7 +12,7 @@ with sync_playwright() as p:
     errs = []
     pg.on("console", lambda m: errs.append(m.text[:300]) if m.type == "error" else None)
     pg.on("pageerror", lambda e: errs.append("PAGEERR " + str(e)[:300]))
-    pg.goto("http://127.0.0.1:8080/tools/map_test.html?" + q, timeout=120000)
+    pg.goto(__import__("os").environ.get("QA_BASE", "http://127.0.0.1:8080").rstrip("/") + "/tools/map_test.html?" + q, timeout=120000)
     pg.wait_for_function("window.__done", timeout=120000)
     pg.screenshot(path=out)
     b.close()
