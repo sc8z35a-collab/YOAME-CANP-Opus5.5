@@ -150,3 +150,9 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 - 場所: css/style.css .chip.go, js/tablet.js 選択ラベルの強制表示
 - 修正: ボタンは nowrap+ellipsis、低い画面では 12.5px。選択ラベルは衝突してでも「画面内に収まる候補」を優先
 - 検証: page_shot map_test.html?sel=ridge&route=summit 568x320 で目視
+
+### E-28 [B] iPhone（ノッチ/ホームインジケータ付き）の横画面で下端・上端のボタンがセーフエリアに食い込む
+- 場所: css/style.css（左右の safe-area だけ考慮）
+- 症状: viewport-fit=cover なのに bottom/top の inset を見ていない。横画面の iPhone ではホームバー(下 21px)に #ctxBtn・🧰・🏃・アクションシート・トーストが重なり、スワイプでホームへ戻る誤操作が起きる。全画面地図の上下も同様
+- 修正: `--safe-b/--safe-t` を追加し、下端/上端に固定した全要素と #tablet の padding に加算
+- 検証: ui_test.html 915x412 の撮影でレイアウト不変（inset=0 環境）
