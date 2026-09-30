@@ -97,10 +97,11 @@ export function wetness() { return clamp(Math.max(G.wet || 0, (G.rain || 0) * 0.
 /** Surface under (x,z) at ground height gy: writes { kind, name, mu, crr, soft } into out. */
 export function surfaceAt(x, z, gy, out = {}) {
   let s = SURF.forest;
-  const r = roadQuery(x, z), wet = wetness();
-  const cd = Math.abs(x - creekX(z));
+  const r = roadQuery(x, z), cd = Math.abs(x - creekX(z));
+  // under flood water the ground keeps its own kind but is fully soaked (only the channel itself is creek bed)
+  const under = G.waterLevel > gy + 0.06, wet = under ? 1 : wetness();
   if (r.road && r.bridge && r.d < ROAD_HALF + 0.3 && gy > heightAt(x, z) + 0.25) s = SURF.deck;
-  else if (G.waterLevel > gy + 0.06) s = SURF.stream;
+  else if (under && cd < 6.5 && !(r.road && r.d < ROAD_HALF + 0.35)) s = SURF.stream;
   else if (r.road && r.d < ROAD_HALF + 0.35) s = wet > 0.3 && noise2(x * 0.35, z * 0.35) > 0.42 ? SURF.puddle : SURF.road;
   else if (cd < 6.5) s = SURF.mud;
   else if (slopeAt(x, z) > 0.75) s = SURF.rock;
