@@ -12,12 +12,8 @@ export const colliders = []; // {x,z,r} for animals / events
 export const treeList = [];   // {x,z,h,s}
 export const treeKit = {};    // geometry+materials of a forest tree (reused by events)
 
-function windify(mat, { strength = 1, card = false } = {}) {
-  mat.onBeforeCompile = sh => {
-    sh.uniforms.uTime = U.uTime; sh.uniforms.uWind = U.uWind; sh.uniforms.uWet = U.uWet;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime, uWind;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
+// Wind vertex code shared by the colour material and its shadow (depth) material.
+const windVS = (strength, card) => `#include <begin_vertex>
         {
           vec3 ip = vec3(0.);
           #ifdef USE_INSTANCING
@@ -30,7 +26,26 @@ function windify(mat, { strength = 1, card = false } = {}) {
           transformed.x += sway * hgt * hgt * 0.004;
           transformed.z += sway * hgt * hgt * 0.0025;
           ${card ? 'transformed.y += sin(uTime*6.0 + ph + position.x*3.0 + position.z*2.0) * 0.02 * w * hgt*0.1;' : ''}
-        }`);
+        }`;
+/** Shadow (depth) material for a windy material: without it the shadow pass renders the un-swayed
+ *  geometry, so tree shadows stood still (and detached from the trees) while the trees swayed. */
+export function windDepth(mat, { strength = 1, card = false } = {}) {
+  const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaMap: mat.alphaMap || null, alphaTest: mat.alphaTest || 0, side: mat.side });
+  d.onBeforeCompile = sh => {
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uWind = U.uWind;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime, uWind;').replace('#include <begin_vertex>', windVS(strength, card));
+  };
+  d.customProgramCacheKey = () => 'winddepth' + strength + card + !!mat.alphaMap;
+  return d;
+}
+function windify(mat, { strength = 1, card = false } = {}) {
+  mat.customProgramCacheKey = () => 'wind' + strength + card; // distinct programs per strength (the
+  // onBeforeCompile source is identical text for every strength, so three.js could share one program)
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uWind = U.uWind; sh.uniforms.uWet = U.uWet;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime, uWind;')
+      .replace('#include <begin_vertex>', windVS(strength, card));
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uWet;')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.35, uWet*0.6);')
@@ -154,6 +169,7 @@ export async function buildForest(scene) {
     roughness: 0.85, vertexColors: true, color: new THREE.Color(0.78, 0.86, 0.72),
   });
   windify(needleMat, { strength: 1, card: true });
+  const depthNeedle = windDepth(needleMat, { strength: 1, card: true }), depthBark = windDepth(barkF, { strength: 0.6 });
 
   const templates = [buildTreeTemplate(11, 'cedar'), buildTreeTemplate(23, 'fir'), buildTreeTemplate(37, 'cedar')];
   // expose one full-quality tree (same template/materials) for the falling-tree event
@@ -193,6 +209,7 @@ export async function buildForest(scene) {
       colliders.push({ x: p.x, z: p.z, r: 0.6 * s });
       treeList.push({ x: p.x, z: p.z, h: T.H * s, s });
     });
+    trunkM.customDepthMaterial = depthBark; cardM.customDepthMaterial = depthNeedle;
     for (const m of [trunkM, cardM]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
   });
 

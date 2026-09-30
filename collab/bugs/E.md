@@ -156,3 +156,14 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 - 症状: viewport-fit=cover なのに bottom/top の inset を見ていない。横画面の iPhone ではホームバー(下 21px)に #ctxBtn・🧰・🏃・アクションシート・トーストが重なり、スワイプでホームへ戻る誤操作が起きる。全画面地図の上下も同様
 - 修正: `--safe-b/--safe-t` を追加し、下端/上端に固定した全要素と #tablet の padding に加算
 - 検証: ui_test.html 915x412 の撮影でレイアウト不変（inset=0 環境）
+
+### E-29 [B] 風で揺れるシェーダが強さ違い・カード有無で同じプログラムに共有され、揺れ方が混ざる
+- 場所: js/forest.js windify()
+- 原因: three.js の既定 customProgramCacheKey は `onBeforeCompile.toString()`。windify の onBeforeCompile は毎回同じソース文字列（strength はクロージャ）なので、樹皮(0.6)・針葉カード(1.0 + カード羽ばたき)・シダ(1.2)・雑草(1.6) が最初にコンパイルされた1つの GLSL を共有 → 雑草が樹皮と同じ弱さで揺れる／樹皮に葉の羽ばたきコードが入る等（コンパイル順依存）
+- 修正: `customProgramCacheKey = 'wind'+strength+card`
+
+### E-30 [B] 木の影が風で揺れない（木は揺れているのに影は静止し、根元から影がずれる）
+- 場所: js/forest.js（InstancedMesh に customDepthMaterial 無し）
+- 原因: シャドウパスは既定の MeshDepthMaterial で描かれ、onBeforeCompile の揺れが入らない。強風時(uWind 大)は梢で 1m 以上ずれる
+- 修正: 同じ揺れコードを持つ windDepth()（alphaMap/alphaTest 付き RGBA depth）を幹・枝カードの customDepthMaterial に
+- 検証: node で import 成功・npm test PASS（WebGL 撮影は1GB環境で不可、env/E.md §3）
