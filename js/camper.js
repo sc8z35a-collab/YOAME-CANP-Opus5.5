@@ -334,8 +334,9 @@ export function buildCamper(scene) {
   for (const sx of [-1, 1]) g.add(rbox(0.12, 0.34, 0.04, tailM, sx * (XW - 0.12), 1.15, ZB + 0.02, 0.02));
   g.add(rbox(2.3, 0.2, 0.22, darkPlastic, 0, 0.6, ZB + 0.08, 0.06));
   const ladderM = alu;
-  for (const lx of [0.55, 0.9]) g.add(bb(lx - 0.015, 0.9, ZB + 0.04, lx + 0.015, ROOF + 0.25, ZB + 0.07, ladderM, 0.008));
-  for (let y = 1.0; y < ROOF + 0.2; y += 0.28) g.add(bb(0.55, y, ZB + 0.04, 0.9, y + 0.025, ZB + 0.07, ladderM, 0.008));
+  // ladder beside the rear window (x > 0.7) and inboard of the right tail light (x < 1.02)
+  for (const lx of [0.74, 1.0]) g.add(bb(lx - 0.015, 0.9, ZB + 0.04, lx + 0.015, ROOF + 0.25, ZB + 0.07, ladderM, 0.008));
+  for (let y = 1.0; y < ROOF + 0.2; y += 0.28) g.add(bb(0.74, y, ZB + 0.04, 1.0, y + 0.025, ZB + 0.07, ladderM, 0.008));
   const spare = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.22, 28), new THREE.MeshStandardMaterial({ color: 0x1e3a30, roughness: 0.55 }));
   spare.rotation.x = Math.PI / 2; spare.position.set(-0.45, 1.25, ZB + 0.13); spare.castShadow = true; g.add(spare);
   // roof A/C unit & vent
@@ -362,7 +363,7 @@ export function buildCamper(scene) {
   C.headMat = hlM;
   // mirrors
   for (const sx of [-1, 1]) {
-    g.add(rbox(0.06, 0.05, 0.05, darkPlastic, sx * 1.3, 1.9, ZF + 0.3, 0.01));
+    g.add(rbox(0.15, 0.04, 0.04, darkPlastic, sx * (XW + 0.075), 1.9, ZF + 0.3, 0.01)); // arm from the skin to the head
     g.add(rbox(0.05, 0.32, 0.2, darkPlastic, sx * 1.36, 1.9, ZF + 0.3, 0.03));
   }
   // wheels
@@ -394,10 +395,10 @@ export function buildCamper(scene) {
   g.add(bb(-0.7, ROOF + 0.05, 0.1, 0.7, ROOF + 0.09, 1.5, solar, 0.01));
   g.add(bb(-0.9, ROOF + 0.04, -3.9, 0.9, ROOF + 0.06, -2.6, steel, 0.01));
   // roof spotlight (投光器)
-  const spotHousing = rbox(0.22, 0.16, 0.2, darkPlastic, 0, ROOF + 0.18, -3.4, 0.04);
+  const spotHousing = rbox(0.22, 0.16, 0.2, darkPlastic, 0, ROOF + 0.14, -3.4, 0.04); // sits on the rack (top ROOF+0.06)
   g.add(spotHousing);
   const spot = new THREE.SpotLight(0xe8f0ff, 0, 60, 0.5, 0.35, 1.2);
-  spot.position.set(0, ROOF + 0.25, -3.4); spot.castShadow = false;
+  spot.position.set(0, ROOF + 0.14, -3.4 - 0.11); spot.castShadow = false;
   spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.0005;
   g.add(spot, spot.target); spot.target.position.set(0, 0, -20);
   C.spot = spot;
@@ -423,7 +424,7 @@ export function buildCamper(scene) {
   // ---------- glass
   for (const w of WINDOWS) {
     const horizontal = w.wall === 'T';
-    const mat = makeGlass({ horizontal, tint: w.wall === 'F' ? 0xf4fbf8 : 0xffffff });
+    const mat = makeGlass({ horizontal, tint: w.wall === 'F' ? 0xf4fbf8 : 0xffffff, uvScale: [w.w / 0.8, w.h / 0.8] });
     const geo = new THREE.PlaneGeometry(w.w + 0.02, w.h + 0.02);
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w.w / 0.8, uv.getY(i) * w.h / 0.8);
@@ -466,11 +467,11 @@ function buildInterior(I, M) {
   M.chrome = V3.chrome; M.darkPlastic = V3.black; M.steel = V3.steel;
 
   // ---- fairy lights (string along both locker edges and over bed) ----
-  const pts = [];
-  const string = (a, b, n, sag) => { for (let i = 0; i < n; i++) { const t = i / (n - 1); const p = a.clone().lerp(b, t); p.y -= Math.sin(t * Math.PI) * sag + Math.abs(Math.sin(t * Math.PI * 6)) * 0.03; pts.push(p); } };
+  const pts = [], runs = [];
+  const string = (a, b, n, sag) => { runs.push([pts.length, n]); for (let i = 0; i < n; i++) { const t = i / (n - 1); const p = a.clone().lerp(b, t); p.y -= Math.sin(t * Math.PI) * sag + Math.abs(Math.sin(t * Math.PI * 6)) * 0.03; pts.push(p); } };
   string(new THREE.Vector3(-0.72, 2.38, -2.5), new THREE.Vector3(-0.72, 2.38, -0.35), 22, 0.05);
   string(new THREE.Vector3(0.72, 2.38, -1.6), new THREE.Vector3(0.72, 2.38, 0.28), 18, 0.05);
-  string(new THREE.Vector3(-1.0, 2.62, 1.55), new THREE.Vector3(1.0, 2.62, 1.55), 16, 0.12);
+  string(new THREE.Vector3(-0.72, 2.62, 1.55), new THREE.Vector3(0.72, 2.62, 1.55), 16, 0.12); // between the rear lockers (x ±0.74)
   string(new THREE.Vector3(-1.02, 2.4, 2.15), new THREE.Vector3(-1.02, 2.3, 3.0), 10, 0.04);
   string(new THREE.Vector3(1.02, 2.4, 2.15), new THREE.Vector3(1.02, 2.3, 3.0), 10, 0.04);
   const fairyM = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffa040, emissiveIntensity: 2.6, toneMapped: true });
@@ -479,7 +480,7 @@ function buildInterior(I, M) {
   pts.forEach((p, i) => { d.position.copy(p); d.updateMatrix(); fairy.setMatrixAt(i, d.matrix); });
   add(fairy); C.fairy = fairy; C.emissives.push({ m: fairyM, base: 2.6, kind: 'fairy' });
   // wire
-  const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.slice(0, 22)), 60, 0.002, 4), M.darkPlastic); add(wire);
+  for (const [s0, n] of runs) add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.slice(s0, s0 + n)), n * 3, 0.002, 4), M.darkPlastic));
 
   // ---- lantern on the table ----
   const lanternM = new THREE.MeshStandardMaterial({ color: 0xffe1a8, emissive: 0xff9a3a, emissiveIntensity: 2.4 });
@@ -501,7 +502,7 @@ function buildInterior(I, M) {
   map.position.z = 0.342;
   const clk = new THREE.Mesh(new THREE.CircleGeometry(0.11, 40), new THREE.MeshStandardMaterial({ map: clockTex(), roughness: 0.4 }));
   add(clk); C.clock = clk; drawClock();
-  clk.position.set(-0.199 + 0.02, F + 1.25, 0.9); clk.rotation.y = Math.PI / 2;
+  clk.position.set(-0.176, F + 1.25, 1.2); // beside the mirror (z 0.77..1.07), not on it clk.rotation.y = Math.PI / 2;
   const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.113, 0.01, 10, 40), M.chrome); bezel.position.copy(clk.position); bezel.position.x += 0.004; bezel.rotation.y = Math.PI / 2; add(bezel);
   drawRadio('FM 81.3 森');
   // rug
@@ -584,12 +585,14 @@ function buildInterior(I, M) {
       rod.rotation.z = Math.PI / 2;
       const rp = new THREE.Group(); rp.add(rod);
       rp.position.copy(L.p).addScaledVector(L.n, -0.16); rp.position.y += ch / 2 + 0.005;
+      if (w.wall === 'F') { rp.position.z += 0.25; rp.position.y -= 0.02; } // same offset as the windshield curtain panels
       if (w.wall === 'L' || w.wall === 'R') rp.rotation.y = Math.PI / 2;
       I.add(rp);
     }
   }
   setCurtains(0, true);
   occludeInterior(I);
+  IN.ready?.then(() => occludeInterior(I)); // CC0 props arrive later
 }
 
 // Interior is enclosed: hemisphere/env (unshadowed) light must be attenuated, otherwise the
@@ -599,7 +602,8 @@ const prevIds = new Map();
 function occludeInterior(root) {
   const done = new Set();
   root.traverse(o => {
-    const m = o.material; if (!m || done.has(m) || !m.isMeshStandardMaterial) return; done.add(m);
+    const m = o.material; if (!m || done.has(m) || !m.isMeshStandardMaterial || m.userData.intOcc) return; done.add(m);
+    m.userData.intOcc = true; // never patch twice (would redeclare uIntAmb)
     const prev = m.onBeforeCompile;
     m.onBeforeCompile = (sh, r) => {
       prev && prev.call(m, sh, r);
@@ -634,21 +638,24 @@ export function updateCamper(dt) {
   const flick = 0.85 + 0.15 * Math.sin(G.t * 13) * Math.sin(G.t * 7.3) + (_flick() - 0.5) * 0.08;
   for (const { l, base } of C.interiorLights) l.intensity = base * C.lightLevel * (S.battery > 0 ? 1 : 0);
   C.lantern.intensity = 1.6 * flick * C.lightLevel;
+  // porch lamp is on the house battery + main light switch (it used to glow all night even with a flat battery)
+  const porchOn = !S.hiding && S.lightsOn && S.battery > 0.5 && G.night > 0.3;
   for (const e of C.emissives) {
     let k = C.lightLevel;
     if (e.kind === 'lantern') k *= flick;
     if (e.kind === 'fairy') k *= 0.85 + 0.15 * Math.sin(G.t * 2.0);
-    if (e.kind === 'porch') k = S.hiding ? 0 : (G.night > 0.3 ? 1 : 0.1);
-    if (e.kind === 'dash') k = G.driving ? 1 : 0.15;
+    if (e.kind === 'porch') k = porchOn ? 1 : 0;
+    if (e.kind === 'dash') k = (G.driving ? 1 : 0.15) * (S.battery > 0 || G.driving ? 1 : 0);
     e.m.emissiveIntensity = e.base * k;
   }
-  C.porch.intensity = S.hiding ? 0 : 3 * G.night;
+  C.porch.intensity = porchOn ? 3 * G.night : 0;
   for (const sp of C.spill) sp.l.intensity = sp.base * C.lightLevel * (1 - C.curtainLevel * 0.85) * (0.25 + 0.75 * G.night);
   // spotlight & headlights
   C.spot.intensity = S.spotOn && S.battery > 0.5 ? 900 : 0;
-  const hk = S.headOn || G.driving ? 1 : 0;
+  const hk = G.driving || (S.headOn && S.battery > 0.5) ? 1 : 0;
   C.heads.forEach(h => h.intensity = 350 * hk);
   C.headMat.emissiveIntensity = 6 * hk;
+  if (C.tailMat) C.tailMat.emissiveIntensity = hk ? 2.2 : 0.25; // position lamps come on with the headlights
   // stove glow
   const cook = S.cooking > 0 ? 1 : 0;
   C.stove.forEach(m => m.emissiveIntensity = cook * (2.2 + Math.sin(G.t * 9) * 0.3));

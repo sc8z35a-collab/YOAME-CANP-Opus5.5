@@ -42,7 +42,7 @@ function ringShape(w, h, t, r) { const s = roundRect(w + 2 * t, h + 2 * t, r + t
 
 // ---------------------------------------------------------------- canvas textures
 function gaugeTex() { return canvasTex(512, 200, () => {}); }
-export function drawGauges(speed = 0, rpm = 0, fuel = 0.7, on = 0.2) {
+export function drawGauges(speed = 0, rpm = 0, fuel = 0.7, on = 0.2, gear = 'P') {
   if (!IN.gauges) return;
   const t = IN.gauges.material.map, c = t.userData.ctx, W = 512, H = 200;
   c.fillStyle = '#060708'; c.fillRect(0, 0, W, H);
@@ -80,7 +80,7 @@ export function drawGauges(speed = 0, rpm = 0, fuel = 0.7, on = 0.2) {
   c.fillStyle = `rgba(120,210,255,${0.35 + 0.65 * on})`; c.font = 'bold 15px monospace'; c.textAlign = 'center';
   const hh = Math.floor(G.hour) % 24, mm = Math.floor((G.hour % 1) * 60);
   c.fillText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, 256, 60);
-  c.fillText('D', 256, 84);
+  c.fillText(gear, 256, 84);
   for (let i = 0; i < 8; i++) { c.fillStyle = i < fuel * 8 ? `rgba(120,210,255,${0.35 + 0.65 * on})` : 'rgba(80,100,110,.35)'; c.fillRect(236, 150 - i * 7, 40, 5); }
   c.font = '10px monospace'; c.fillText('FUEL', 256, 98);
   t.needsUpdate = true;
@@ -354,7 +354,7 @@ export function buildFridge(I, M) {
   I.add(B(fx - 0.012, fy0, fz0 - 0.1, fx + 0.03, fy1, fz0 - 0.004, M.fridgeFrame, 0.004));
   I.add(B(fx - 0.012, fy0, fz1 + 0.004, fx + 0.03, fy1, fz1 + 0.1, M.fridgeFrame, 0.004));
   // control strip across the top bar (label + LED + dial)
-  const cp = new THREE.Mesh(new THREE.PlaneGeometry(fw * 0.8, 0.045), new THREE.MeshStandardMaterial({ map: fridgePanelTex(), roughness: 0.5, emissive: 0xffffff, emissiveMap: null }));
+  const cp = new THREE.Mesh(new THREE.PlaneGeometry(fw * 0.8, 0.045), (() => { const t = fridgePanelTex(); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.35 }); })());
   cp.position.set(fx - 0.0125, fy1 + 0.03, fc); cp.rotation.y = -Math.PI / 2; I.add(cp);
   // doors: freezer (top 0.26) + fridge; slightly domed panel with 2mm shadow gap
   const door = (y0, y1) => {
@@ -687,7 +687,7 @@ const PROPS = [
   ['wooden_bowl_01', [-0.92, F + 0.741, -0.62], 0, 0.6],
   ['binoculars', [0.5, 1.515, -3.95], 2.6, 1.0],
   ['throw_pillows_01', [0.0, F + 0.72, 1.9], Math.PI, 0.6],
-  ['wicker_basket_01', [0.55, 2.38, -3.75], 0.3, 0.9],
+  ['wicker_basket_01', [0.55, 2.175, -3.75], 0.3, 0.9],   // on the cab header trim (top y 2.175)
   ['vintage_oil_lamp', [0.85, F + 0.975, 3.0], 0, 0.34],
 ];
 export function loadProps(I) {
@@ -732,7 +732,8 @@ export function updateInterior(dt, S, lightLevel) {
     IN.gT = 0.1;
     const v = Math.abs(G.driveSpeed || 0) * 3.6, on = G.driving ? 1 : 0.25;
     IN.rpm = (IN.rpm || 0) + (((G.driving ? 0.8 : 0) + v / 38) - (IN.rpm || 0)) * 0.3;
-    drawGauges(v, G.driving ? IN.rpm : 0, 0.72, on);
+    const gear = !G.driving ? 'P' : (G.driveSpeed || 0) < -0.3 ? 'R' : 'D';
+    drawGauges(v, G.driving ? IN.rpm : 0, 0.72, on, gear);
   }
   const cook = S.cooking > 0;
   IN.hobFlames.forEach((f, i) => { f.visible = cook; if (cook) f.scale.y = 0.85 + Math.sin(G.t * 23 + i * 2) * 0.15; });

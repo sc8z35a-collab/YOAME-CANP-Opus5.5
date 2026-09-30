@@ -19,7 +19,7 @@ export function setAniso(n) { maxAniso = n; }
 
 /** Load a texture by base file name (without .jpg). */
 export function tex(name, { srgb = false, repeat = 1, flip = true } = {}) {
-  const key = name + '|' + repeat + '|' + srgb;
+  const key = name + '|' + repeat + '|' + srgb + '|' + flip;
   if (texCache.has(key)) return texCache.get(key);
   const t = TL.load(dir() + name + '.jpg');
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -46,7 +46,7 @@ export function pbr(base, { repeat = 1, arm = true, diff = '_diffuse', color, ro
     if (metal > 0) p.metalnessMap = a;
     p.roughness = rough ?? 1;
   } else p.roughness = rough ?? 0.85;
-  if (color) p.color = new THREE.Color(color);
+  if (color != null) p.color = new THREE.Color(color);
   return new THREE.MeshStandardMaterial(p);
 }
 

@@ -6,7 +6,7 @@ export const glassShared = { uFogGlass: { value: 0.0 }, uDirt: { value: 0.1 } };
 
 const GLSL = /* glsl */`
 uniform float uTime, uRain, uFogGlass, uDirt, uCrack, uFlash;
-uniform vec2 uCrackAt;
+uniform vec2 uCrackAt, uUvScale;
 uniform float uSlope; // 1 = vertical pane (drops slide), 0 = horizontal (skylight: only static + splashes)
 varying vec2 vGUv;
 float gH1(float p){ p = fract(p*.1031); p *= p+33.33; p *= p+p; return fract(p); }
@@ -81,13 +81,14 @@ float crackLines(vec2 uv, vec2 c, float amt){
 }
 `;
 
-export function makeGlass({ tint = 0xffffff, crackable = true, horizontal = false, env = 0.6 } = {}) {
+export function makeGlass({ tint = 0xffffff, crackable = true, horizontal = false, env = 0.6, uvScale = [1, 1] } = {}) {
   const m = new THREE.MeshPhysicalMaterial({
     color: tint, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.07,
     side: THREE.DoubleSide, envMapIntensity: env, specularIntensity: 1, ior: 1.5,
   });
   m.depthWrite = false;
-  const u = { uCrack: { value: 0 }, uCrackAt: { value: new THREE.Vector2(0.5, 0.5) }, uSlope: { value: horizontal ? 0 : 1 } };
+  // uCrackAt is given in 0..1 of the pane; the geometry UVs are scaled to metres/0.8 for the drops
+  const u = { uCrack: { value: 0 }, uCrackAt: { value: new THREE.Vector2(0.5, 0.5) }, uSlope: { value: horizontal ? 0 : 1 }, uUvScale: { value: new THREE.Vector2(...uvScale) } };
   m.userData.u = u;
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, u, { uTime: U.uTime, uRain: U.uRain, uFlash: U.uFlash }, glassShared);
@@ -109,7 +110,7 @@ export function makeGlass({ tint = 0xffffff, crackable = true, horizontal = fals
             s1.z *= (1. - sd.z);
           }
           gDrops = vec3(s1.xy + s2.xy*.6 + sd.xy, clamp(s1.z + s2.z + sd.z, 0., 1.));
-          gCrack = crackLines(vGUv, uCrackAt, uCrack);
+          gCrack = crackLines(vGUv, uCrackAt * uUvScale, uCrack);
           float clear = clamp(gDrops.z*1.6, 0., 1.);
           gFog = uFogGlass * (1. - clear);
           roughnessFactor = mix(roughnessFactor, .5, gFog) + uDirt*.03;
