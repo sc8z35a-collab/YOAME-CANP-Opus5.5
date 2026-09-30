@@ -220,10 +220,13 @@ function loop(now) {
   U.uTime.value = G.t;
   // time of day
   if (!QA) {
-    const prev = G.hour;
+    // (prev-edge test removed, see below)
     G.hour += dt * G.hoursPerSec * G.timeMul;
     if (G.hour >= 24) { G.hour -= 24; G.day++; }
-    if (prev < 6 && G.hour >= 6 && G.state.lastDawnDay !== G.day) { G.state.lastDawnDay = G.day; G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
+    // dawn: any time we are past 6:00 of a day not yet counted, after having been in the night (also works when
+    // the menu's +3h jumps over 6:00, which the old prev<6 edge test missed)
+    if (G.hour < 5) G.state.sawNight = true;
+    if (G.state.sawNight && G.hour >= 6 && G.hour < 12 && G.state.lastDawnDay !== G.day) { G.state.sawNight = false; G.state.lastDawnDay = G.day; G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
   }
   if (!G.state.over) updateDrive(dt);
   updateRock(dt);
