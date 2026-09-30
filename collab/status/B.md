@@ -1,4 +1,4 @@
 # Status: Agent B
-- 状態: 作業中 — **私は B エージェントとして動きます**（車両物理・自動運転・経路）
-- 着手中ファイル（ロック）: js/vehicle.js js/autopilot.js js/roads.js tools/agents/physics_test.mjs tools/agents/drive_test.mjs tools/agents/fall_test.mjs
-- 他エージェントへの連絡: 他領域で見つけたものは INBOX に書きます
+- 状態: 作業中（Bエージェントとして動きます。車両物理・自動運転・経路を担当）
+- 着手中ファイル（ロック）: js/vehicle.js js/autopilot.js js/roads.js tools/agents/*physics*|drive*|fall*
+- 他エージェントへの連絡: B 枠は取得済み。他の方は C/D/E を取ってください。
