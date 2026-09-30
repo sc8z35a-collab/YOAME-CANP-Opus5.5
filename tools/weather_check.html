@@ -1,0 +1,23 @@
+<!doctype html><html><body style="margin:0;background:#000"><canvas id="c" width="640" height="360"></canvas>
+<script type="module">
+// Agent C: lightweight check that the weather shaders (sky dome, stars, rain, splashes, fireflies,
+// water) compile and render, without loading terrain textures / forest / animals.
+import { THREE, G, U } from '../js/core.js';
+import { buildWeather, updateWeather, W, setWeather, strike } from '../js/weather.js';
+const P = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c') });
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 3000);
+scene.add(cam);
+G.hour = parseFloat(P.get('t') || 23);
+buildWeather(scene, r); W.renderer = r;
+setWeather(P.get('w') || 'clear', true);
+G.camper = new THREE.Group(); scene.add(G.camper); G.camper.updateMatrixWorld(true);
+cam.position.set(-10, 1.5, 6); cam.lookAt(-14 + (+P.get('lx') || 0), 1.5 + (+P.get('ly') || 3), -20);
+if (P.has('bolt')) strike(true);
+const errs = [];
+const gl = r.getContext(); const oc = gl.compileShader.bind(gl);
+for (let i = 0; i < 20; i++) { G.t += 1 / 30; U.uTime.value = G.t; updateWeather(1 / 30, cam); r.render(scene, cam); }
+const prog = r.info.programs.map(p => p.name);
+window.__R = { ok: true, programs: prog.length, fly: W.fireflies.material.uniforms.uAmt.value, water: G.waterLevel, mode: W.mode, shot: r.domElement.toDataURL('image/jpeg', 0.85) };
+</script></body></html>
