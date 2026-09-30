@@ -2,6 +2,7 @@
 // crickets/owl at night, birds in the morning, thunder with distance delay, bear growl/impacts,
 // landslide rumble, flood roar, kettle, radio hiss. No audio files required.
 import { G, bus, clamp, lerp } from './core.js';
+import { WATER_BASE } from './relief.js';
 import { E } from './events.js';
 import { Z } from './animals.js';
 import { creekX } from './relief.js';
@@ -87,7 +88,8 @@ function impulse(c, sec, decay) {
   for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
   return b;
 }
-function env(g, t0, a, peak, d) { g.gain.cancelScheduledValues(t0); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); }
+// exponentialRampToValueAtTime(0) throws a RangeError (spec); clamp so a silent/far source never throws
+function env(g, t0, a, peak, d) { peak = Math.max(peak, 0.0002); g.gain.cancelScheduledValues(t0); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); }
 function burst(dest, { f = 800, type = 'bandpass', q = 1, a = 0.005, d = 0.2, peak = 0.3, rate = 1 } = {}) {
   const c = A.ctx, s = c.createBufferSource(); s.buffer = A.white ||= noiseBuffer(c, 1); s.playbackRate.value = rate;
   const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
@@ -218,7 +220,8 @@ export function updateAudio(dt) {
   set(N.rainOut.g.gain, r * 0.05);
   set(N.wind.g.gain, clamp(G.wind * 0.12 + Math.max(0, G.wind - 0.7) * 0.2)); set(N.wind.f.frequency, 300 + G.wind * 500, 0.8);
   const cd = G.camper ? Math.abs(G.camper.position.x - creekX(G.camper.position.z)) + Math.max(0, G.camper.position.y - G.waterLevel) * 2 : 20;
-  const creek = clamp(1 - cd / 40) * 0.05 * (1 + (G.waterLevel + 1.55) * 2);
+  // loudness relative to the normal creek surface (WATER_BASE); the old -1.55 base made it silent
+  const creek = clamp(1 - cd / 40) * 0.05 * (1 + Math.max(0, G.waterLevel - WATER_BASE) * 2);
   set(N.creek.g.gain, creek);
   A.floodT = E.flood.on ? 1 : 0;
   set(N.flood.g.gain, A.floodT * 0.5 * clamp((G.waterLevel + 2.05) / 2), 1.5);
@@ -239,8 +242,10 @@ export function updateAudio(dt) {
   const b = Z.bear;
   if (b?.active && G.camper) {
     const d = Math.hypot(b.pos.x - G.camper.position.x, b.pos.z - G.camper.position.z);
-    A.stepT = (A.stepT || 0) - dt * (0.8 + b.speed * 1.3);
-    if (A.stepT < 0) { A.stepT = 0.55; burst(A.outside, { f: 180, type: 'lowpass', d: 0.15, peak: clamp(1 - d / 30) * 0.35 }); }
+    // footsteps only while it actually walks (a reared / standing bear makes no steps), and only when audible
+    A.stepT = (A.stepT || 0) - dt * (b.speed > 0.15 ? 0.8 + b.speed * 1.3 : 0);
+    const vol = clamp(1 - d / 30) * 0.35;
+    if (A.stepT < 0) { A.stepT = 0.55; if (vol > 0.003) burst(A.outside, { f: 180, type: 'lowpass', d: 0.15, peak: vol }); }
     if (d < 6 && Math.random() < dt * 0.6) burst(A.outside, { f: 500, q: 0.6, a: 0.25, d: 0.6, peak: 0.12 });
   }
 }

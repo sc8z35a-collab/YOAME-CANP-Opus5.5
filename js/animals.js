@@ -12,6 +12,19 @@ const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 function camperPos() { return G.camper ? G.camper.position : _w.set(0, 0, 0); }
 function distToCamper(a) { const c = camperPos(); return Math.hypot(a.pos.x - c.x, a.pos.z - c.z); }
+// distance from an animal to the camper's footprint box (camper-local, same box as the push-out in steer)
+const _bl = new THREE.Vector3();
+function distToBox(a) {
+  if (!G.camper) return distToCamper(a);
+  _bl.copy(a.pos); G.camper.worldToLocal(_bl);
+  const dx = Math.max(0, Math.abs(_bl.x) - 1.6), dz = Math.max(0, -5.6 - _bl.z, _bl.z - 3.6);
+  return Math.hypot(dx, dz);
+}
+const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+// grazing = speed 0 but steer() still turns toward target: aim 3 m ahead so the animal keeps its facing
+// (a target it has just overshot made arriving deer spin round 180 degrees)
+function holdHeading(a) { a.target.set(a.pos.x + Math.sin(a.heading) * 3, 0, a.pos.z + Math.cos(a.heading) * 3); }
+export const anyActive = list => list.some(a => a && a.active);
 
 // normalize a GLB so its height is `h` and feet sit at y=0, facing +z
 function fitModel(root, h, yaw = 0) {
@@ -51,11 +64,15 @@ class Animal {
     let want = Math.atan2(dx, dz);
     // avoid colliders & camper box
     for (const c of colliders) {
-      const ox = c.x - this.pos.x, oz = c.z - this.pos.z, d = Math.hypot(ox, oz);
-      if (d < c.r + 1.4 && d > 0.01) want += (Math.sign(ox * Math.cos(want) - oz * Math.sin(want)) || 1) * 0.6 * (1 - d / (c.r + 1.4));
+      const ox = c.x - this.pos.x, oz = c.z - this.pos.z;
+      if (Math.abs(ox) > 6 || Math.abs(oz) > 6) continue; // cheap reject (thousands of trees)
+      const d = Math.hypot(ox, oz);
+      // cross(fwd, rel) > 0 means the obstacle is on the +heading side: steer AWAY (was steering into it)
+      if (d < c.r + 1.4 && d > 0.01) want -= (Math.sign(ox * Math.cos(want) - oz * Math.sin(want)) || 1) * 0.6 * (1 - d / (c.r + 1.4));
     }
-    let da = ((want - this.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    this.heading += clamp(da, -turn * dt, turn * dt);
+    // shortest signed angle (the old %-based wrap broke once |heading| grew past 3π while circling)
+    const da = wrapA(want - this.heading);
+    this.heading = wrapA(this.heading + clamp(da, -turn * dt, turn * dt));
     this.speed += (spd - this.speed) * Math.min(1, dt * 3);
     this.pos.x += Math.sin(this.heading) * this.speed * dt;
     this.pos.z += Math.cos(this.heading) * this.speed * dt;
@@ -146,7 +163,8 @@ export async function buildAnimals(scene) {
   const [stag, fawn, bear, wolf] = await Promise.all([glb('stag'), glb('fawn'), glb('black_bear'), glb('wolf')]);
   for (let i = 0; i < 3; i++) {
     const d = new Skinned('deer', stag, i === 0 ? 1.95 : 1.55, { radius: 0.5, gaitRef: 1.4 });
-    if (i > 0) d.obj.traverse(o => { if (o.isMesh && /antler|horn/i.test(o.material.name)) o.visible = false; });
+    // does have no antlers: the antler mesh is the node "Stag_Horns" (its material is just "Material.001")
+    if (i > 0) d.obj.traverse(o => { if (o.isMesh && /antler|horn/i.test(o.name + ' ' + (o.material?.name || ''))) o.visible = false; });
     scene.add(d.obj); animals.push(d); Z.deer.push(d);
   }
   const fr = fawn.scene.clone(true);
@@ -172,11 +190,11 @@ function ringPoint(r0, r1, ang) {
 }
 
 export function spawnDeer() {
-  if (!Z.ready || Z.deer[0].active) return false;
+  if (!Z.ready || anyActive([...Z.deer, ...Z.fawns])) return false; // a straggler would otherwise teleport
   const base = R() * Math.PI * 2;
   [...Z.deer, ...Z.fawns].forEach((d, i) => {
     const [x, z] = ringPoint(26, 32, base + (i - 1.5) * 0.18);
-    d.spawnAt(x, z); d.state = 'approach';
+    d.spawnAt(x, z); d.state = 'approach'; d.visit = 0; d.walkT = 0;
     const [tx, tz] = ringPoint(7, 11, base + 0.9 + (i - 1.5) * 0.25);
     d.target.set(tx, 0, tz); d.t = 0;
   });
@@ -189,12 +207,13 @@ export function spawnBear(mode = 'prowl') {
   const b = Z.bear;
   const [x, z] = ringPoint(30, 36);
   b.spawnAt(x, z); b.state = mode; b.t = 0; b.aggro = mode === 'charge' ? 1 : 0.2; b.hits = 0; b.sniffed = false;
+  b.sniffAt = null; b.qaHold = false; b.rear = 0; b.hitCd = 0; b.chaseT = 0; // no stale state from the previous visit
   bus.emit('animal', 'bear');
   return true;
 }
 
 export function spawnWolves() {
-  if (!Z.ready || Z.wolves[0].active) return false;
+  if (!Z.ready || anyActive(Z.wolves)) return false;
   const base = R() * Math.PI * 2;
   Z.wolves.forEach((w, i) => { const [x, z] = ringPoint(30, 36, base + i * 0.3); w.spawnAt(x, z); w.state = 'circle'; w.t = i * 3; w.play('Walk'); });
   bus.emit('animal', 'wolf');
@@ -216,23 +235,28 @@ export function updateAnimals(dt) {
   // deer
   for (const d of [...Z.deer, ...Z.fawns]) {
     if (!d.active) continue;
-    d.t += dt;
+    d.t += dt; d.visit = (d.visit || 0) + dt;
     const dist = distToCamper(d);
     const scared = st.noise > 0.5 || st.light > 0.8 || G.flash > 0.5 || Z.bear.active && Math.hypot(Z.bear.pos.x - d.pos.x, Z.bear.pos.z - d.pos.z) < 25;
     if (scared && d.state !== 'flee') { d.state = 'flee'; const a = Math.atan2(d.pos.z - c.z, d.pos.x - c.x); d.target.set(c.x + Math.cos(a) * 60, 0, c.z + Math.sin(a) * 60); bus.emit('deerflee'); }
     if (d.state === 'approach') {
       const r = d.steer(dt, d.target.x, d.target.z, 1.3);
       d.play?.('Walk');
-      if (r < 1.2) { d.state = 'graze'; d.t = 0; }
+      d.walkT = (d.walkT || 0) + dt;
+      // blocked by the van / a tree (steer pushes it back every frame): give up and graze where it stands
+      if (r < 1.2 || d.walkT > 25) { d.state = 'graze'; d.t = 0; d.walkT = 0; holdHeading(d); }
     } else if (d.state === 'graze') {
       d.steer(dt, d.target.x, d.target.z, 0);
       d.play?.(d.t % 12 < 7 ? 'Eating' : (d.t % 12 < 9.5 ? 'Idle' : 'Idle_Headlow'));
       if (d.t > 10 && R() < dt * 0.15) { const [tx, tz] = ringPoint(6, 12); d.target.set(tx, 0, tz); d.state = 'approach'; }
-      if (d.t > 55) { d.state = 'leave'; const [tx, tz] = ringPoint(55, 60); d.target.set(tx, 0, tz); }
+      // leave after the whole visit (d.t is reset by every re-approach, so it almost never reached 55 s
+      // and the herd stayed around the van forever, blocking new deer visits)
+      if (d.t > 55 || d.visit > 80) { d.state = 'leave'; d.walkT = 0; const [tx, tz] = ringPoint(55, 60); d.target.set(tx, 0, tz); }
     } else if (d.state === 'flee' || d.state === 'leave') {
       const r = d.steer(dt, d.target.x, d.target.z, d.state === 'flee' ? 7 : 1.4, 4);
       d.play?.(d.state === 'flee' ? 'Gallop' : 'Walk');
-      if (r < 3 || dist > 58) d.despawn();
+      d.walkT = (d.walkT || 0) + dt;
+      if (r < 3 || dist > 58 || d.walkT > 60) d.despawn();
     }
     d.anim(dt);
   }
@@ -251,7 +275,8 @@ export function updateAnimals(dt) {
       b.steer(dt, c.x + Math.cos(ang) * r, c.z + Math.sin(ang) * r, 1.1);
       if (!b.sniffed && b.t > 18 && dist < 9 && !G.state.hiding) { b.sniffed = true; b.state = 'sniff'; b.t = 0; bus.emit('bearsniff'); }
       else if (b.aggro > 0.75 || b.t > 60 && b.aggro > 0.45) { b.state = 'charge'; bus.emit('bearcharge'); }
-      if (b.t > 70 && b.aggro < 0.3) { b.state = 'leave'; }
+      // mid aggression (0.3..0.45) used to prowl forever (threat never clears => no more events)
+      if (b.t > 70 && b.aggro <= 0.45 || b.t > 150) { b.state = 'leave'; }
     } else if (b.state === 'sniff') {
       // walk to ~1.3m outside the window nearest the player's seat, then rear up to peer in
       if (!b.qaHold) {
@@ -268,13 +293,17 @@ export function updateAnimals(dt) {
       if (b.t > 16) { b.sniffAt = null; b.state = b.aggro > 0.5 ? 'charge' : 'prowl'; b.t = 30; if (b.state === 'charge') bus.emit('bearcharge'); }
     } else if (b.state === 'charge') {
       b.rear += (0 - b.rear) * dt * 4;
-      const r = b.steer(dt, c.x, c.z, 5.5, 3);
-      if (dist < 3.2 && b.hitCd < 0) {
+      b.steer(dt, c.x, c.z, 5.5, 3);
+      b.chaseT = (b.chaseT || 0) + dt;
+      // contact is measured against the van's box: a bear charging the nose/tail is pinned ~6 m from the
+      // origin by the footprint push-out, so the old centre-distance < 3.2 never fired (endless charge)
+      if (distToBox(b) < b.radius + 0.4 && b.hitCd < 0) {
+        b.chaseT = 0;
         b.hitCd = 3.5; b.hits++;
         _v.set(b.pos.x - c.x, 0, b.pos.z - c.z).normalize();
         bus.emit('impact', { from: _v.clone(), power: 1, source: 'bear' });
         b.state = 'backoff'; b.t = 0;
-      }
+      } else if (b.chaseT > 20) { b.chaseT = 0; b.state = 'backoff'; b.t = 0; b.hits++; }
     } else if (b.state === 'backoff') {
       const a = Math.atan2(b.pos.z - c.z, b.pos.x - c.x);
       b.steer(dt, c.x + Math.cos(a) * 9, c.z + Math.sin(a) * 9, 2.0);
@@ -326,7 +355,7 @@ export function scareAll(power = 1) {
     b.aggro = Math.max(0, b.aggro - 0.35 * power);
     if (b.aggro < 0.3 || power > 1.2) { b.state = 'flee'; bus.emit('bearscared'); }
   }
-  for (const d of [...Z.deer, ...Z.fawns]) if (d.active && d.state !== 'flee') d.state = 'graze', d.t = 1e3; // leave
+  for (const d of [...Z.deer, ...Z.fawns]) if (d.active && d.state !== 'flee') d.state = 'graze', d.t = 1e3, d.visit = 1e3; // leave
   for (const w of Z.wolves) if (w.active) w.state = 'leave';
 }
 

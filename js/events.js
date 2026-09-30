@@ -6,7 +6,7 @@ import { VEH, addObstacle, removeObstacles, applyImpulse, linkObstacles, toLocal
 import { ROADS } from './roads.js';
 import { W, setWeather, strike } from './weather.js';
 import { C, WINDOWS, windowLocal } from './camper.js';
-import { Z, spawnBear, spawnDeer, spawnWolves } from './animals.js';
+import { Z, spawnBear, spawnDeer, spawnWolves, anyActive } from './animals.js';
 import { glassShared } from './glass.js';
 import { tex } from './assets.js';
 import { VIEWS } from './view.js';
@@ -35,8 +35,6 @@ bus.on('impact', ({ from, power = 1, source, lp, ln, cause }) => {
   S.hull = source === 'crash' ? Math.max(Math.min(S.hull, 8), S.hull - dmg) : Math.max(0, S.hull - dmg);
   S.calm = Math.max(0, S.calm - 12 * power);
   G.shake = Math.min(1.5, G.shake + 0.9 * power);
-  // camper rocks physically
-  G.rockV = (G.rockV || 0) + (from ? Math.sign(from.x || 1) : 1) * 0.06 * power;
   // crack the window closest to the impact direction
   if (from && G.camper && (source !== 'crash' || power > 0.6)) {
     const dirL = from.clone().applyQuaternion(G.camper.quaternion.clone().invert());
@@ -49,7 +47,8 @@ bus.on('impact', ({ from, power = 1, source, lp, ln, cause }) => {
     if (best && R() < 0.75) {
       const u = C.glass[best.id].material.userData.u;
       u.uCrack.value = Math.min(1.2, u.uCrack.value + 0.45 * power);
-      u.uCrackAt.value.set(0.3 + R() * 0.4, 0.3 + R() * 0.4);
+      // a new crack starts where it hits; an already cracked pane keeps its star (it used to jump around)
+      if (u.uCrack.value <= 0.45 * power + 1e-3) u.uCrackAt.value.set(0.3 + R() * 0.4, 0.3 + R() * 0.4);
       bus.emit('glasscrack', best.id);
     }
   }
@@ -93,8 +92,10 @@ function syncSlide(s) {
   s.im.instanceMatrix.needsUpdate = true;
 }
 export function startLandslide() {
-  const s = E.slide; if (!s || s.on) return false;
-  removeObstacles('slide'); s.done = false;
+  const s = E.slide; if (!s || (s.on && !s.done)) return false;
+  // a settled slide (debris lies around for 10 min) no longer blocks a new one: clear the old one first
+  if (s.on) endSlide(s);
+  removeObstacles('slide'); s.done = false; s.mudInit = s.mudInit || false; s.mudStill = 0;
   const c = G.camper.position;
   // uphill direction = gradient of height
   const e = 2, gx = heightAt(c.x + e, c.z) - heightAt(c.x - e, c.z), gz = heightAt(c.x, c.z + e) - heightAt(c.x, c.z - e);
@@ -147,8 +148,10 @@ function updateSlide(dt) {
   }
   syncSlide(s);
   G.shake = Math.max(G.shake, 0.35 * smooth(0, 1, s.t) * (1 - smooth(8, 14, s.t)));
-  // mud sheet mesh follows the flow
-  if (m) {
+  // mud sheet mesh follows the flow (once the mud has stopped for good, the ~1000-vertex terrain
+  // drape is frozen instead of being recomputed every frame for the remaining ~10 minutes)
+  if (m && s.t > 25 && !m.vx && !m.vz) s.mudStill = (s.mudStill || 0) + 1; else s.mudStill = 0;
+  if (m && s.mudStill < 3) {
     s.mud.position.set(m.x, 0, m.z); s.mud.rotation.set(0, Math.atan2(s.up.x, s.up.y), 0);
     s.mud.scale.set(m.r * 1.9, 1, m.r * 2.2 + 8);
     const mp = s.mud.geometry.attributes.position;
@@ -163,18 +166,25 @@ function updateSlide(dt) {
   }
   // dust
   const dp = s.dust.geometry.attributes.position;
-  if (s.bodies.length) for (let i = 0; i < dp.count; i++) {
+  if (s.bodies.length && s.t < 30) for (let i = 0; i < dp.count; i++) {
     const r = s.bodies[i % s.bodies.length].p;
     dp.setXYZ(i, r.x + Math.sin(i * 7.1 + s.t) * 2, r.y + (i % 7) * 0.4 + s.t * 0.1, r.z + Math.cos(i * 3.3 + s.t) * 2);
   }
   dp.needsUpdate = true;
   s.dust.material.opacity = 0.4 * (1 - smooth(10, 30, s.t));
+  s.dust.visible = s.dust.material.opacity > 0.005;
   if (s.t > 16 && !s.done) {
     s.done = true; bus.emit('slidesettled');
     let onRoad = 0; for (const o of s.bodies) if (o.r > 0.45 && roadQuery(o.p.x, o.p.z).d < 3.5) onRoad++;
     warn(onRoad ? `土砂が道をふさいだ（岩${onRoad}個）。押しのけるか迂回する` : '土砂は手前で止まった…', 'warn');
   }
-  if (s.t > 600) { s.on = false; s.im.visible = s.mud.visible = s.dust.visible = false; removeObstacles('slide'); G.mudZones.splice(G.mudZones.indexOf(m), 1); s.mudZ = null; }
+  if (s.t > 600) endSlide(s);
+}
+function endSlide(s) {
+  s.on = false; s.mudStill = 0; s.bodies = []; s.queue = [];
+  s.im.visible = s.mud.visible = s.dust.visible = false; removeObstacles('slide');
+  const i = G.mudZones.indexOf(s.mudZ); if (i >= 0) G.mudZones.splice(i, 1); // indexOf -1 would splice the LAST zone
+  s.mudZ = null;
 }
 
 // ---------------------------------------------------------------- flood
@@ -202,12 +212,14 @@ function updateFlood(dt) {
     const sub = G.waterLevel - G.camper.position.y;
     if (sub > 0.35 && !f.warned) { f.warned = true; warn('水がタイヤを越えた！ 高台へ避難を！', 'danger'); }
     if (sub > 0.55) {
+      const h0 = G.state.hull;
       G.state.hull = Math.max(0, G.state.hull - dt * 0.8);
       G.state.battery = Math.max(0, G.state.battery - dt * 0.3);
       G.state.calm = Math.max(0, G.state.calm - dt * 1.2);
       G.shake = Math.max(G.shake, 0.08);
       // flooding never destroys the van outright (the current carries it; the player can drive out)
-      G.state.hull = Math.max(G.state.hull, 6);
+      // (floor at 6%, but never RAISE a hull that was already lower, e.g. after a bear attack)
+      G.state.hull = Math.max(G.state.hull, Math.min(h0, 6));
     }
   }
   if (f.t > 200) { f.on = false; f.warned = false; warn('水が引いていく…', 'info'); }
@@ -225,7 +237,8 @@ function buildFallingTree(scene) {
   treeMesh.visible = false; scene.add(treeMesh);
 }
 export function startTreeFall() {
-  if (!treeMesh || (E.fallen && !E.fallen.done)) return false;
+  // one tree at a time while it falls; once it has landed (or long after) another one may come down
+  if (!treeMesh || (E.fallen && !E.fallen.done && !(E.fallen.hit && E.fallen.t > 15))) return false;
   removeObstacles('tree');
   const c = G.camper.position, a = Math.atan2(-VEH.fwd.x, -VEH.fwd.z);
   // while driving, the tree comes down across the road AHEAD (a road block the autopilot must handle)
@@ -294,7 +307,7 @@ export function powerTick(dt) {
   S.battery = clamp(S.battery + (solar + gen - draw) * dt * 0.35, 0, 100);
   // slow field repair while parked safely (tools + generator power); never while driving or flooded
   if (!G.driving && (G.submerge || 0) < 0.3 && S.hull < 100) S.hull = Math.min(100, S.hull + dt * (S.generator ? 0.12 : 0.03));
-  if (S.battery <= 0.01 && (S.lightsOn || S.spotOn)) { S.lightsOn = false; S.spotOn = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
+  if (S.battery <= 0.01 && (S.lightsOn || S.spotOn || S.heater)) { S.lightsOn = false; S.spotOn = false; S.heater = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
 }
 
 // ---------------------------------------------------------------- director
@@ -305,8 +318,8 @@ const EVENTS = {
   landslide: { w: () => G.rainAccum > 0.4 ? 1.4 * G.rainAccum : 0, run: startLandslide, cd: 240 },
   flood: { w: () => G.rainAccum > 0.35 ? 1.5 * G.rainAccum : 0, run: startFlood, cd: 260 },
   tree: { w: () => W.mode === 'storm' ? 0.9 : 0, run: startTreeFall, cd: 400 },
-  stormroll: { w: () => W.mode === 'rain' ? 0.6 : W.mode === 'clear' || W.mode === 'cloudy' ? 0.35 : 0.1, run: () => { const m = W.mode === 'rain' ? 'storm' : W.mode === 'storm' ? 'rain' : R() < 0.5 ? 'rain' : 'cloudy'; setWeather(m); warn({ rain: '雨が降り出した…屋根を叩く音が心地いい', storm: '風が強まってきた。嵐になりそうだ', cloudy: '雲が広がってきた' }[m] || '', 'info'); return true; }, cd: 150 },
-  clearup: { w: () => W.mode === 'storm' || W.mode === 'rain' ? 0.4 : W.mode === 'fog' ? 0.8 : 0, run: () => { setWeather(R() < 0.5 ? 'clear' : 'fog'); warn(W.mode === 'fog' ? '霧が森を包み込んでいく' : '雨が上がった。森が静かになる', 'info'); return true; }, cd: 150 },
+  stormroll: { w: () => W.mode === 'rain' ? 0.6 : W.mode === 'clear' || W.mode === 'cloudy' ? 0.35 : 0.1, run: () => { const from = W.mode, m = from === 'rain' ? 'storm' : from === 'storm' ? 'rain' : R() < 0.5 ? 'rain' : 'cloudy'; if (m === from) return false; setWeather(m); warn(from === 'storm' ? '風が弱まってきた。嵐は峠を越えたようだ' : { rain: '雨が降り出した…屋根を叩く音が心地いい', storm: '風が強まってきた。嵐になりそうだ', cloudy: '雲が広がってきた' }[m], 'info'); return true; }, cd: 150 },
+  clearup: { w: () => W.mode === 'storm' || W.mode === 'rain' ? 0.4 : W.mode === 'fog' ? 0.8 : 0, run: () => { const from = W.mode; setWeather(from === 'fog' || R() < 0.5 ? 'clear' : 'fog'); warn(W.mode === 'fog' ? '雨が上がり、霧が森を包み込んでいく' : from === 'fog' ? '霧が晴れてきた' : '雨が上がった。森が静かになる', 'info'); return true; }, cd: 150 },
 };
 const lastRun = {};
 
@@ -340,7 +353,8 @@ export function triggerEvent(name) {
   }
   if (name === 'deer' && P.has('qa')) {
     spawnDeer();
-    Z.deer.concat(Z.fawns).forEach((d, i) => { const { wp, face } = stage(10 + i * 1.3, (i - 1.5) * 1.8); d.pos.copy(wp); d.target.copy(wp); d.state = 'graze'; d.heading = face + 1.2 + i * 0.5; d.obj.rotation.y = d.heading; });
+    Z.deer.concat(Z.fawns).forEach((d, i) => { const { wp, face } = stage(10 + i * 1.3, (i - 1.5) * 1.8); d.pos.copy(wp); d.state = 'graze'; d.heading = face + 1.2 + i * 0.5; d.obj.rotation.y = d.heading;
+      d.target.set(wp.x + Math.sin(d.heading) * 3, 0, wp.z + Math.cos(d.heading) * 3); }); // graze target ahead: keeps the staged facing
     return;
   }
   if (name === 'flood' && P.has('qa')) { startFlood(); E.flood.t = 40; G.waterLevel = E.flood.peak; return; }
@@ -355,7 +369,7 @@ export function updateEvents(dt) {
   updateSlide(dt); updateFlood(dt); updateTree(dt); powerTick(dt);
   // stress/calm
   const S = G.state;
-  const threat = (Z.bear?.active ? 1 : 0) + (Z.wolves?.[0]?.active ? 0.5 : 0) + (E.flood.on ? 0.6 : 0) + (E.slide?.on && !E.slide.done ? 0.8 : 0);
+  const threat = (Z.bear?.active ? 1 : 0) + (anyActive(Z.wolves) ? 0.5 : 0) + (E.flood.on ? 0.6 : 0) + (E.slide?.on && !E.slide.done ? 0.8 : 0);
   const cozy = (S.lightsOn ? 0.4 : 0) + (C.curtainLevel > 0.5 ? 0.3 : 0) + (G.rain > 0.2 && threat === 0 ? 0.5 : 0) + (S.cooking > 0 ? 0.6 : 0) + (S.heater ? 0.3 : 0);
   S.calm = clamp(S.calm + (cozy * 0.6 - threat * 1.4) * dt * 0.5, 0, 100);
   S.smell = Math.max(0, S.smell - dt * 0.004);
