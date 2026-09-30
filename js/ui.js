@@ -171,8 +171,11 @@ export function buildUI() {
   try { if (localStorage.getItem('fc3d_mute') === '1') $('#sndBtn').textContent = '🔇 オフ'; } catch (e) {}
   $('#sndBtn').onclick = () => {
     initAudio();
-    const on = A.master.gain.value < 0.01;
-    A.master.gain.setTargetAtTime(on ? 0.9 : 0, A.ctx.currentTime, 0.05);
+    // the stored preference is the truth: gain.value is mid-ramp for ~0.2s after setTargetAtTime,
+    // so a quick double tap used to read the old level and leave button text / audio / storage out of sync
+    let muted = false; try { muted = localStorage.getItem('fc3d_mute') === '1'; } catch (e) { muted = A.master.gain.value < 0.01; }
+    const on = muted;
+    A.master.gain.cancelScheduledValues(A.ctx.currentTime); A.master.gain.setTargetAtTime(on ? 0.9 : 0, A.ctx.currentTime, 0.05);
     $('#sndBtn').textContent = on ? '🔊 オン' : '🔇 オフ';
     try { localStorage.setItem('fc3d_mute', on ? '0' : '1'); } catch (e) {}
   };
