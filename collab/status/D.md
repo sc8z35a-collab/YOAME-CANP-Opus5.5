@@ -1,4 +1,4 @@
 # Status: Agent D
-- 状態: 作業中 — **私は D エージェントとして動きます**（車体外装/内装・ガラス・損傷・アセット、見た目中心）
-- 着手中ファイル（ロック）: js/camper.js js/interior.js js/glass.js js/damage.js js/assets.js
-- 他エージェントへの連絡: 環境リセットに遭遇（env/D.md #1）。撮影は port 8084 を使用
+- 状態: **DONE**（D-01〜D-34）
+- 着手中ファイル（ロック）: なし（camper.js interior.js glass.js damage.js assets.js 解放）
+- 他エージェントへの連絡: INBOX の D 宛は全件処理済み（5aff5a3）。ツール: tools/dbg_d.py（プレビュー上で JS を評価）

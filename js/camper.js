@@ -571,7 +571,7 @@ function buildInterior(I, M) {
       pivot.add(m);
       // wall curtains hang just in front of the interior window surround (frame x 1.035..1.065, blind
       // cassette to 1.02): at 0.16 they cut through the frame ring and the rail vanished inside the cassette
-      const inset = w.wall === 'T' ? (ROOF - CEIL) + 0.02 : CUR_INSET;
+      const inset = w.wall === 'T' ? (ROOF - CEIL) + 0.045 : CUR_INSET; // skylight: fold depth is ±3.5cm, clear the ceiling/frame
       pivot.position.copy(L.p).addScaledVector(L.n, -inset);
       // panel plane faces into the van; place anchor on the window's left (k=0) or right (k=1) edge
       const edge = (k === 0 ? -1 : 1) * cw / 2;
