@@ -242,20 +242,25 @@ function buildBridges(scene) {
     for (let i = B.a; i < B.b; i++) {
       const p = B.r.s[i], q = B.r.s[i + 1];
       const L = Math.hypot(q.x - p.x, q.z - p.z), yaw = Math.atan2(q.x - p.x, q.z - p.z);
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 + 0.4, 0.18, L + 0.05), plank);
-      deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 - 0.07, (p.z + q.z) / 2); deck.rotation.y = yaw;
+      const pitch = Math.atan2(q.h - p.h, L); // end spans ramp from the abutment up to the deck level
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 + 0.4, 0.18, Math.hypot(L, q.h - p.h) + 0.05), plank);
+      deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 - 0.07, (p.z + q.z) / 2); deck.rotation.set(-pitch, yaw, 0, 'YXZ');
       deck.castShadow = deck.receiveShadow = true; g.add(deck);
       for (const s of [-1, 1]) { // side rails
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, L + 0.05), beam);
         rail.position.copy(deck.position).add(new THREE.Vector3(Math.cos(yaw) * s * (ROAD_HALF + 0.15), 0.75, -Math.sin(yaw) * s * (ROAD_HALF + 0.15)));
-        rail.rotation.y = yaw; rail.castShadow = true; g.add(rail);
+        rail.rotation.set(-pitch, yaw, 0, 'YXZ'); rail.castShadow = true; g.add(rail);
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), beam);
         post.position.copy(rail.position); post.position.y -= 0.38; g.add(post);
       }
-      const pier = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 - 0.8, 1, 0.3), beam);
-      const gy = heightAt(p.x, p.z), top = p.h;
-      pier.scale.y = Math.max(0.1, top - gy + 0.4); pier.position.set(p.x, (top + gy) / 2 - 0.1, p.z); pier.rotation.y = yaw;
-      g.add(pier);
+      // pier under the deck: from 0.3m below ground up to the underside of the planks (deck top − 0.16),
+      // never poking through the driving surface; only where the deck actually stands above the ground
+      const gy = heightAt(p.x, p.z), top = p.h - 0.17, bot = gy - 0.3;
+      if (p.bridge && top - bot > 0.35) {
+        const pier = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 - 0.8, 1, 0.3), beam);
+        pier.scale.y = top - bot; pier.position.set(p.x, (top + bot) / 2, p.z); pier.rotation.y = yaw;
+        g.add(pier);
+      }
     }
     scene.add(g);
   }
