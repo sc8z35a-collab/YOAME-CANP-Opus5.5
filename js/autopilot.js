@@ -149,6 +149,8 @@ export function updateAutopilot(dt) {
   if (!AP.on) {
     c.throttle = 0; c.steer = 0;
     c.hand = VEH.speed < 1.5; c.brake = VEH.up.y > 0.6 ? 1 : 0; // parked: handbrake (still slides if shoved hard)
+    // swept away by a flood / shoved by debris or a bear: no longer parked at that spot
+    if (AP.at) { const d = DESTS[AP.at], q = originOf(_o); if (!d || Math.hypot(q.x - d.x, q.z - d.z) > 7) { AP.at = null; bus.emit('leftSpot'); } }
     return;
   }
   if (G.state.hull <= 0) return disengage('車が動かなくなった…');
