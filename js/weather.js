@@ -1,7 +1,7 @@
 // Sky, sun/moon, stars, clouds, fog, rain streaks + splashes, lightning, fireflies, creek water.
 import { THREE, G, U, P, clamp, smooth, lerp, damp, rng, bus } from './core.js';
 import { Sky } from './lib/addons/objects/Sky.js';
-import { creekX, CREEK_BED, WATER_BASE, heightAt } from './terrain.js';
+import { creekX, CREEK_BED, WATER_BASE, WORLD, heightAt } from './terrain.js';
 
 export const W = {
   sky: null, sun: null, moon: null, hemi: null, stars: null, rain: null, splash: null,
@@ -65,6 +65,16 @@ export function buildWeather(scene, renderer) {
   setWeather(P.get('weather') || 'clear', true);
 }
 
+const CLOUD_GLSL = `
+  float ch(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+  float cn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(ch(i),ch(i+vec2(1,0)),f.x), mix(ch(i+vec2(0,1)),ch(i+vec2(1,1)),f.x), f.y); }
+  float cfbm(vec2 p){ float s=0., a=.5; for(int i=0;i<6;i++){ s+=a*cn(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return s; }
+  float cloudCov(vec3 d, float uCloud, float uTime){
+    vec2 cp = d.xz/(d.y+0.12);
+    float c1 = cfbm(cp*0.9 + vec2(uTime*0.01, uTime*0.004));
+    float c2 = cfbm(cp*2.3 - vec2(uTime*0.02, 0.));
+    return smoothstep(1.0 - uCloud*0.95, 1.25 - uCloud*0.6, c1*0.75 + c2*0.35 + uCloud*0.3) * smoothstep(-0.02, 0.15, d.y);
+  }`;
 function starDome() {
   const R = rng(5);
   const N = 2600, pos = new Float32Array(N * 3), a = new Float32Array(N);
@@ -79,12 +89,15 @@ function starDome() {
   g.setAttribute('mag', new THREE.BufferAttribute(a, 1));
   const m = new THREE.ShaderMaterial({
     uniforms: { uNight: { value: 0 }, uCloud: { value: 0 }, uTime: U.uTime },
-    vertexShader: `attribute float mag; varying float vM; varying float vY; uniform float uTime;
-      void main(){ vM = mag; vY = position.y; vec4 p = modelViewMatrix*vec4(position*1400., 1.);
+    vertexShader: `attribute float mag; varying float vM; varying float vY; varying vec3 vSD; uniform float uTime;
+      void main(){ vM = mag; vY = position.y; vSD = position; vec4 p = modelViewMatrix*vec4(position*1400., 1.);
         gl_Position = projectionMatrix*p; gl_PointSize = (1.2 + mag*3.2) * (0.8 + 0.2*sin(uTime*3.0 + position.x*400.)); }`,
-    fragmentShader: `varying float vM; varying float vY; uniform float uNight, uCloud;
+    // same cloud field as the dome shader: stars are drawn after the dome, so they must hide behind clouds themselves
+    fragmentShader: `varying float vM; varying float vY; varying vec3 vSD; uniform float uNight, uCloud, uTime;
+      ${CLOUD_GLSL}
       void main(){ float d = length(gl_PointCoord-0.5); float a = 1. - smoothstep(0., .5, d);
-        gl_FragColor = vec4(vec3(0.85,0.9,1.0)*(0.5+vM*1.6), a*uNight*(1.-uCloud)*smoothstep(0.02,0.2,vY)); }`,
+        float cov = cloudCov(normalize(vSD), uCloud, uTime);
+        gl_FragColor = vec4(vec3(0.85,0.9,1.0)*(0.5+vM*1.6), a*uNight*(1.-uCloud*0.5)*(1.-cov)*smoothstep(0.02,0.2,vY)); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
   });
   const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = -8;
@@ -230,7 +243,7 @@ export function placeSplashes(cx, cz) {
 
 // ---------------------------------------------------------------- creek / flood water
 function buildWater(scene) {
-  const g = new THREE.PlaneGeometry(420, 420, 1, 1); g.rotateX(-Math.PI / 2); g.translate(20, 0, -10);
+  const g = new THREE.PlaneGeometry(WORLD.size + 40, WORLD.size + 40, 1, 1); g.rotateX(-Math.PI / 2); g.translate(WORLD.x0 + WORLD.size / 2, 0, WORLD.z0 + WORLD.size / 2);
   const m = new THREE.MeshPhysicalMaterial({
     color: 0x5a5a3a, roughness: 0.05, metalness: 0, transmission: 0.0, transparent: true, opacity: 0.86,
     envMapIntensity: 1.0,

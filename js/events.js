@@ -303,6 +303,7 @@ function updateTree(dt) {
 // ---------------------------------------------------------------- power
 export function powerTick(dt) {
   const S = G.state;
+  dt *= G.timeMul || 1; // fast-forward: a night passes in seconds, so battery / solar / repair must scale too
   // headlights run off the house battery while parked (350 cd x2 used to be free all night)
   const draw = (S.lightsOn && !S.hiding ? 0.05 : 0) + (S.spotOn ? 0.35 : 0) + (S.headOn && !G.driving ? 0.15 : 0) + (S.heater ? 0.12 : 0) + (S.cooking > 0 ? 0.1 : 0) + 0.01;
   const solar = G.daylight * (1 - G.cloud * 0.8) * 0.22;
@@ -364,7 +365,7 @@ export function triggerEvent(name) {
   if (name === 'flood' && P.has('qa')) { startFlood(); E.flood.t = 40; G.waterLevel = E.flood.peak; return; }
   if (name === 'landslide' && P.has('qa')) { startLandslide(); return; }
   const ok = e.run ? e.run() : false;
-  if (ok !== false) lastRun[name] = G.t; // a refused run (already in progress) must not reset the cooldown
+  if (ok !== false) lastRun[name] = E.gt || 0; // a refused run (already in progress) must not reset the cooldown
 }
 
 export function updateEvents(dt) {
@@ -383,11 +384,14 @@ export function updateEvents(dt) {
   if (P.has('noevents')) return;
   // director
   E.cooldown -= dt * G.timeMul;
+  E.gt = (E.gt || 0) + dt * G.timeMul;
   if (E.cooldown > 0 || threat > 0) return;
-  const pool = Object.entries(EVENTS).filter(([k, e]) => !(lastRun[k] && G.t - lastRun[k] < e.cd)).map(([k, e]) => [k, e.w()]).filter(x => x[1] > 0);
+  // per-kind cooldowns in (scaled) game seconds like E.cooldown; with real G.t a 30x fast-forward kept
+  // the weather/animal cooldowns 30x too long compared to the in-game clock
+  const pool = Object.entries(EVENTS).filter(([k, e]) => !(lastRun[k] !== undefined && E.gt - lastRun[k] < e.cd)).map(([k, e]) => [k, e.w()]).filter(x => x[1] > 0);
   const tot = pool.reduce((a, b) => a + b[1], 0);
   if (!tot) { E.cooldown = 10; return; }
   let r = R() * tot;
-  for (const [k, w] of pool) { r -= w; if (r <= 0) { const ok = EVENTS[k].run(); if (ok !== false) lastRun[k] = G.t; break; } }
+  for (const [k, w] of pool) { r -= w; if (r <= 0) { const ok = EVENTS[k].run(); if (ok !== false) lastRun[k] = E.gt || 0; break; } }
   E.cooldown = 35 + R() * 50;
 }

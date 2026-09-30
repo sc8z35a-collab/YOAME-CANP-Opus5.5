@@ -73,7 +73,8 @@ export function initAudio() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { A.on = false; c.suspend(); } else { c.resume(); A.on = true; }
   });
-  bus.on('thunder', ({ dist, delay }) => setTimeout(() => thunder(dist), Math.min(delay, 4) * 1000));
+  // (a strike while the tab is hidden must not queue up and all go off at once on return)
+  bus.on('thunder', ({ dist, delay }) => { if (A.on) setTimeout(() => A.on && thunder(dist), Math.min(delay, 4) * 1000); });
   bus.on('bearcharge', () => sfx('growl', 1));
   bus.on('animal', k => { if (k === 'wolf') setTimeout(() => howl(), 1500); if (k === 'bear') setTimeout(() => sfx('growl', 0.5), 4000); });
   bus.on('glasscrack', () => sfx('glass', 1));
