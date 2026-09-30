@@ -167,7 +167,7 @@ export async function buildForest(scene) {
   }, 3.2);
   // hand placed "close" trees framing the camper windows
   const framing = [[-9, -12], [11, -13], [12, 6], [-9, 10], [-12, -2], [13, -3]];
-  for (const [x, z] of framing) if (clearOf(x, z, 8, 5, 3)) pts.push({ x, z, r: Math.random(), y: heightAt(x, z) });
+  framing.forEach(([x, z], i) => { if (clearOf(x, z, 8, 5, 3)) pts.push({ x, z, r: (i * 0.618 + 0.21) % 1, y: heightAt(x, z) }); }); // deterministic (QA frames must be reproducible)
 
   const perT = templates.map(() => []);
   pts.forEach((p, i) => perT[i % templates.length].push(p));
@@ -242,6 +242,7 @@ async function buildUnderstory(scene, hi) {
   await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi, maxDist: 70 });
   await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi, maxDist: 70 });
   const weeds = place(Math.round(900 * k), 74, (x, z) => {
+    if (trackDist(x, z) < 3.2) return false; // never on the road bed (pads sit right on the road)
     for (const s in SPOTS) { const d = Math.hypot(x - SPOTS[s].x, z - SPOTS[s].z); if (d > 5 && d < 15) return true; }
     const cd = Math.abs(x - creekX(z)); return cd > 3 && cd < 7;
   });
@@ -249,12 +250,13 @@ async function buildUnderstory(scene, hi) {
   await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false, maxDist: 40 });
   const rocks = place(Math.round(160 * k), 75, (x, z, R) => clearOf(x, z, 9, 6, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
   await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.1, maxDist: 120 });
-  const small = place(Math.round(500 * k), 76, (x, z) => Math.abs(x - creekX(z)) < 5.5 || (trackDist(x, z) > 2.8 && trackDist(x, z) < 5));
+  // pebbles along the creek and the road verges — but not on the bed where the road fords the creek
+  const small = place(Math.round(500 * k), 76, (x, z) => { const td = trackDist(x, z); return td > 2.8 && (Math.abs(x - creekX(z)) < 5.5 || td < 5); });
   await instanceGLB(scene, 'rock_07', small, { scale: [0.8, 2.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
   const logs = place(80, 77, (x, z) => clearOf(x, z, 10, 6, 4));
   await instanceGLB(scene, 'dead_tree_trunk', logs, { scale: [1.2, 2.2], yOff: 0.05, tilt: 0.05, colliderR: 1 });
   await instanceGLB(scene, 'tree_stump_01', place(90, 78, (x, z) => clearOf(x, z, 8, 5.5, 4)), { scale: [0.8, 1.3], yOff: -0.05, colliderR: 0.8 });
-  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40 });
+  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 3.2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40 });
 }
 
 // Camp props around the parked camper (placed in world, relative to hollow spot)
