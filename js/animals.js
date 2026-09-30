@@ -2,7 +2,7 @@
 // wolves (skinned). Simple steering + state machines reacting to noise, light and smell.
 import { THREE, G, bus, clamp, rng } from './core.js';
 import { glb } from './assets.js';
-import { heightAt } from './terrain.js';
+import { heightAt, WORLD } from './terrain.js';
 import { colliders } from './forest.js';
 import { WINDOWS, windowLocal } from './camper.js';
 import * as SkeletonUtils from './lib/addons/SkeletonUtils.js';
@@ -190,9 +190,13 @@ export async function buildAnimals(scene, stub = null) { // stub: { stag, fawn, 
 
 // --------------------------------------------------------------- behaviours
 const R = rng(99);
+// keep spawn / wander / exit points inside the playable map: from the dead-end pads 45 m from the edge
+// (northEnd / southEnd) a 26-70 m ring put animals inside the rim mountains or off the world
+const RIM = 24;
+const inWorld = (x, z) => [clamp(x, WORLD.x0 + RIM, WORLD.x1 - RIM), clamp(z, WORLD.z0 + RIM, WORLD.z1 - RIM)];
 function ringPoint(r0, r1, ang) {
   const c = camperPos(), a = ang ?? R() * Math.PI * 2, r = r0 + R() * (r1 - r0);
-  return [c.x + Math.cos(a) * r, c.z + Math.sin(a) * r];
+  return inWorld(c.x + Math.cos(a) * r, c.z + Math.sin(a) * r);
 }
 
 export function spawnDeer() {
@@ -245,7 +249,7 @@ export function updateAnimals(dt) {
     d.t += dt; d.visit = (d.visit || 0) + dt;
     const dist = distToCamper(d);
     const scared = st.noise > 0.5 || st.light > 0.8 || G.flash > 0.5 || Z.bear.active && Math.hypot(Z.bear.pos.x - d.pos.x, Z.bear.pos.z - d.pos.z) < 25;
-    if (scared && d.state !== 'flee') { d.state = 'flee'; const a = Math.atan2(d.pos.z - c.z, d.pos.x - c.x); d.target.set(c.x + Math.cos(a) * 60, 0, c.z + Math.sin(a) * 60); bus.emit('deerflee'); }
+    if (scared && d.state !== 'flee') { d.state = 'flee'; const a = Math.atan2(d.pos.z - c.z, d.pos.x - c.x); { const [fx, fz] = inWorld(c.x + Math.cos(a) * 60, c.z + Math.sin(a) * 60); d.target.set(fx, 0, fz); } bus.emit('deerflee'); }
     if (d.state === 'approach') {
       const r = d.steer(dt, d.target.x, d.target.z, 1.3);
       d.play?.('Walk');
@@ -322,7 +326,7 @@ export function updateAnimals(dt) {
       if (b.t > 4) { b.t = 0; b.state = b.hits >= 3 || b.aggro < 0.35 ? 'leave' : 'charge'; if (b.state === 'charge') bus.emit('bearcharge'); }
     } else if (b.state === 'flee' || b.state === 'leave') {
       const a = Math.atan2(b.pos.z - c.z, b.pos.x - c.x);
-      b.steer(dt, c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70, b.state === 'flee' ? 6 : 1.6);
+      b.steer(dt, ...inWorld(c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70), b.state === 'flee' ? 6 : 1.6);
       b.rear += (0 - b.rear) * dt * 3;
       b.leaveT = (b.leaveT || 0) + dt;
       if (dist > 55 || b.leaveT > 60) { b.leaveT = 0; b.despawn(); bus.emit('bearleft'); }
@@ -341,7 +345,7 @@ export function updateAnimals(dt) {
       if (w.t > 45 || st.light > 0.9 || st.noise > 0.6 || G.flash > 0.5) { w.state = 'leave'; w.walkT = 0; }
     } else {
       const a = Math.atan2(w.pos.z - c.z, w.pos.x - c.x);
-      w.steer(dt, c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70, 6);
+      w.steer(dt, ...inWorld(c.x + Math.cos(a) * 70, c.z + Math.sin(a) * 70), 6);
       w.play('Run');
       w.walkT = (w.walkT || 0) + dt;
       if (distToCamper(w) > 55 || w.walkT > 40) w.despawn(); // (a wolf wedged against the rim/trees never despawned)
