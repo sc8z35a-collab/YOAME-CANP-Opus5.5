@@ -92,9 +92,22 @@ export const RAILS = [];   // bridge guard-rail colliders (posts every 1m) used 
 for (const r of ROADS) if (r.bridge) {
   const [a, b] = r.bridge; BRIDGES.push({ r, a: Math.max(0, a - 1), b: Math.min(r.s.length - 1, b + 1) });
 }
-for (const B of BRIDGES) for (let i = B.a; i < B.b; i++) {
-  const p = B.r.s[i], q = B.r.s[i + 1], L = Math.hypot(q.x - p.x, q.z - p.z), nx = -(q.z - p.z) / L, nz = (q.x - p.x) / L;
-  for (let k = 0; k < L; k += 1) for (const sd of [-1, 1]) { const x = p.x + (q.x - p.x) * k / L + nx * sd * (ROAD_HALF + 0.35), z = p.z + (q.z - p.z) * k / L + nz * sd * (ROAD_HALF + 0.35); RAILS.push({ x, z, r: 0.3, rail: true }); }
+// Posts only along the actual deck (both samples on the bridge). The land approaches (a-1→a, b→b+1)
+// used to carry posts too: on the sharp west-bridge approach the 6.5m van's front corner hit those
+// invisible land posts and the autopilot gave up ("進めない") and detoured for minutes.
+// The last metre at each end flares outward (bell-mouth) so the van is guided in instead of stopped.
+export const railSpan = (B, i) => !!(B.r.s[i].bridge && B.r.s[i + 1].bridge);
+for (const B of BRIDGES) {
+  let i0 = -1, i1 = -1; for (let i = B.a; i < B.b; i++) if (railSpan(B, i)) { if (i0 < 0) i0 = i; i1 = i; }
+  for (let i = B.a; i < B.b; i++) {
+    if (!railSpan(B, i)) continue;
+    const p = B.r.s[i], q = B.r.s[i + 1], L = Math.hypot(q.x - p.x, q.z - p.z), nx = -(q.z - p.z) / L, nz = (q.x - p.x) / L;
+    for (let k = 0; k <= L; k += 1) {
+      const t = k / L, flare = (i === i0 ? Math.max(0, 1 - t * L) : 0) + (i === i1 ? Math.max(0, 1 - (1 - t) * L) : 0);
+      const off = ROAD_HALF + 0.35 + flare * 0.4;
+      for (const sd of [-1, 1]) RAILS.push({ x: p.x + (q.x - p.x) * t + nx * sd * off, z: p.z + (q.z - p.z) * t + nz * sd * off, r: 0.3, rail: true });
+    }
+  }
 }
 for (const B of BRIDGES) { const s = B.r.s.slice(B.a, B.b + 1); B.box = [Math.min(...s.map(p => p.x)) - 4, Math.min(...s.map(p => p.z)) - 4, Math.max(...s.map(p => p.x)) + 4, Math.max(...s.map(p => p.z)) + 4]; }
 function deckAt(x, z) {
@@ -246,7 +259,7 @@ function buildBridges(scene) {
       const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 + 0.4, 0.18, Math.hypot(L, q.h - p.h) + 0.05), plank);
       deck.position.set((p.x + q.x) / 2, (p.h + q.h) / 2 - 0.07, (p.z + q.z) / 2); deck.rotation.set(-pitch, yaw, 0, 'YXZ');
       deck.castShadow = deck.receiveShadow = true; g.add(deck);
-      for (const s of [-1, 1]) { // side rails
+      for (const s of (railSpan(B, i) ? [-1, 1] : [])) { // side rails (deck spans only, same as the colliders)
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, L + 0.05), beam);
         rail.position.copy(deck.position).add(new THREE.Vector3(Math.cos(yaw) * s * (ROAD_HALF + 0.15), 0.75, -Math.sin(yaw) * s * (ROAD_HALF + 0.15)));
         rail.rotation.set(-pitch, yaw, 0, 'YXZ'); rail.castShadow = true; g.add(rail);
