@@ -91,3 +91,8 @@
 
 ### A-20 [C] 🎥 ボタンの点灯が実際のカメラ状態と食い違う（?cam=chase 起動時など）
 - 修正: updateUI で V.cam と毎回同期（早送りボタンも G.timeMul と同期）
+
+### A-21 [S] tools/save.sh の競合フォールバック `git pull --no-rebase -X ours` が他エージェントの変更を黙って捨てる
+- 場所: tools/save.sh
+- 症状: 同じファイルを2人が編集して rebase が競合すると、マージで**自分側を勝たせて**リモートの変更行を破棄、そのまま push（B 報告: INBOX の他人の行が消えた。コードでも同様に修正が巻き戻り得る＝データ破損）
+- 修正: 競合時は rebase を中止してエラー表示・push しない（ローカルコミットは保持）。共有 md は B が .gitattributes で merge=union 化済み。push 失敗も警告
