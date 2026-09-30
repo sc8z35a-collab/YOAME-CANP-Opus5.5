@@ -283,7 +283,7 @@ function step(dt) {
   VEH.steer += clamp(clamp(c.steer, -lim, lim) - VEH.steer, -dt * STEER_RATE, dt * STEER_RATE);
   updateDrivetrain(dt);
   const mask = drivenMask(D.range);
-  let grounded = 0, skid = 0, muSum = 0, stuck = 0;
+  let grounded = 0, skid = 0, muSum = 0, stuck = 0, hull = 0;
   // ---- pass 1: suspension raycasts
   for (let i = 0; i < 4; i++) {
     const [wx, wz] = WHEELS[i], W = VEH.wheels[i];
@@ -405,7 +405,7 @@ function step(dt) {
     if (p.y < g) {
       const n = normalAt(p.x, p.z, _n, p.y + 0.3);
       surfaceAt(p.x, p.z, g, S0);
-      contact(p, n, (g - p.y) * n.y, null, clamp(S0.mu * 0.8, 0.2, 0.65), 'ground');
+      contact(p, n, (g - p.y) * n.y, null, clamp(S0.mu * 0.8, 0.2, 0.65), 'ground'); hull++;
     }
   }
   // ---- trees / fixed colliders & movable obstacles vs hull box (in body local space)
@@ -494,7 +494,7 @@ function step(dt) {
   VEH.pos.x = clamp(VEH.pos.x, WORLD.x0 + 6, WORLD.x1 - 6); VEH.pos.z = clamp(VEH.pos.z, WORLD.z0 + 6, WORLD.z1 - 6);
   const floor = heightAt(VEH.pos.x, VEH.pos.z) - 3;
   if (VEH.pos.y < floor) { VEH.pos.y = floor + 1; VEH.v.y = Math.max(0, VEH.v.y); } // tunnelling guard
-  VEH.grounded = grounded; VEH.skid = Math.max(VEH.skid * 0.97, skid); if (grounded) VEH.mu = muSum / grounded;
+  VEH.grounded = grounded; VEH.hullGround = hull; VEH.skid = Math.max(VEH.skid * 0.97, skid); if (grounded) VEH.mu = muSum / grounded;
   VEH.stuck = stuck;
   if (VEH.wheels[2].contact) VEH.surface = VEH.wheels[2].kind;
   // report the scrape of this step (body local)
@@ -586,7 +586,8 @@ export function updateVehicle(dt, group) {
   VEH.speed = VEH.v.length();
   VEH.fwdSpeed = VEH.v.dot(VEH.fwd);
   VEH.latSpeed = VEH.v.dot(_lv.set(1, 0, 0).applyQuaternion(VEH.q));
-  VEH.airT = VEH.grounded ? 0 : VEH.airT + dt;
+  // airborne = neither a wheel nor the body touches the ground (lying on its side / roof is resting, not falling)
+  VEH.airT = VEH.grounded || VEH.hullGround ? 0 : VEH.airT + dt;
   if (n) { // accelerations in g (body frame) for HUD / sway
     const a = _pv.subVectors(VEH.v, _pv).divideScalar(n * STEP).applyQuaternion(_wq.copy(VEH.q).invert());
     VEH.latG += (a.x / 9.81 - VEH.latG) * Math.min(1, dt * 6); VEH.lonG += (-a.z / 9.81 - VEH.lonG) * Math.min(1, dt * 6);
