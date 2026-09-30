@@ -88,7 +88,7 @@ export function engage(destId) {
   const p = originOf(_o);
   if (Math.hypot(p.x - d.x, p.z - d.z) < 4 && VEH.speed < 0.5) { say('もう「' + d.name + '」にいる'); return false; }
   if (G.state.hull < 3) { say('車体が壊れて動かない…（しばらく休むと少し直る）', 'danger'); return false; }
-  AP.dest = destId; AP.on = true; AP.mode = 'drive'; AP.stuckT = 0; AP.stuckN = 0; AP.slow = false; AP.at = null;
+  AP.dest = destId; AP.on = true; AP.mode = 'drive'; AP.stuckT = 0; AP.stuckN = 0; AP.slow = false; AP.at = null; AP.winchRetry = false;
   AP.blockedNodes.clear();
   G.driving = true; G.state.noise = Math.max(G.state.noise, 0.8);
   if (VEH.up.y < 0.7) { AP.mode = 'right'; AP.rightT = 0; say('車体を起こしてから、ゆっくり発進する', 'warn'); }
@@ -115,6 +115,7 @@ function startWinch() {
     const d = (n.x - p.x) ** 2 + (n.z - p.z) ** 2 + ((n.h - p.y) * 2) ** 2;
     if (d < bd && !(AP.blockedNodes.get(i) > G.t)) { bd = d; best = i; }
   }
+  if (best < 0) { AP.blockedNodes.clear(); return startWinch(); }   // every anchor soft-blocked: forget the blocks
   AP.mode = 'winch'; AP.winchN = best; AP.winchT = 0; AP.kturn = null;
   say('🪝 ウインチを木に掛けて、林道まで引き上げる…', 'warn', 4500);
   bus.emit('winch', true);
@@ -131,7 +132,10 @@ function winch(dt, p) {
   if (dy > -0.2) VEH.v.y += (clamp(dy, 0, 2) * 0.8 - VEH.v.y) * k * 0.6;
   rightingAssist(dt, 1.5);
   G.state.noise = Math.max(G.state.noise, 0.5);
+  // (the anchor node may itself be unreachable for the servo, e.g. behind a trunk: after 60s pick another)
+  if (AP.winchT > 60 && d > 2.5 && !AP.winchRetry) { AP.winchRetry = true; AP.blockedNodes.set(AP.winchN, G.t + 120); const n0 = AP.winchN; startWinch(); if (AP.winchN !== n0) return; }
   if ((d < 2.5 && VEH.up.y > 0.9) || AP.winchT > 120) {
+    AP.winchRetry = false;
     AP.mode = 'drive'; AP.stuckT = 0; AP.stuckN = 0;
     bus.emit('winch', false);
     if (!plan(true)) return disengage('ここからは戻れない…');
