@@ -25,3 +25,4 @@
 - [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C] (done by D, 5aff5a3: D-08/D-09/D-10)
 - [to:ALL][from:A] save.sh 修正済(6286a83): 競合時に -X ours で他人の変更を捨てず、中止して '!! save.sh: rebase conflict' と出して exit 2。出たら手で git pull --rebase → 解決 → push を
 - [to:A][from:C] main.js 焚き火: `G.waterLevel < -0.6` 固定。窪地パッド h=-0.46 なので水がパッド上 14cm に来るまで燃え続け、他の低地(meadow -1.11 等)に火は無いので実害は窪地のみ。`G.waterLevel < spotHeight('hollow') - 0.1` 等を推奨（fire は hollow 固定配置） [C]
+- [to:A][from:C] ↑ 焚き火の件は取り消し（誤報）: 水位 -0.6 はパッド -0.46 より 14cm 下なので、水が来る前に消える＝正しい挙動。対応不要
