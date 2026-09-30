@@ -81,7 +81,8 @@ export function bakeStep(ms = 6) {
     const x = BK.x; x.font = '600 15px "Noto Sans JP", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     for (let j = 60; j < MAP - 60; j += 170) for (let i = 60; i < MAP - 60; i += 170) {
       const k = j * MAP + i, h = H[k];
-      if (Math.floor(h / 25) !== Math.floor(H[k + 3] / 25)) { x.fillStyle = 'rgba(40,34,20,.55)'; x.fillText(Math.round(h / 25) * 25 + '', i, j); }
+      // label = the index contour actually crossed here (round() could print the neighbouring 25m line)
+      if (Math.floor(h / 25) !== Math.floor(H[k + 3] / 25)) { x.fillStyle = 'rgba(40,34,20,.55)'; x.fillText(Math.max(Math.floor(h / 25), Math.floor(H[k + 3] / 25)) * 25 + '', i, j); }
     }
     BK.done = true; BK.H = null; BK.img = null;
   }
@@ -280,7 +281,8 @@ function refreshPanel(rebuild = false) {
     const km = Math.hypot(p.x - d.x, p.z - d.z), dh = d.h - p.y;
     info.innerHTML = `<b>${d.name}</b><small>${d.desc}</small>
       <div class="tstats"><span>📏 ${Math.round(km)} m</span><span>⛰ ${dh >= 0 ? '+' : ''}${Math.round(dh)} m</span><span>🛣 ${ROAD_NAMES[d.road]}</span></div>`;
-    go.disabled = false; go.textContent = AP.on && AP.dest === d.id ? '走行中' : 'ここへ自動運転';
+    const going = AP.on && AP.dest === d.id; // already heading there: re-engaging would restart the route / progress bar
+    go.disabled = going; go.textContent = going ? '走行中' : 'ここへ自動運転';
   } else {
     info.innerHTML = AP.on ? `<b>▶ ${DESTS[AP.dest].name}</b><div class="tstats"><span>残り ${Math.round(AP.remain)} m</span><span>約 ${eta(AP.remain)}</span></div>`
       : '<b>目的地を選ぶ</b><small>地図の●をタップ、またはリストから選択</small>';
@@ -301,7 +303,11 @@ function refreshPanel(rebuild = false) {
       list.appendChild(b);
     }
   }
-  list.querySelectorAll('.tli').forEach(b => b.classList.toggle('on', b.dataset.id === TAB.sel));
+  list.querySelectorAll('.tli').forEach(b => {
+    b.classList.toggle('on', b.dataset.id === TAB.sel);
+    if (!rebuild) { const x = DESTS[b.dataset.id], em = b.querySelector('em'), dist = Math.hypot(p.x - x.x, p.z - x.z); // live distances while driving
+      if (em) em.textContent = dist < 1000 ? Math.round(dist) + 'm' : (dist / 1000).toFixed(1) + 'km'; }
+  });
   document.querySelectorAll('#tabSort button').forEach(b => b.classList.toggle('on', b.dataset.sort === TAB.sort));
   document.getElementById('tabLbl')?.classList.toggle('on', TAB.labels);
 }
@@ -309,6 +315,7 @@ function zoomAt(f, sx, sy) { // zoom keeping the map point under (sx,sy) [css px
   const c = TAB.fcanvas, sc0 = Math.min(c.clientWidth, c.clientHeight) / MAP * TAB.zoom;
   const nz = clamp(TAB.zoom * f, 0.9, 14), sc1 = Math.min(c.clientWidth, c.clientHeight) / MAP * nz;
   TAB.cu += sx / sc0 - sx / sc1; TAB.cv += sy / sc0 - sy / sc1; TAB.zoom = nz;
+  TAB.cu = clamp(TAB.cu, 0, MAP); TAB.cv = clamp(TAB.cv, 0, MAP); // wheel/buttons could zoom the view off the map (black screen)
 }
 export function initTabletUI(root) {
   const el = document.createElement('div'); el.id = 'tablet'; el.className = 'hidden';
@@ -345,7 +352,7 @@ export function initTabletUI(root) {
     for (const d of Object.values(DESTS)) { const [du, dv] = toMap(d.x, d.z); const dd = Math.hypot(du - u, dv - v); if (dd < bd) { bd = dd; best = d.id; } }
     TAB.sel = best; refreshPanel(); if (best) bus.emit('sfx', 'switch');
   });
-  c.addEventListener('pointercancel', e => pts.delete(e.pointerId));
+  c.addEventListener('pointercancel', e => { pts.delete(e.pointerId); if (!pts.size) TAB.pinched = false; }); // else the next tap after a cancelled pinch was swallowed
   c.addEventListener('wheel', e => { const [sx, sy] = rel(e.clientX, e.clientY); zoomAt(e.deltaY > 0 ? 0.88 : 1.14, sx, sy); }, { passive: true });
   el.querySelector('#tabZi').onclick = () => zoomAt(1.5, 0, 0);
   el.querySelector('#tabZo').onclick = () => zoomAt(1 / 1.5, 0, 0);
