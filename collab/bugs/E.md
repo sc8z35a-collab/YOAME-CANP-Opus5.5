@@ -125,3 +125,8 @@
 - 修正: `width:100%;height:100%`（position:fixed; inset:0 と一致）。パネルの max-height も 92dvh を併記
 
 tools/dash_test.html を追加（車内ダッシュボード小画面の撮影用）
+
+### E-23 [C] 車内ダッシュボードの地図で、自車が下の帯（ステータス表示 54px）の近くに描かれ、南へ走ると前方の道が帯に隠れる
+- 場所: js/tablet.js draw()（full=false）の中心 = 自車
+- 修正: 帯を除いた領域の中央に自車を置く
+- 検証: tools/dash_test.html?route=summit で撮影

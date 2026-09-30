@@ -98,7 +98,9 @@ function draw(ctx, W, H, full, dpr = 1) {
   const p = originOf(_tp);
   const z = full ? TAB.zoom : 3.2;
   const [pu, pv] = toMap(p.x, p.z);
-  const [cu, cv] = full ? [TAB.cu ?? pu, TAB.cv ?? pv] : [pu, pv];
+  // dashboard screen: the van sits at the centre of the area ABOVE the 54px status strip (it used to
+  // be centred on the whole canvas, so when driving south the road ahead was hidden under the strip)
+  const [cu, cv] = full ? [TAB.cu ?? pu, TAB.cv ?? pv] : [pu, pv + 27 / (Math.min(W, H) / MAP * z)];
   const sc = Math.min(W, H) / MAP * z;              // screen px per map px
   const S = (u, v) => [W / 2 + (u - cu) * sc, H / 2 + (v - cv) * sc];
   const SW = (x, zz) => { const [u, v] = toMap(x, zz); return S(u, v); };
