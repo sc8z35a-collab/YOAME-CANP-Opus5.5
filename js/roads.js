@@ -2,7 +2,7 @@
 // is generated from the raw relief with a grade limit, so every road is drivable. The graph
 // (samples every ~2m, junctions, both directions) is what the autopilot routes on.
 import { THREE, clamp, lerp, smooth } from './core.js';
-import { rawHeight, creekX } from './relief.js';
+import { rawHeight, creekX, WATER_BASE } from './relief.js';
 
 export const GRADE_MAX = 0.2;   // steepest road grade (20%)
 export const ROAD_HALF = 2.6;   // flat bed half width (m)
@@ -13,7 +13,7 @@ const DEF = [
   { id: 'valley', name: '沢沿いの林道', pts: [[7, -205], [10, -170], [5, -135], [9, -100], [5, -65], [3, -32], [1, -12], [0, 0], [2, 25], [8, 60], [4, 100], [9, 140], [6, 185]] },
   { id: 'mount', name: '峠道', pts: [[3, -32], [16, -48], [34, -42], [44, -26], [40, -12], [50, -6], [62, -12], [64, -26], [58, -40], [54, -58], [64, -76], [84, -82], [102, -72], [114, -56], [130, -50], [142, -64], [146, -86], [138, -104], [148, -122], [168, -122]] },
   { id: 'west', name: '西の橋ルート', pts: [[7, 52], [3, 60], [-2, 61], [-12, 62], [-24, 63], [-36, 70], [-48, 84], [-62, 96], [-80, 100], [-96, 88], [-110, 72], [-130, 74], [-152, 86]], bridge: [2, 4] },
-  { id: 'ford', name: '浅瀬の渡し', pts: [[7, -112], [2, -118], [-4, -122], [-18, -121], [-32, -120], [-52, -133], [-78, -140], [-100, -126], [-120, -110], [-142, -118]] },
+  { id: 'ford', name: '浅瀬の渡し', pts: [[8, -111], [1, -113], [-5, -118], [-18, -121], [-32, -120], [-52, -133], [-78, -140], [-100, -126], [-120, -110], [-142, -118]] },
   { id: 'ridgeW', name: '西尾根道', pts: [[-110, 72], [-104, 42], [-112, 4], [-105, -36], [-113, -78], [-120, -110]] },
   { id: 'north', name: '北の森道', pts: [[9, 140], [32, 146], [52, 140], [72, 154], [92, 168]] },
   { id: 'traverse', name: '中腹トラバース', pts: [[50, -6], [58, 18], [52, 50], [58, 82], [48, 112], [32, 146]] },
@@ -113,6 +113,10 @@ for (const d of DEF) {
     for (let i = 1; i < n - 1; i++) if (!pinned[i]) nh[i] = (h[i - 1] + 2 * h[i] + h[i + 1]) / 4;
     h = nh;
   }
+  // ford: where the road crosses the creek channel without a bridge, the bed dips to the stream
+  // bed (≈15cm under the normal water) so it really is a shallow crossing that floods in a spate
+  const fordAt = i => !(d.bridge && i >= ctrlS[d.bridge[0]] && i <= ctrlS[d.bridge[1]]) && Math.abs(s[i].x - creekX(s[i].z)) < 3.5;
+  for (let i = 0; i < n; i++) if (fordAt(i) && !pinned[i]) { h[i] = WATER_BASE - 0.15; pinned[i] = true; }
   limitGrade(h, pinned, GRADE_MAX * 0.7); // leave slack so the flat pads below stay feasible
   // bridge span: straight deck between the bank samples
   if (d.bridge) {

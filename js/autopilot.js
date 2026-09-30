@@ -25,7 +25,7 @@ function say(msg, level = 'info', ms = 3800) { AP.msg = msg; bus.emit('toast', {
 function nodeCost(n) {
   const b = AP.blockedNodes.get(n);
   if (b && G.t < b) return 400;                  // soft block: avoid if any alternative exists
-  if (NODES[n].ford && G.waterLevel > -1.2) return 300; // flooded ford: go around if possible
+  if (NODES[n].ford && G.waterLevel > NODES[n].h + 0.45) return 300; // flooded ford (water above the axles): go around if possible
   return 0;
 }
 
