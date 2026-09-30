@@ -505,7 +505,7 @@ function buildInterior(I, M) {
   map.position.z = 0.342;
   const clk = new THREE.Mesh(new THREE.CircleGeometry(0.11, 40), new THREE.MeshStandardMaterial({ map: clockTex(), roughness: 0.4 }));
   add(clk); C.clock = clk; drawClock();
-  clk.position.set(-0.176, F + 1.25, 1.2); // beside the mirror (z 0.77..1.07), not on it clk.rotation.y = Math.PI / 2;
+  clk.position.set(-0.176, F + 1.25, 1.2); clk.rotation.y = Math.PI / 2; // beside the mirror (z 0.77..1.07), not on it
   const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.113, 0.01, 10, 40), M.chrome); bezel.position.copy(clk.position); bezel.position.x += 0.004; bezel.rotation.y = Math.PI / 2; add(bezel);
   drawRadio(G.state.radio ? 'FM 81.3 森' : '---'); // the radio starts switched off
   C.emissives.push({ m: C.radio.material, base: 1.0, kind: 'radio' });
