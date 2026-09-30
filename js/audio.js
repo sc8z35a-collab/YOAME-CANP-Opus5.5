@@ -225,7 +225,7 @@ export function updateAudio(dt) {
   // loudness relative to the normal creek surface (WATER_BASE); the old -1.55 base made it silent
   const creek = clamp(1 - cd / 40) * 0.05 * (1 + Math.max(0, G.waterLevel - WATER_BASE) * 2);
   set(N.creek.g.gain, creek);
-  A.floodT = E.flood.on ? 1 : 0;
+  A.floodT = E.flood.on && !S.over ? 1 : 0;
   set(N.flood.g.gain, A.floodT * 0.5 * clamp((G.waterLevel + 2.05) / 2), 1.5);
   A.rumbleT = Math.max(0, (A.rumbleT || 0) - dt);
   set(N.rumble.g.gain, clamp(A.rumbleT / 6) * 0.9, 0.5);
@@ -243,7 +243,8 @@ export function updateAudio(dt) {
   set(A.outside.frequency, !inCab ? 16000 : S.hiding ? 900 : 2400 - (G.state.curtainsClosed ? 800 : 0));
   // bear footsteps & breathing when close
   const b = Z.bear;
-  if (b?.active && G.camper) {
+  // (after game over the animal update stops, so a frozen bear kept stomping and breathing forever)
+  if (b?.active && G.camper && !S.over) {
     const d = Math.hypot(b.pos.x - G.camper.position.x, b.pos.z - G.camper.position.z);
     // footsteps only while it actually walks (a reared / standing bear makes no steps), and only when audible
     A.stepT = (A.stepT || 0) - dt * (b.speed > 0.15 ? 0.8 + b.speed * 1.3 : 0);
