@@ -1,7 +1,7 @@
 // Sky, sun/moon, stars, clouds, fog, rain streaks + splashes, lightning, fireflies, creek water.
 import { THREE, G, U, P, clamp, smooth, lerp, damp, rng, bus } from './core.js';
 import { Sky } from './lib/addons/objects/Sky.js';
-import { creekX, CREEK_BED, heightAt } from './terrain.js';
+import { creekX, CREEK_BED, WATER_BASE, heightAt } from './terrain.js';
 
 export const W = {
   sky: null, sun: null, moon: null, hemi: null, stars: null, rain: null, splash: null,
@@ -19,6 +19,7 @@ export const WEATHERS = {
 };
 
 export function setWeather(mode, instant = false) {
+  if (!WEATHERS[mode]) mode = 'clear'; // unknown ?weather= value: W.mode used to become garbage (blank HUD label)
   W.mode = mode;
   Object.assign(W.target, WEATHERS[mode]);
   if (instant) { G.rain = W.target.rain; G.cloud = W.target.cloud; G.fog = W.target.fog; G.wind = W.target.wind; G.wet = mode === 'rain' || mode === 'storm' ? 1 : 0; }
@@ -47,8 +48,13 @@ export function buildWeather(scene, renderer) {
   const sc = sun.shadow.camera; sc.left = -38; sc.right = 38; sc.top = 38; sc.bottom = -38; sc.near = 1; sc.far = 260;
   sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target); W.sun = sun;
-  const bolt = new THREE.DirectionalLight(0xcfe0ff, 0); bolt.position.set(-60, 120, -80); scene.add(bolt); W.boltLight = bolt;
+  // the target must be in the scene graph, otherwise its matrixWorld never updates and the flash always
+  // shines toward the world origin instead of the strike point
+  const bolt = new THREE.DirectionalLight(0xcfe0ff, 0); bolt.position.set(-60, 120, -80); scene.add(bolt, bolt.target); W.boltLight = bolt;
 
+  // the creek starts at its normal level (core.js still had the pre-v3 -1.55 => a 50cm flood at load
+  // that slowly drained over the first minute)
+  if (G.waterLevel > WATER_BASE) G.waterLevel = WATER_BASE;
   // --- fog
   scene.fog = new THREE.FogExp2(0x9aa7a0, 0.01);
 
@@ -77,7 +83,7 @@ function starDome() {
       void main(){ vM = mag; vY = position.y; vec4 p = modelViewMatrix*vec4(position*1400., 1.);
         gl_Position = projectionMatrix*p; gl_PointSize = (1.2 + mag*3.2) * (0.8 + 0.2*sin(uTime*3.0 + position.x*400.)); }`,
     fragmentShader: `varying float vM; varying float vY; uniform float uNight, uCloud;
-      void main(){ float d = length(gl_PointCoord-0.5); float a = smoothstep(.5, .0, d);
+      void main(){ float d = length(gl_PointCoord-0.5); float a = 1. - smoothstep(0., .5, d);
         gl_FragColor = vec4(vec3(0.85,0.9,1.0)*(0.5+vM*1.6), a*uNight*(1.-uCloud)*smoothstep(0.02,0.2,vY)); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
   });
@@ -198,7 +204,7 @@ function buildRain(scene) {
         vec3 p = vec3(aOff.x, aH + 0.03, aOff.y) + position*(0.04 + t*0.12);
         gl_Position = projectionMatrix*viewMatrix*vec4(p,1.); }`,
     fragmentShader: `varying vec2 vP; varying float vT, vOn; uniform vec3 uLight;
-      void main(){ float r = length(vP); float ring = smoothstep(0.15, 0.0, abs(r-0.75))*(1.-vT)*vOn; if (ring<0.01) discard;
+      void main(){ float r = length(vP); float ring = (1. - smoothstep(0.0, 0.15, abs(r-0.75)))*(1.-vT)*vOn; if (ring<0.01) discard;
         gl_FragColor = vec4(uLight*1.5, ring*0.5); }`,
     transparent: true, depthWrite: false,
   });
@@ -206,13 +212,18 @@ function buildRain(scene) {
   scene.add(splash); W.splash = splash;
 }
 
+const _inv = new THREE.Matrix4(), _sp = new THREE.Vector3();
 export function placeSplashes(cx, cz) {
   const g = W.splash.geometry, o = g.attributes.aOff, h = g.attributes.aH;
   const R = rng(Math.floor(cx * 7 + cz * 13));
+  const inv = G.camper ? _inv.copy(G.camper.matrixWorld).invert() : null;
   for (let i = 0; i < o.count; i++) {
     let x = cx + R() * 34 - 17, z = cz + R() * 34 - 17;
     o.setXY(i, x, z);
-    h.setX(i, Math.max(heightAt(x, z), G.waterLevel));
+    let y = Math.max(heightAt(x, z), G.waterLevel);
+    // no ripples on the dry ground under the van (they showed through the floor / under the chassis)
+    if (inv) { _sp.set(x, y, z).applyMatrix4(inv); if (Math.abs(_sp.x) < 1.35 && _sp.z > -4.5 && _sp.z < 3.4) y = -1e4; }
+    h.setX(i, y);
   }
   o.needsUpdate = true; h.needsUpdate = true;
 }
@@ -251,12 +262,10 @@ function buildWater(scene) {
 
 // ---------------------------------------------------------------- fireflies
 function buildFireflies(scene) {
-  const N = 90, pos = new Float32Array(N * 3), ph = new Float32Array(N);
+  const N = 90, pos = new Float32Array(N * 3), ph = new Float32Array(N), seed = new Float32Array(N * 3);
   const R = rng(8);
-  for (let i = 0; i < N; i++) {
-    const z = (R() - 0.5) * 60, x = creekX(z) + (R() - 0.5) * 14;
-    pos[i * 3] = x; pos[i * 3 + 1] = heightAt(x, z) + 0.4 + R() * 1.6; pos[i * 3 + 2] = z; ph[i] = R() * 100;
-  }
+  for (let i = 0; i < N; i++) { seed[i * 3] = R(); seed[i * 3 + 1] = R(); seed[i * 3 + 2] = R(); ph[i] = R() * 100; }
+  W.ffSeed = seed; W.ffChunk = null;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('ph', new THREE.BufferAttribute(ph, 1));
@@ -266,11 +275,24 @@ function buildFireflies(scene) {
       void main(){ vec3 p = position + vec3(sin(uTime*0.3+ph)*1.2, sin(uTime*0.5+ph*2.)*0.4, cos(uTime*0.27+ph)*1.2);
         vB = pow(max(sin(uTime*1.3 + ph*3.), 0.), 6.);
         vec4 mv = modelViewMatrix*vec4(p,1.); gl_Position = projectionMatrix*mv; gl_PointSize = 90./-mv.z; }`,
-    fragmentShader: `uniform float uAmt; varying float vB; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,0.,d);
+    fragmentShader: `uniform float uAmt; varying float vB; void main(){ float d=length(gl_PointCoord-.5); float a=1.-smoothstep(0.,.5,d);
         gl_FragColor = vec4(vec3(0.75,1.0,0.35)*3.0, a*a*vB*uAmt); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const p = new THREE.Points(g, m); p.frustumCulled = false; scene.add(p); W.fireflies = p;
+  placeFireflies(0);
+}
+// Fireflies live along the creek near the van, laid out per 60 m chunk in WORLD coordinates (the old
+// code shifted one fixed swarm along z only, so away from camp it hovered off the meandering creek at
+// the old ground height: buried in the banks or floating metres up).
+function placeFireflies(zc) {
+  if (W.ffChunk === zc) return; W.ffChunk = zc;
+  const a = W.fireflies.geometry.attributes.position, s = W.ffSeed;
+  for (let i = 0; i < a.count; i++) {
+    const z = zc + (s[i * 3] - 0.5) * 60, x = creekX(z) + (s[i * 3 + 1] - 0.5) * 14;
+    a.setXYZ(i, x, Math.max(heightAt(x, z), WATER_BASE) + 0.4 + s[i * 3 + 2] * 1.6, z);
+  }
+  a.needsUpdate = true;
 }
 
 // ---------------------------------------------------------------- lightning bolt
@@ -326,7 +348,8 @@ export function updateWeather(dt, camera) {
   const sunA = (hr - 6) / 12 * Math.PI;
   sunDir.set(Math.cos(sunA) * 0.85, Math.sin(sunA), -0.35 + Math.cos(sunA) * 0.1).normalize();
   const moonA = (hr - 18.5) / 12 * Math.PI;
-  moonDir.set(-Math.cos(moonA) * 0.7, Math.max(Math.sin(moonA), -0.3) * 0.8 + 0.1, -0.6).normalize();
+  // rises in the east (+x, like the sun) at 18:30 and sets in the west; it used to rise in the west
+  moonDir.set(Math.cos(moonA) * 0.7, Math.max(Math.sin(moonA), -0.3) * 0.8 + 0.1, -0.6).normalize();
   const elev = sunDir.y;
   G.daylight = smooth(-0.1, 0.25, elev);
   G.night = 1 - smooth(-0.18, 0.05, elev);
@@ -405,6 +428,6 @@ export function updateWeather(dt, camera) {
   W.uFlow && (W.uFlow.value = 1 + Math.max(0, G.waterLevel + 2.05) * 1.5 + G.rain);
 
   // fireflies on clear warm nights
-  if (G.camper) { W.fireflies.position.set(0, 0, Math.round((G.camper.position.z) / 60) * 60); W.fireflies.position.y = 0; }
+  if (G.camper) placeFireflies(Math.round(G.camper.position.z / 60) * 60);
   W.fireflies.material.uniforms.uAmt.value = damp(W.fireflies.material.uniforms.uAmt.value, G.night * (1 - G.rain) * (1 - G.cloud * 0.6), 0.5, dt);
 }
