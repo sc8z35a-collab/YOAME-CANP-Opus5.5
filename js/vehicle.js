@@ -515,11 +515,11 @@ function stepObstacles(dt) {
     if (o.static || o.frozen || o.sleep) continue;
     o.v.y -= 9.81 * dt;
     o.p.addScaledVector(o.v, dt);
-    const g = heightAt(o.p.x, o.p.z) + o.r * 0.85;
+    const g = groundAt(o.p.x, o.p.z, o.p.y) + o.r * 0.85;   // terrain or bridge deck (debris can land on the bridge)
     o.grounded = false;
     if (o.p.y < g) {
       o.p.y = g; o.grounded = true;
-      const n = normalAt(o.p.x, o.p.z, og), vn = o.v.dot(n);
+      const n = normalAt(o.p.x, o.p.z, og, o.p.y), vn = o.v.dot(n);
       if (vn < 0) o.v.addScaledVector(n, -vn * 1.2);                  // bounce a little
       // tangential: irregular rocks roll/slide with resistance
       const vt = _ov.copy(o.v).addScaledVector(n, -o.v.dot(n)), sp = vt.length();
