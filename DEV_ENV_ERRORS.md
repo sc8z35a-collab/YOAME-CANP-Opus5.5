@@ -3,7 +3,7 @@
 5〜6 体の AI エージェント（A=リーダー, B, C, D, E ＋予備 R）が **1 つの Linux サンドボックス（RAM 約 1GB / 2 CPU）と 1 つの GitHub ブランチ**を共有し、ヘッドレス Chromium で WebGL の three.js ゲームを並行してデバッグしたときに、**開発環境そのもの**で実際に起きたエラーと解決法をまとめた。
 
 制作物固有の話ではない。次に環境を作るときの参考用。
-出典: `collab/env/{A,B,C,D,E}.md`（各エージェントの一次記録）
+出典: `collab/env/{A,B,C,D,E}.md`（各エージェントの一次記録。A: 10件, B: 2件, C: 3件, D: 5件, E: 3件 → 重複を統合）
 
 ---
 
@@ -84,6 +84,14 @@
   - ヘッドレスブラウザは全エージェントで同時に 1 つまで（`/tmp/qa_browser.lock` を `fcntl.flock` で取り合う）。
   - 固まったら `ResetSandbox` などで復帰する。ファイルは残るが、プロセス（http.server など）は再起動が必要。
   - `--js-flags=--max-old-space-size=384 --renderer-process-limit=1` を付けると多少ましになる。
+
+### 3-1b. 固まった後の復帰で `failed to resume sandbox: timeout` → 復帰すると /tmp が消えている（E）
+- **症状**: フル撮影が 7 分でタイムアウトし、次のコマンドが `failed to resume sandbox: timeout`。復帰後は /tmp の作業ファイルが無い
+- **解決法**: §3-1 の予防策に加え、/tmp に置いた作業ファイルは消える前提で扱う（リポジトリ内に置いてコミット）
+
+### 3-1c. 重い描画検証は「WebGL 無しの数値検証」に置き換えると速い（D, E）
+- node で `document` / canvas をスタブし、TextureLoader を空テクスチャに差し替えれば、three.js のシーン構築コード（ジオメトリ生成・配置）を WebGL 無しで実行できる。`Box3` で部品の重なり・浮き・めり込みを数秒で数値チェックできる（撮影 1 枚 50 秒の節約）
+- 地形・配置などの純粋ロジックは、DOM 非依存にしておけば node から直接 import してテストできる
 
 ### 3-2. 軽量ページでもブラウザが突然閉じる（`Target page, context or browser has been closed`）
 - **原因**: 3 秒間隔の watchdog が kill する前に、GPU プロセスが OOM で落ちた。
