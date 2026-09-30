@@ -260,6 +260,8 @@ export function updateUI() {
   if (E.flood.on) th.push('🌊 増水 ' + Math.max(0, (G.waterLevel - G.camper.position.y) * 100).toFixed(0) + 'cm');
   if (E.slide?.on && !E.slide.done) th.push('⛰ 土砂崩れ');
   hud.threat.innerHTML = th.map(t => `<span>${t}</span>`).join('');
+  document.getElementById('camBtn')?.classList.toggle('on', V.cam === 'chase'); // also when started with ?cam=chase
+  document.getElementById('ff')?.classList.toggle('on', G.timeMul > 1);
   refresh();
   if (!$('#menu').classList.contains('hidden')) refreshCar();
 }
