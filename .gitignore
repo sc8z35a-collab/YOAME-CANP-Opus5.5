@@ -1,8 +1,11 @@
-node_modules/
-.DS_Store
 *.log
-/tmp/
-build/shots/
-__pycache__/
-dist/
+.DS_Store
 .boot.log
+/tmp/
+__pycache__/
+build/*.log
+build/base/
+build/qa_errors_base.py
+build/shots/
+dist/
+node_modules/
