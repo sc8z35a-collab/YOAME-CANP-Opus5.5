@@ -238,6 +238,12 @@ export function updateAutopilot(dt) {
       const vk = Math.max(1.3, Math.sqrt(aLat / Math.max(k, 1e-3)));
       vcurve = Math.min(vcurve, Math.sqrt(vk * vk + 2 * aDec * 0.6 * dist));
     }
+    // steep descent ahead (road-bed grade over ~4m): arrive at its top already slow, like a curve
+    const na = a.n >= 0 ? NODES[a.n] : null, nb = b.n >= 0 ? NODES[b.n] : null;
+    if (na && nb && l1 > 0.5) {
+      const g = (nb.h - na.h) / l1;
+      if (g < -0.1) { const vg = lerpV(AP.cruise, 3, clamp((-g - 0.1) / 0.1)); vcurve = Math.min(vcurve, Math.sqrt(vg * vg + 2 * aDec * 0.4 * dist)); }
+    }
     dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
   }
   let remain = 0; for (let i = AP.idx; i < path.length - 1; i++) remain += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z);
