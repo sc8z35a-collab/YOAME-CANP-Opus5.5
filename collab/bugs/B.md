@@ -73,3 +73,11 @@
 - 原因: 判定が「水面より低い＝沢」だけで、場所（沢の流路かどうか）を見ていない
 - 修正: 沢の流路(±6.5m)かつ道路でない所だけ stream。それ以外の冠水地点は元の路面のまま wetness=1（完全に濡れた砂利道など）
 - 検証: `tools/agents/b/surf.mjs`（水位 −0.3 で窪地/草地/浅瀬=road μ0.56、沢の中=stream）、physics 8/8、floodesc/fordrun OK
+
+### B-12 [B] 落石・倒木（物理障害物）が木橋の床板をすり抜けて沢に落ちる
+- 場所: js/vehicle.js stepObstacles
+- 症状: 橋の上に落ちた岩が床板(0.20m)を抜けて −1.54m（沢底）まで沈む → 橋をふさぐはずの障害物が消える／橋下で車体と干渉
+- 原因: 障害物の接地が `heightAt`（地形）だけで、橋床 `groundAt` を見ていない
+- 修正: `groundAt(x,z,y)` と同じ fromY 付き法線で接地
+- 検証: `tools/agents/b/debris.mjs`（床上 0.65m で静止、斜面の12個も40秒で全て停止・NaNなし）
+- 補足: `tools/agents/b/alldest.mjs` で窪地から全35目的地へ到達・パッド上 4m 以内・傾き 8°未満で停車を確認（全PASS）
