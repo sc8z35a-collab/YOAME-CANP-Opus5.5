@@ -97,6 +97,9 @@ class Animal {
 class Skinned extends Animal {
   constructor(kind, gltf, h, opts) {
     const root = SkeletonUtils.clone(gltf.scene);
+    // does: remove the antler mesh BEFORE fitting (hiding it afterwards left the antlers in the bounding
+    // box, so the 1.55 m target height included invisible antlers and the does came out ~25% too small)
+    if (opts.noHorns) { const hs = []; root.traverse(o => { if (o.isMesh && /antler|horn/i.test(o.name + ' ' + (o.material?.name || ''))) hs.push(o); }); hs.forEach(o => o.parent.remove(o)); }
     const obj = fitModel(root, h, opts.yaw || 0);
     super(kind, obj, opts);
     this.mixer = new THREE.AnimationMixer(root);
@@ -162,9 +165,8 @@ export const Z = { deer: [], fawns: [], bear: null, wolves: [], ready: false };
 export async function buildAnimals(scene) {
   const [stag, fawn, bear, wolf] = await Promise.all([glb('stag'), glb('fawn'), glb('black_bear'), glb('wolf')]);
   for (let i = 0; i < 3; i++) {
-    const d = new Skinned('deer', stag, i === 0 ? 1.95 : 1.55, { radius: 0.5, gaitRef: 1.4 });
     // does have no antlers: the antler mesh is the node "Stag_Horns" (its material is just "Material.001")
-    if (i > 0) d.obj.traverse(o => { if (o.isMesh && /antler|horn/i.test(o.name + ' ' + (o.material?.name || ''))) o.visible = false; });
+    const d = new Skinned('deer', stag, i === 0 ? 1.95 : 1.3, { radius: 0.5, gaitRef: 1.4, noHorns: i > 0 });
     scene.add(d.obj); animals.push(d); Z.deer.push(d);
   }
   const fr = fawn.scene.clone(true);
@@ -356,7 +358,7 @@ export function scareAll(power = 1) {
   if (b.active) {
     b.aggro = Math.max(0, b.aggro - 0.35 * power);
     // (repeated horn presses re-emitted 'bearscared' and stacked the same toast / reset a leaving bear)
-    if ((b.aggro < 0.3 || power > 1.2) && b.state !== 'flee' && b.state !== 'leave') { b.state = 'flee'; b.sniffAt = null; b.leaveT = 0; bus.emit('bearscared'); }
+    if ((b.aggro < 0.3 || power > 1.2) && b.state !== 'flee') { b.state = 'flee'; b.sniffAt = null; b.leaveT = 0; bus.emit('bearscared'); }
   }
   for (const d of [...Z.deer, ...Z.fawns]) if (d.active && d.state !== 'flee') d.state = 'graze', d.t = 1e3, d.visit = 1e3; // leave
   for (const w of Z.wolves) if (w.active && w.state !== 'leave') { w.state = 'leave'; w.walkT = 0; }

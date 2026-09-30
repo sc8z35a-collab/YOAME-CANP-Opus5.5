@@ -92,7 +92,8 @@ function impulse(c, sec, decay) {
 // exponentialRampToValueAtTime(0) throws a RangeError (spec); clamp so a silent/far source never throws
 function env(g, t0, a, peak, d) { peak = Math.max(peak, 0.0002); g.gain.cancelScheduledValues(t0); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); }
 function burst(dest, { f = 800, type = 'bandpass', q = 1, a = 0.005, d = 0.2, peak = 0.3, rate = 1 } = {}) {
-  const c = A.ctx, s = c.createBufferSource(); s.buffer = A.white ||= noiseBuffer(c, 1); s.playbackRate.value = rate;
+  // loop: bursts start at a random offset in a 1 s buffer, so longer ones (growl 1.6 s) were cut off early
+  const c = A.ctx, s = c.createBufferSource(); s.buffer = A.white ||= noiseBuffer(c, 1); s.loop = true; s.playbackRate.value = rate;
   const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
   const g = c.createGain(); s.connect(fl).connect(g).connect(dest);
   const t = c.currentTime; env(g, t, a, peak, d); s.start(t, Math.random()); s.stop(t + a + d + 0.1);

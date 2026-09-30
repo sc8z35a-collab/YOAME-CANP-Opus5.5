@@ -310,7 +310,7 @@ export function powerTick(dt) {
   const gen = S.generator ? 0.5 : 0;
   S.battery = clamp(S.battery + (solar + gen - draw) * dt * 0.35, 0, 100);
   // slow field repair while parked safely (tools + generator power); never while driving or flooded
-  if (!G.driving && (G.submerge || 0) < 0.3 && S.hull < 100) S.hull = Math.min(100, S.hull + dt * (S.generator ? 0.12 : 0.03));
+  if (!G.driving && (G.submerge || 0) < 0.3 && S.hull < 100 && VEH.up.y > 0.8 && !S.over) S.hull = Math.min(100, S.hull + dt * (S.generator ? 0.12 : 0.03));
   if (S.battery <= 0.01 && (S.lightsOn || S.spotOn || S.heater || S.headOn && !G.driving)) { S.lightsOn = false; S.spotOn = false; S.heater = false; if (!G.driving) S.headOn = false; warn('バッテリー切れ… 真っ暗だ', 'warn'); bus.emit('sfx', 'powerdown'); }
 }
 
