@@ -3,7 +3,8 @@
 // can step outside through the side door. Collision = axis-aligned furniture boxes + walls.
 import { THREE, G, P, clamp, damp, lerp, bus } from './core.js';
 import { FLOOR, CEIL, XW, ZF, ZB } from './camper.js';
-import { groundAt } from './terrain.js';
+import { groundAt, WORLD } from './terrain.js';
+import { colliders } from './forest.js';
 
 const XI = XW - 0.12 - 0.22;      // inner wall minus body radius
 const R = 0.22;                    // body radius
@@ -140,6 +141,13 @@ export function updatePlayer(dt, camper, driving) {
       if (px < pf && px < pb) l.x = Math.sign(l.x || 1) * (XW + 0.3); else if (pf < pb) l.z = ZF - 1.3; else l.z = ZB + 0.3;
       PL.world.copy(camper.localToWorld(l));
     }
+    // trunks / rocks / camp props are solid (was: walk straight through every tree)
+    for (const c of colliders) {
+      const dx = PL.world.x - c.x, dz = PL.world.z - c.z, rr = c.r * 0.6 + R;
+      if (dx * dx + dz * dz < rr * rr) { const d = Math.hypot(dx, dz) || 1e-3; PL.world.x = c.x + dx / d * rr; PL.world.z = c.z + dz / d * rr; }
+    }
+    // never walk off the edge of the world (the rim mountains are climbable on foot)
+    PL.world.x = clamp(PL.world.x, WORLD.x0 + 12, WORLD.x1 - 12); PL.world.z = clamp(PL.world.z, WORLD.z0 + 12, WORLD.z1 - 12);
     const g = groundAt(PL.world.x, PL.world.z, PL.world.y) + lerp(EYE, EYE_CROUCH, PL.crouch);
     if (PL.world.y < g) { PL.world.y = g; PL.wvel.y = 0; PL.onGround = true; } else PL.onGround = false;
     const spd = Math.hypot(PL.wvel.x, PL.wvel.z);

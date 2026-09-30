@@ -40,8 +40,9 @@ export const ACTIONS = [
 function distBear() { return Math.hypot(Z.bear.pos.x - G.camper.position.x, Z.bear.pos.z - G.camper.position.z); }
 
 let toastEl, hud = {};
+const early = [];
 export function toast(msg, level = 'info', ms = 4000) {
-  if (!toastEl) return;
+  if (!toastEl) { if (early.length < 6) early.push([msg, level, ms]); return; }
   if (toastEl.lastChild && toastEl.lastChild.dataset.msg === msg) return; // de-dupe spam
   const t = h('div', { className: 'toast ' + level }, msg); t.dataset.msg = msg;
   toastEl.appendChild(t);
@@ -130,7 +131,7 @@ export function buildUI() {
     </div>
   </div>`;
   initTabletUI(document.body);
-  toastEl = $('#toasts');
+  toastEl = $('#toasts'); early.splice(0).forEach(a => toast(...a));
   for (const a of ACTIONS) {
     const b = h('button', { className: 'abtn', id: 'a-' + a.id }, `<span>${a.icon}</span><small>${a.label}</small>`); b.dataset.touch = 1;
     b.onclick = () => { initAudio(); a.act(); refresh(); }; root.querySelector(`.sgrid[data-g="${a.g}"]`).appendChild(b);
