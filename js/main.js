@@ -192,7 +192,7 @@ async function init() {
   // interior reflections (after CC0 props are in) + warm up shaders
   try { await IN.ready; bakeInteriorEnv(renderer, scene, C.group); } catch (e) { console.warn('env bake', e); }
   renderer.compile(scene, camera);
-  loadEl.classList.add('done');
+  loadEl.classList.add('done'); loadEl.removeAttribute('aria-busy');
   barEl.style.strokeDashoffset = 0; clearInterval(loadTick); setTimeout(() => loadEl.remove(), 1200);
   if (!QA) {
     let seen = false; try { seen = localStorage.getItem('fc3d_intro') === '1'; } catch (e) {}
@@ -207,7 +207,9 @@ async function init() {
   window.addEventListener('pointerdown', first, { once: true });
   requestAnimationFrame(loop);
 }
-const loadTick = setInterval(() => { if (progress.total) barEl.style.strokeDashoffset = 276.5 * (1 - progress.loaded / progress.total); }, 100);
+// the loading manager's total grows while later GLBs are queued: never let the ring run backwards
+let loadMax = 0;
+const loadTick = setInterval(() => { if (progress.total) { loadMax = Math.max(loadMax, progress.loaded / progress.total); barEl.style.strokeDashoffset = 276.5 * (1 - loadMax * 0.95); } }, 100);
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, qaFrames = 0;
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
@@ -293,4 +295,4 @@ function showIntro() {
 }
 function VIEWS_out() { return !G.camInside; }
 
-init().catch(e => { console.error(e); loadEl.innerHTML = '<p style="color:#f88;font-size:12px">⚠ ' + e.message + '</p>'; window.__QA.error = String(e); window.__QA.ready = true; });
+init().catch(e => { console.error(e); clearInterval(loadTick); loadEl.removeAttribute('aria-busy'); loadEl.innerHTML = '<p style="color:#f88;font-size:12px">⚠ ' + e.message + '</p>'; window.__QA.error = String(e); window.__QA.ready = true; });

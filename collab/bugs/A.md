@@ -101,3 +101,8 @@
 - 場所: js/ui.js sndBtn
 - 原因: 現在状態を `A.master.gain.value < 0.01` で判定。setTargetAtTime の遷移中（約0.2秒）は中間値なので、2度目のタップが同じ向きに切り替える
 - 修正: localStorage の設定値を真とし、スケジュールをキャンセルしてから遷移
+
+### A-23 [C] 読み込みリングが逆戻りする／起動失敗時もタイマーが回り続ける
+- 場所: js/main.js loadTick / init().catch
+- 原因: LoadingManager の total は森・動物の GLB が順次キューに入るたびに増えるので loaded/total が減る。失敗時 clearInterval されず aria-busy も残る
+- 修正: 進捗は最大値を保持（完了前は 95% 止まり）、失敗・完了時にタイマー停止と aria-busy 解除
