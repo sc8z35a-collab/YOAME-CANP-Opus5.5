@@ -159,7 +159,7 @@ export function buildUI() {
   updRange();
   $('#repairBtn').onclick = () => {
     if (G.driving) return toast('停車中にしか直せない', 'warn');
-    if (!DMG.dents.length && !DMG.scratches.length) return toast('直すところはない', 'info');
+    if (!DMG.dents.length && !DMG.scratches.length && G.state.hull >= 60) return toast('直すところはない', 'info'); // (hull damage alone also counts)
     repairAll(); G.state.hull = Math.max(G.state.hull, 60); toast('🔧 凹みを叩き出して、傷をタッチアップした', 'info'); refreshCar();
   };
   $('#ff').onclick = () => { G.timeMul = G.timeMul > 1 ? 1 : 30; $('#ff').classList.toggle('on', G.timeMul > 1); };
