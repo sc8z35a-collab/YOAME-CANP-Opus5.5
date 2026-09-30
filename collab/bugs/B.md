@@ -87,3 +87,17 @@
 - 症状: 沢の北ほとりに停車→洪水で流されても `AP.at='creekN'` のまま。tablet.js は `AP.at===d.id` で「現在地」表示を出し続ける
 - 修正: 停車中に目的地から 7m 以上離れたら AP.at を解除し `leftSpot` イベントを発火
 - 検証: `tools/agents/b/stale.mjs`（流された後 AP.at=null）
+
+### B-14 [B] 下り急勾配の手前で減速せず、急坂に入ってから急ブレーキ（ABS 作動、目標+17km/h 超過）
+- 場所: js/autopilot.js 速度計画
+- 症状: summit→hollow の峠道終端（mount#0-7, 下り22%）で 23km/h のまま突入し、目標 5km/h に対して ABS フルブレーキ（`speedtrack.mjs`/`overspeed2.mjs`）
+- 原因: 勾配制限が「今の車体の向き(f.y)」だけで決まり、経路上の先の急坂を見ていない（カーブは先読みしているのに）
+- 修正: 経路の各区間の路床勾配を先読みし、カーブと同様に「その地点の上限速度＋減速距離」で目標速度を制限
+- 検証: cliff→lookout の超過時間 0.9s→0.0s、summit→hollow 2.6s→1.6s。drive/wet/physics 全PASS
+
+### B-15 [A] 分岐の取り付けで2本の路床が並んで尾根・横傾斜ができ、車が大きく傾く／腹を擦る
+- 場所: js/roads.js build（joins）
+- 症状: `tools/agents/b/ridges.mjs`：本線 valley#84.5 に高さ 0.33m・横断差 0.37m の尾根（峠道の取り付け）。summit→hollow で車体が 28° 傾き(minUp 0.88)、横滑り skid 5.6m/s
+- 原因: 分岐は端点だけ本線の高さに固定され、本線の路床内を並走する数サンプルは自分の勾配で上下するため、地形（近い方の路床に従う）に段差ができる
+- 修正: 分岐が本線の路床内（中心間 ≤ ROAD_HALF×1.3）を走る区間は本線の路床高さに合わせて固定
+- 検証: 全道路の最大凸凹 0.33→0.20m、最大勾配はすべて 20% 以内。drive_test summit→hollow minUp 0.88→0.97、cliff→wr2 0.88→0.97、WET も全PASS、physics 8/8、fall PASS、全35目的地 PASS
