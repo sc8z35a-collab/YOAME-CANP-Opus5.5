@@ -130,3 +130,9 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 - 場所: js/tablet.js draw()（full=false）の中心 = 自車
 - 修正: 帯を除いた領域の中央に自車を置く
 - 検証: tools/dash_test.html?route=summit で撮影
+
+### E-24 [C] PWA アイコン 512 が "any maskable" なのにセーフゾーン外に絵がある → Android のホーム画面で月と車の角が切れる
+- 場所: manifest.webmanifest / assets/icons/icon-512.png
+- 症状: maskable は中心から半径 40%（204.8px）がセーフゾーン。月・車の端が中心から最大 236px にあり、円形/角丸マスクで欠ける。また1枚を any と maskable 兼用にすると "any" 表示時は余白不足、の両方で問題
+- 修正: 絵を 76% に縮小し背景を延長した icon-maskable-512.png を追加（最大半径≈180px）。any と maskable を別エントリに
+- 検証: PIL で内容の最大半径 236→約180px を計測、画像を目視
