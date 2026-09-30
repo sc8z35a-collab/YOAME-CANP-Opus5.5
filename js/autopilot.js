@@ -18,6 +18,7 @@ const LOCK = 0.72;          // max steering angle (rad) ≈ 7.5m turning radius
 const WB = 6.55;            // wheelbase
 
 const lerpV = (a, b, t) => a + (b - a) * t;
+function remainFrom(path, i0) { let s = 0; for (let i = i0; i < path.length - 1; i++) s += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z); return s; }
 function say(msg, level = 'info', ms = 3800) { AP.msg = msg; bus.emit('toast', { msg, level, ms }); }
 
 // ---------------------------------------------------------------- planning
@@ -177,6 +178,8 @@ export function updateAutopilot(dt) {
   let best = AP.idx, bd = 1e9;
   for (let i = AP.idx; i < Math.min(path.length, AP.idx + 12); i++) { const d = Math.hypot(path[i].x - p.x, path[i].z - p.z); if (d < bd) { bd = d; best = i; } }
   AP.idx = best;
+  // off-road lead finished: back on the road graph -> normal cruising after a short creep
+  if (AP.offroad && path[AP.idx].n >= 0 && bd < 4) { AP.offroad = false; AP.slowUntil = Math.max(AP.slowUntil || 0, remainFrom(path, AP.idx) - 40); }
   if (bd > (AP.offroad ? 9 : 6) && !AP.kturn) { AP.replanT = (AP.replanT || 0) + dt; if (AP.replanT > 1.2) { AP.replanT = 0; plan(true); return; } } else AP.replanT = 0;
   const look = clamp(4 + Math.abs(spd) * 0.9, 4, 12);
   let li = AP.idx, acc = 0;
@@ -263,7 +266,8 @@ export function updateAutopilot(dt) {
   if (G.rangeMode && G.rangeMode !== 'auto') { c.range = G.rangeMode; AP.rangeT = 0; }
   else if (want !== c.range) { AP.rangeT = (AP.rangeT || 0) + dt; if (AP.rangeT > (want === '2H' ? 6 : 0.5)) { AP.rangeT = 0; if (want === '4L' && Math.abs(spd) > 2.4) { c.throttle = 0; c.brake = 0.4; } else c.range = want; } } else AP.rangeT = 0;
   // ---- stuck: back up with opposite lock, mark ahead as blocked, replan; repeated -> winch
-  if (Math.abs(spd) < 0.35 && vt > 1) AP.stuckT += dt; else AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
+  // (while rocking back, the reverse motion itself must not count as progress)
+  if (AP.stuckT > 4 || (Math.abs(spd) < 0.35 && vt > 1)) AP.stuckT += dt; else AP.stuckT = Math.max(0, AP.stuckT - dt * 2);
   if (Math.abs(spd) > 2) { AP.goodT = (AP.goodT || 0) + dt; if (AP.goodT > 20) { AP.goodT = 0; AP.stuckN = 0; } }
   // stuck: rock the van (reverse a little with opposite lock, then go again) like a real driver
   if (AP.stuckT > 4 && AP.stuckT < 6.5) { c.throttle = -0.45; c.steer = -c.steer; c.brake = 0; }
