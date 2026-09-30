@@ -162,8 +162,9 @@ class Bear extends Animal {
 // ---------------------------------------------------------------- manager
 export const Z = { deer: [], fawns: [], bear: null, wolves: [], ready: false };
 
-export async function buildAnimals(scene) {
-  const [stag, fawn, bear, wolf] = await Promise.all([glb('stag'), glb('fawn'), glb('black_bear'), glb('wolf')]);
+export async function buildAnimals(scene, stub = null) { // stub: { stag, fawn, black_bear, wolf } gltf-likes (node tests)
+  const load = n => stub ? Promise.resolve(stub[n]) : glb(n);
+  const [stag, fawn, bear, wolf] = await Promise.all([load('stag'), load('fawn'), load('black_bear'), load('wolf')]);
   for (let i = 0; i < 3; i++) {
     // does have no antlers: the antler mesh is the node "Stag_Horns" (its material is just "Material.001")
     const d = new Skinned('deer', stag, i === 0 ? 1.95 : 1.3, { radius: 0.5, gaitRef: 1.4, noHorns: i > 0 });
