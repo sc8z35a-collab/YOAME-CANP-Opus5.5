@@ -713,17 +713,24 @@ let cubeRT = null;
 export function bakeInteriorEnv(renderer, scene, camperGroup) {
   if (!renderer || !camperGroup) return;
   if (!cubeRT) cubeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
+  // world-aligned cube camera (envMaps are sampled with WORLD reflection vectors: a cube camera parented
+  // to the van baked camper-local faces, so any heading != 0 reflected the wrong side of the cabin)
   const cam = new THREE.CubeCamera(0.05, 60, cubeRT);
-  cam.position.set(0.1, 1.75, -1.0); camperGroup.add(cam); camperGroup.updateMatrixWorld(true);
+  camperGroup.updateMatrixWorld(true);
+  cam.position.copy(camperGroup.localToWorld(new THREE.Vector3(0.1, 1.75, -1.0)));
+  scene.add(cam); cam.updateMatrixWorld(true);
   for (const m of IN.envMats) m.envMap = null;
   cam.update(renderer, scene);
-  camperGroup.remove(cam);
+  scene.remove(cam);
+  camperGroup.getWorldQuaternion(IN.envQ0 = new THREE.Quaternion()); // van orientation at bake time
   const pm = new THREE.PMREMGenerator(renderer);
   const env = pm.fromCubemap(cubeRT.texture).texture; pm.dispose();
+  if (IN.env && IN.env !== env) IN.env.dispose(); // re-bakes (lights toggled) used to leak a PMREM target each time
   for (const m of IN.envMats) { m.envMap = env; m.envMapIntensity = 1; m.userData.ownEnv = true; m.needsUpdate = true; }
   IN.env = env;
 }
 
+const _eq = new THREE.Quaternion(), _eq0 = new THREE.Quaternion(), _ee = new THREE.Euler();
 export function updateInterior(dt, S, lightLevel) {
   // steering wheel follows the front-wheel steer angle (~14:1 → about ±1.5 turns lock to lock)
   if (IN.wheel) IN.wheel.rotation.z += (((G.steerAngle || 0) * 9) - IN.wheel.rotation.z) * Math.min(1, dt * 10);
@@ -738,7 +745,11 @@ export function updateInterior(dt, S, lightLevel) {
   const cook = S.cooking > 0;
   IN.hobFlames.forEach((f, i) => { f.visible = cook; if (cook) f.scale.y = 0.85 + Math.sin(G.t * 23 + i * 2) * 0.15; });
   const k = 0.25 + 0.75 * Math.max(lightLevel, G.daylight ?? 1);
-  for (const m of IN.envMats) if (m.userData.ownEnv) m.envMapIntensity = k;
+  // the baked cabin reflections turn with the van (driving / other camp spots)
+  if (IN.envQ0 && G.camper) {
+    _eq.copy(G.camper.quaternion).multiply(_eq0.copy(IN.envQ0).invert()); _ee.setFromQuaternion(_eq);
+  }
+  for (const m of IN.envMats) if (m.userData.ownEnv) { m.envMapIntensity = k; if (IN.envQ0) m.envMapRotation.copy(_ee); }
 }
 
 /** Build everything. Returns the materials so camper.js can reuse them (walls, curtains…). */

@@ -32,24 +32,39 @@ DMG.u.uDmg.value = DMG.tex;
 const put = (i, a, b, c, d) => { TD[i * 4] = a; TD[i * 4 + 1] = b; TD[i * 4 + 2] = c; TD[i * 4 + 3] = d; };
 
 // ---------------------------------------------------------------- adding damage
-/** Snap a camper-local point to the skin (nearest face of the body box). */
-function toSkin(p, n) {
-  const q = p.clone();
-  q.x = clamp(q.x, -HB.x, HB.x); q.y = clamp(q.y, HB.y0, HB.y1); q.z = clamp(q.z, HB.z0, HB.z1);
-  const dx = HB.x - Math.abs(q.x), dyT = HB.y1 - q.y, dzF = q.z - HB.z0, dzB = HB.z1 - q.z;
-  const m = Math.min(dx, dyT, dzF, dzB);
-  if (m === dx) { q.x = Math.sign(q.x || n?.x || 1) * HB.x; } else if (m === dyT) q.y = HB.y1; else if (m === dzF) q.z = HB.z0; else q.z = HB.z1;
-  return q;
-}
-function skinNormal(q) {
-  if (Math.abs(Math.abs(q.x) - HB.x) < 1e-3) return new THREE.Vector3(-Math.sign(q.x), 0, 0);
-  if (Math.abs(q.y - HB.y1) < 1e-3) return new THREE.Vector3(0, -1, 0);
-  return new THREE.Vector3(0, 0, q.z < 0 ? 1 : -1);
+// The skin is not one box: the cab front sits 1 m behind the hood, and the cab-over nose sticks out
+// above the windshield. A single bounding box put front hits at windshield height 1 m in front of
+// the glass (in thin air), so those dents never showed up.
+const PARTS = [
+  { x: HB.x, y0: HB.y0, y1: HB.y1, z0: -4.3, z1: HB.z1, back: true },   // living box + cab
+  { x: 1.15, y0: 0.55, y1: 1.405, z0: HB.z0, z1: -4.3 },                // hood
+  { x: 1.18, y0: 2.27, y1: 2.89, z0: -4.93, z1: -4.3 },                 // cab-over nose
+];
+/** Snap a camper-local point to the nearest exposed face of the body. Returns the point; the inward
+ *  normal of that face is written to nOut (optional). */
+function toSkin(p, n, nOut) {
+  let best = null, bd = Infinity, bn = null;
+  for (const P of PARTS) {
+    const q = p.clone();
+    q.x = clamp(q.x, -P.x, P.x); q.y = clamp(q.y, P.y0, P.y1); q.z = clamp(q.z, P.z0, P.z1);
+    const faces = [[P.x - Math.abs(q.x), 'x'], [P.y1 - q.y, 'top'], [q.z - P.z0, 'front']];
+    if (P.back) faces.push([P.z1 - q.z, 'back']);
+    faces.sort((a, b) => a[0] - b[0]);
+    const f = faces[0][1], nn = new THREE.Vector3();
+    if (f === 'x') { const s = Math.sign(q.x || n?.x || 1); q.x = s * P.x; nn.set(-s, 0, 0); }
+    else if (f === 'top') { q.y = P.y1; nn.set(0, -1, 0); }
+    else if (f === 'front') { q.z = P.z0; nn.set(0, 0, 1); }
+    else { q.z = P.z1; nn.set(0, 0, -1); }
+    const d = q.distanceToSquared(p);
+    if (d < bd) { bd = d; best = q; bn = nn; }
+  }
+  if (nOut) nOut.copy(bn);
+  return best;
 }
 /** sev 0..1.2 : size & depth grow with the impact severity. */
 export function addDent(lp, ln, sev = 0.3, cause = '') {
   if (!lp) return;
-  const c = toSkin(lp, ln), n = skinNormal(c);
+  const n = new THREE.Vector3(), c = toSkin(lp, ln, n);
   const r = clamp(0.12 + sev * 0.45, 0.12, 0.7) * (cause === 'tree' ? 1.5 : cause === 'bear' ? 0.8 : 1);
   const depth = clamp(0.01 + sev * 0.07, 0.01, 0.1) * (cause === 'tree' ? 1.4 : 1);
   // merge into an existing dent nearby (repeated hits deepen it)
