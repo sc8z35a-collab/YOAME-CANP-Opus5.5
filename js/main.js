@@ -3,8 +3,8 @@ import { THREE, G, U, P, QA, bus, clamp, damp, lerp, smooth } from './core.js';
 import { setAniso, progress } from './assets.js';
 import { buildTerrain, heightAt, SPOTS, spotHeight } from './terrain.js';
 import { VEH, setPose, updateVehicle, originOf } from './vehicle.js';
-import { AP, updateAutopilot, engage } from './autopilot.js';
-import { PL, initPlayer, updatePlayer, goOutside } from './player.js';
+import { AP, updateAutopilot, engage, disengage } from './autopilot.js';
+import { PL, initPlayer, updatePlayer, goOutside, goInside } from './player.js';
 import { buildTablet, updateTablet } from './tablet.js';
 import { FLOOR, ZF } from './camper.js';
 import { buildForest, camp, updateForest } from './forest.js';
@@ -118,7 +118,13 @@ function placeCamper(spot) {
 }
 bus.on('driveTo', to => engage(to)); // legacy event name (menus, QA)
 // menu 'キャンプ地へ戻す' (always-available escape hatch; the physics-based recovery normally suffices)
-bus.on('rescueHome', () => { import('./autopilot.js').then(m => m.disengage()); placeCamper('hollow'); toast('レッカーでキャンプ地まで運んでもらった', 'info'); });
+bus.on('rescueHome', () => {
+  disengage(); // stop the autopilot BEFORE teleporting (the old async import let it steer the towed van for a frame)
+  placeCamper('hollow'); AP.at = 'hollow'; C.group.updateMatrixWorld(true);
+  if (!PL.inside) goInside(C.group);                      // you ride along in the tow truck
+  try { localStorage.setItem('fc3d_spot', 'hollow'); } catch (e) {}
+  toast('レッカーでキャンプ地まで運んでもらった', 'info');
+});
 // vehicle acceleration in camper-local space (sways the walking player & curtains)
 const _pv = new THREE.Vector3(), _qa = new THREE.Quaternion();
 G.vehAccL = new THREE.Vector3();
@@ -163,8 +169,8 @@ async function init() {
   await buildAnimals(scene);
   buildEvents(scene);
   initPlayer(); initView(canvas);
-  if (PL.pendingOutside) goOutside(C.group);
-  C.group.updateMatrixWorld(true);
+  C.group.updateMatrixWorld(true); // goOutside() converts camper-local -> world: needs the placed pose
+  if (PL.pendingOutside) { PL.pendingOutside = false; goOutside(C.group); }
   startForcedEvent(); // after camper placement + view (staging uses both)
   if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
   buildUI();

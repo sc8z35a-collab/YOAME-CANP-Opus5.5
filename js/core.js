@@ -9,7 +9,7 @@ export const QA = P.has('qa');
 export const G = {
   scene: null, camera: null, renderer: null,
   t: 0, dt: 0, frame: 0,
-  hour: P.has('t') ? parseFloat(P.get('t')) : 19.2,
+  hour: P.has('t') && isFinite(parseFloat(P.get('t'))) ? ((parseFloat(P.get('t')) % 24) + 24) % 24 : 19.2,
   day: 1,
   hoursPerSec: 1 / 40,          // 1 in-game hour = 40 real seconds
   timeMul: 1,

@@ -23,17 +23,20 @@ export const VIEWS = {};
 for (const [k, r] of Object.entries(RAW)) { const { yaw, pitch } = dirToYawPitch(r.pos, r.at); VIEWS[k] = { ...r, yaw, pitch, limits: [-r.span, r.span] }; }
 
 export const V = { cur: 'walk', fov: 70, tfov: 70, breath: 0, cam: 'fp', chase: { yaw: 0, dist: 11 } };
-export function setView(k) { if (k === 'chase') { V.cam = V.cam === 'chase' ? 'fp' : 'chase'; V.chaseInit = false; V.chase.yaw = (G.camper ? G.camper.rotation.y : 0); } }
+// true heading of the van (Euler .y flips by ±π once the body has any pitch/roll near ±π yaw)
+const _hf = new THREE.Vector3();
+function camperHeading() { if (!G.camper) return 0; _hf.set(0, 0, -1).applyQuaternion(G.camper.quaternion); return Math.atan2(-_hf.x, -_hf.z); }
+export function setView(k) { if (k === 'chase') { V.cam = V.cam === 'chase' ? 'fp' : 'chase'; V.chaseInit = false; V.chase.yaw = camperHeading(); } }
 
 export function initView(canvas) {
   if (P.has('yaw')) PL.yaw = parseFloat(P.get('yaw'));
   if (P.has('pitch')) PL.pitch = parseFloat(P.get('pitch'));
-  const look = new Map(); let pinch0 = 0, fov0 = 70;
+  const look = new Map(); let pinch0 = 0, fov0 = 70, dist0 = 11;
   canvas.addEventListener('pointerdown', e => {
     // left 42% of the screen belongs to the joystick (ui.js)
     if (e.clientX < window.innerWidth * 0.42 && e.pointerType !== 'mouse') return;
     look.set(e.pointerId, { x: e.clientX, y: e.clientY }); canvas.setPointerCapture?.(e.pointerId);
-    if (look.size === 2) { const [a, b] = [...look.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); fov0 = V.tfov; }
+    if (look.size === 2) { const [a, b] = [...look.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); fov0 = V.tfov; dist0 = V.chase.dist; }
   });
   canvas.addEventListener('pointermove', e => {
     const p = look.get(e.pointerId); if (!p) return;
@@ -44,7 +47,7 @@ export function initView(canvas) {
     } else if (look.size === 2) {
       p.x = e.clientX; p.y = e.clientY;
       const [a, b] = [...look.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (V.cam === 'chase') V.chase.dist = clamp(11 * pinch0 / Math.max(d, 1), 6, 26);
+      if (V.cam === 'chase') V.chase.dist = clamp(dist0 * pinch0 / Math.max(d, 1), 6, 26);
       else V.tfov = clamp(fov0 * pinch0 / Math.max(d, 1), 24, 80);
       return;
     }
@@ -52,7 +55,7 @@ export function initView(canvas) {
   });
   const up = e => look.delete(e.pointerId);
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up); canvas.addEventListener('lostpointercapture', up);
-  canvas.addEventListener('wheel', e => { V.tfov = clamp(V.tfov + e.deltaY * 0.03, 24, 80); }, { passive: true });
+  canvas.addEventListener('wheel', e => { if (V.cam === 'chase') V.chase.dist = clamp(V.chase.dist * (1 + e.deltaY * 0.001), 6, 26); else V.tfov = clamp(V.tfov + e.deltaY * 0.03, 24, 80); }, { passive: true });
 }
 
 const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _t = new THREE.Vector3();
