@@ -78,7 +78,11 @@ export function bakeStep(ms = 6) {
   }
   BK.x.putImageData(BK.img, 0, 0, 0, Math.max(0, j0 - 1), MAP, BK.j - j0 + 2);
   if (BK.j >= MAP) {
-    const x = BK.x; x.font = '600 15px "Noto Sans JP", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    // the loop above skips the 1px border (needs neighbours): copy the adjacent row/column so the base
+    // map has no transparent (black) frame around it
+    const x = BK.x; x.drawImage(BK.x.canvas, 0, 1, MAP, 1, 0, 0, MAP, 1); x.drawImage(BK.x.canvas, 0, MAP - 2, MAP, 1, 0, MAP - 1, MAP, 1);
+    x.drawImage(BK.x.canvas, 1, 0, 1, MAP, 0, 0, 1, MAP); x.drawImage(BK.x.canvas, MAP - 2, 0, 1, MAP, MAP - 1, 0, 1, MAP);
+    x.font = '600 15px "Noto Sans JP", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     for (let j = 60; j < MAP - 60; j += 170) for (let i = 60; i < MAP - 60; i += 170) {
       const k = j * MAP + i, h = H[k];
       // label = the index contour actually crossed here (round() could print the neighbouring 25m line)
@@ -230,6 +234,12 @@ function draw(ctx, W, H, full, dpr = 1) {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, H - 54, W, 54);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(AP.on ? `▶ ${DESTS[AP.dest].name}  残り${Math.round(AP.remain)}m` : '🧭 目的地を選ぶ', 14, H - 27);
+  }
+  if (full && !BK.done && BK.H) { // still baking: the un-baked rows are blank, say so instead of a half-empty map
+    const t = `地図を描いています… ${Math.round(100 * BK.j / MAP)}%`;
+    ctx.font = `700 ${13 * k}px "Noto Sans JP", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(t).width + 24 * k; ctx.fillStyle = 'rgba(10,12,11,.75)'; ctx.fillRect(W / 2 - w / 2, H - 70 * k, w, 30 * k);
+    ctx.fillStyle = '#ffd9a0'; ctx.fillText(t, W / 2, H - 55 * k);
   }
 }
 function drawScale(ctx, W, H, mpp, k) {
