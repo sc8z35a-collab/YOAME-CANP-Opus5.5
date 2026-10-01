@@ -159,7 +159,7 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 
 ### E-29 [B] 風で揺れるシェーダが強さ違い・カード有無で同じプログラムに共有され、揺れ方が混ざる
 - 場所: js/forest.js windify()
-- 原因: three.js の既定 customProgramCacheKey は `onBeforeCompile.toString()`。windify の onBeforeCompile は毎回同じソース文字列（strength はクロージャ）なので、機能フラグが同じ材質（GLB 由来のシダ 1.2・低木 1.2・雑草 1.6・イラクサ 1.6 等）は最初にコンパイルされた GLSL を共有する。キャッシュ命中時は onBeforeCompile が呼ばれないため、後から来た材質は uTime/uWind/uWet の uniform 登録も無く、揺れ強度が違う・濡れ表現が効かない（コンパイル順依存）
+- 原因: three.js の既定 customProgramCacheKey は `onBeforeCompile.toString()`。windify の onBeforeCompile は毎回同じソース文字列（strength はクロージャ）なので、機能フラグが同じ材質（GLB 由来のシダ 1.2・低木 1.2・雑草 1.6・イラクサ 1.6 等）は最初にコンパイルされた GLSL を共有する。GLSL はキャッシュ命中で共有されるため、strength が GLSL 定数として焼き込まれている本実装では、後からの材質も最初の材質の strength で揺れる（コンパイル順依存）
 - 修正: `customProgramCacheKey = 'wind'+strength+card`
 
 ### E-30 [B] 木の影が風で揺れない（木は揺れているのに影は静止し、根元から影がずれる）
