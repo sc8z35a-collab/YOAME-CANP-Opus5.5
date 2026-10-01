@@ -167,3 +167,8 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 - 原因: シャドウパスは既定の MeshDepthMaterial で描かれ、onBeforeCompile の揺れが入らない。強風時(uWind 大)は梢で 1m 以上ずれる
 - 修正: 同じ揺れコードを持つ windDepth()（alphaMap/alphaTest 付き RGBA depth）を幹・枝カードの customDepthMaterial に
 - 検証: node で import 成功・npm test PASS（WebGL 撮影は1GB環境で不可、env/E.md §3）
+
+### E-31 [B] 車内ダッシュボードのタブレット画面がバッテリー0でも「息をひそめる」中でも煌々と光る
+- 場所: js/tablet.js updateTablet() `emissiveIntensity = 0.55 + night*0.2`
+- 症状: 電池切れで真っ暗になっても、クマから隠れて全消灯しても、運転席の地図画面だけが夜ほど明るく光り続ける（BUGFIXES #57 の漏れ）
+- 修正: 走行中以外は battery>0.5 のときだけ点灯、hiding 中は 15% に減光

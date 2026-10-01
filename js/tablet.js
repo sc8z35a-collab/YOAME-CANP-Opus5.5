@@ -257,7 +257,10 @@ export function updateTablet(dt) {
   if (!BK.done) bakeStep(TAB.open ? 30 : 6);
   drawT -= dt; if (drawT > 0) return; drawT = TAB.open ? 0 : 0.25;
   if (!TAB.open) { draw(TAB.ctx, 640, 400, false); TAB.tex.needsUpdate = true; }
-  TAB.screenMat.emissiveIntensity = 0.55 + G.night * 0.2;
+  // dash screen runs on the house battery (BUGFIXES #57 covered the lamps but the tablet kept glowing),
+  // and is dimmed in "息をひそめる" (hiding) mode like every other light source
+  const powered = G.driving || G.state.battery > 0.5;
+  TAB.screenMat.emissiveIntensity = !powered ? 0 : (0.55 + G.night * 0.2) * (G.state.hiding ? 0.15 : 1);
   if (TAB.open && TAB.fctx && Math.abs(TAB.fcanvas.width - Math.round(TAB.fcanvas.clientWidth * (TAB.dpr || 1))) > 2) resizeFull(); // layout settled / rotated
   if (TAB.open && TAB.fctx) draw(TAB.fctx, TAB.fcanvas.width, TAB.fcanvas.height, true, TAB.dpr || 1);
 }
