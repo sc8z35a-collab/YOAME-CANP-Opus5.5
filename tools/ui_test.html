@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/style.css">
+<style>body{background:linear-gradient(#3a4a3a,#1a2419)}</style></head>
+<body><canvas id="c"></canvas><div id="ui"></div>
+<!-- HUD-only harness (no WebGL). ?drive=summit&menu=car&sheet=1 -->
+<script type="module">
+import { G } from '../js/core.js';
+import { setPose, VEH } from '../js/vehicle.js';
+import { DESTS } from '../js/roads.js';
+import { engage, AP } from '../js/autopilot.js';
+import * as UI from '../js/ui.js';
+const P = new URLSearchParams(location.search);
+G.camper = { position: { x: 0, y: 0, z: 0 }, quaternion: { clone() { return { invert() { return this; } }; } }, localToWorld: v => v };
+const d = DESTS.hollow; setPose(d.x, d.z, d.rot);
+try { UI.buildUI(); } catch (e) { document.body.insertAdjacentHTML('beforeend', '<pre style="color:red">' + e.stack + '</pre>'); }
+if (P.has('drive')) { engage(P.get('drive')); VEH.fwdSpeed = 6.4; VEH.roll = 0.22; VEH.drive.mode = 'D'; VEH.drive.gear = 2; VEH.drive.range = '4H'; VEH.surface = 'puddle'; VEH.mu = 0.4; VEH.drive.tcs = true; VEH.skid = 2; }
+if (P.has('menu')) { document.getElementById('menuBtn').click(); document.querySelector(`#mtabs [data-tab="${P.get('menu')}"]`)?.click(); }
+if (P.has('sheet')) document.getElementById('actToggle').click();
+G.frame = 0; UI.updateUI(); G.frame = 6; UI.updateUI();
+UI.toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。');
+setTimeout(() => window.__done = true, 700);
+</script></body></html>

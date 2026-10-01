@@ -1,0 +1,13 @@
+{
+  "name": "forest-camper-3d",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "test": "node tools/agents/logic_test.mjs && node tools/agents/view_test.mjs && node tools/agents/check_exports.mjs",
+    "pipeline": "python3 tools/agents/pipeline.py",
+    "test:drive": "node tools/agents/drive_test.mjs -q",
+    "test:fall": "node tools/agents/fall_test.mjs cliff hollow",
+    "test:physics": "node tools/agents/physics_test.mjs"
+  }
+}

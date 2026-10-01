@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>camper preview</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// Lightweight "camper only" preview world for QA shots on a 1GB / 2CPU sandbox.
+// No terrain / forest / animals / weather system: just the real camper (exterior + interior,
+// glass, damage shader, lights, curtains, tablet) on a flat ground plane under a gradient sky.
+//
+//   tools/camper_preview.html?view=ext|int|top|side|rear|front|cab|bed|kitchen
+//     &night=1 &t=<hour> &rain=1 &wet=1 &dmg=1 &lights=0|1 &curtain=1 &cook=1 &spot=1 &head=1
+//     &hide=curtains,glass,shell &cam=x,y,z &at=x,y,z &fov=60 &w=915 &h=412 &q=m &frames=4
+// Shot is exposed as window.__SHOT (jpeg dataURL) and document.title becomes 'done'.
+import { THREE, G, U, P } from '../js/core.js';
+import { setAniso, manager } from '../js/assets.js';
+import { buildCamper, updateCamper, C, FLOOR, ZF, setCurtains, uIntAmb, bakeInteriorEnv, IN } from '../js/camper.js';
+import { updateDamage, addDent, addScratch, DMG } from '../js/damage.js';
+const errs = []; window.__ERRS = errs;
+window.addEventListener('error', e => errs.push(String(e.message)));
+const canvas = document.getElementById('c');
+const W = +(P.get('w') || 915), H = +(P.get('h') || 412);
+const r = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(1); r.setSize(W, H);
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+r.shadowMap.enabled = !P.has('noshadow'); r.shadowMap.type = THREE.PCFSoftShadowMap;
+setAniso(4);
+const scene = new THREE.Scene(); G.scene = scene; G.renderer = r;
+const hour = P.has('t') ? +P.get('t') : (P.has('night') ? 22 : 13);
+G.hour = hour;
+const night = hour < 5 || hour > 19.2;
+G.night = night ? 1 : 0; G.daylight = night ? 0 : 1;
+G.rain = P.has('rain') ? 1 : 0; G.wet = P.has('wet') || P.has('rain') ? 1 : 0;
+U.uRain.value = G.rain; U.uWet.value = G.wet;
+// gradient sky dome
+const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false,
+  uniforms: { top: { value: new THREE.Color(night ? 0x02040a : 0x6f9cc9) }, bot: { value: new THREE.Color(night ? 0x0b1220 : 0xcfdde6) } },
+  vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+  fragmentShader: 'uniform vec3 top, bot; varying vec3 vP; void main(){ float h = clamp(normalize(vP).y*1.6, 0., 1.); gl_FragColor = vec4(mix(bot, top, h), 1.); }' }));
+scene.add(sky);
+scene.fog = new THREE.Fog(night ? 0x0b1220 : 0xcfdde6, 40, 220);
+const hemi = new THREE.HemisphereLight(night ? 0x223355 : 0xcfe3ff, night ? 0x0b0d08 : 0x4a5a3a, night ? 0.12 : 1.3); scene.add(hemi);
+const sun = new THREE.DirectionalLight(night ? 0x8899ff : 0xfff1dc, night ? 0.15 : 3.0); sun.position.set(-8, 12, -5); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 50 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+const gnd = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: G.wet ? 0x2a3320 : 0x3b4a2a, roughness: G.wet ? 0.45 : 1 }));
+gnd.rotation.x = -Math.PI / 2; gnd.receiveShadow = true; scene.add(gnd);
+for (let i = 0; i < 36; i++) { const a = i * 2.39, d = 10 + (i * 37 % 26); const t = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 14, 8), new THREE.MeshStandardMaterial({ color: 0x3a2c20 })); t.position.set(Math.cos(a) * d, 7, Math.sin(a) * d); t.castShadow = true; scene.add(t); }
+buildCamper(scene);
+try { const m = await import('../js/tablet.js'); m.buildTablet(C.group, FLOOR, ZF); } catch (e) { errs.push('tablet ' + e.message); }
+const pm = new THREE.PMREMGenerator(r); const es = new THREE.Scene(); es.background = new THREE.Color(night ? 0x0b1220 : 0xa9c4d8);
+scene.environment = pm.fromScene(es).texture; scene.environmentIntensity = night ? 0.05 : 0.6;
+uIntAmb.value = +(P.get('amb') || 0.3);
+if (P.has('lights')) G.state.lightsOn = P.get('lights') === '1';
+G.state.cooking = P.has('cook') ? 25 : 0; G.state.spotOn = P.has('spot'); G.state.headOn = P.has('head');
+if (P.has('curtain')) { setCurtains(1, true); G.state.curtainsClosed = true; }
+if (P.has('dmg')) { const V3 = THREE.Vector3;
+  addDent(new V3(1.2, 1.6, -1.5), new V3(-1, 0, 0), 1, 'rock'); addDent(new V3(1.2, 1.1, 1.2), new V3(-1, 0, 0), 0.6, 'crash');
+  addDent(new V3(0, 2.95, -0.8), new V3(0, -1, 0), 1.2, 'tree'); addScratch(new V3(1.2, 0.9, -3.5), new V3(1.2, 1.2, 1.5), 0.08, 1); }
+if (P.has('crack')) for (const g of Object.values(C.glass)) { const u = g.material.userData.u; u.uCrack.value = 0.9; }
+if (P.has('steer')) G.steerAngle = +P.get('steer'); if (P.has('drive')) { G.driving = true; G.driveSpeed = +P.get('drive'); }
+// camera presets (camper local == world here: camper sits at the origin facing -z)
+const VIEWS = {
+  ext: [[7.5, 3.2, -7.5], [0, 1.3, -0.8], 50], side: [[9, 1.8, -0.8], [0, 1.4, -0.8], 50], front: [[1.5, 1.8, -12], [0, 1.4, -1], 45],
+  rear: [[-1.5, 2.0, 10], [0, 1.4, 0], 45], top: [[0.01, 14, -0.8], [0, 0, -0.8], 45], left: [[-9, 1.8, -0.8], [0, 1.4, -0.8], 50],
+  int: [[0.1, FLOOR + 1.6, 2.4], [0, FLOOR + 1.1, -3], 70], cab: [[-0.55, FLOOR + 1.28, -3.0], [-0.3, FLOOR + 1.05, -8], 70],
+  bed: [[0.1, FLOOR + 1.4, -0.4], [0, FLOOR + 0.8, 3], 70], kitchen: [[-0.3, FLOOR + 1.6, -0.7], [1.2, FLOOR + 1.0, -0.8], 70],
+};
+const V = VIEWS[P.get('view') || 'ext'] || VIEWS.ext;
+const cam = new THREE.PerspectiveCamera(+(P.get('fov') || V[2]), W / H, 0.02, 800);
+const v = k => (P.get(k) || '').split(',').map(Number);
+cam.position.fromArray(P.has('cam') ? v('cam') : V[0]);
+cam.lookAt(new THREE.Vector3().fromArray(P.has('at') ? v('at') : V[1]));
+if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); if (k === 'shell') C.group.children.forEach(o => { if (o !== C.interiorRoot) o.visible = false; }); }
+const done = () => new Promise(res => { if (manager.itemsLoaded === manager.itemsTotal) res(); else manager.onLoad = res; setTimeout(res, 60000); });
+await done(); try { await IN.ready; } catch (e) {}
+if (!P.has('noenv')) bakeInteriorEnv(r, scene, C.group);
+let n = 0; const N = +(P.get('frames') || 4);
+function loop() {
+  G.dt = 1 / 30; G.t += 1 / 30; G.frame++; U.uTime.value = G.t; C.group.updateMatrixWorld(true);
+  updateCamper(1 / 30); updateDamage(1 / 30, null);
+  r.render(scene, cam);
+  if (++n < N) requestAnimationFrame(loop);
+  else { window.__SHOT = canvas.toDataURL('image/jpeg', 0.9); window.__INFO = { dents: DMG.dents.length, scr: DMG.scratches.length, calls: r.info.render.calls }; document.title = 'done'; }
+}
+loop();
+</script></body></html>

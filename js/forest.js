@@ -1,0 +1,342 @@
+// Forest: instanced procedural conifers (cedar/fir) with twig-atlas cards + wind,
+// instanced photo-scanned understory, rocks, deadwood and camp props.
+import { THREE, G, U, rng, clamp, smooth, fbm } from './core.js';
+import { tex, pbr, glbParts, glb } from './assets.js';
+import { heightAt, slopeAt, creekX, trackDist, SPOTS, WORLD } from './terrain.js';
+import * as BGU from './lib/addons/BufferGeometryUtils.js';
+
+// twig atlas regions (u0, vTop0, u1, vTop1) measured from alpha map (image-space y from top)
+const TWIGS = [[0.184, 0.041, 0.435, 0.317], [0.646, 0.034, 0.943, 0.375], [0.3, 0.394, 0.65, 0.781], [0.629, 0.446, 0.963, 0.806]];
+
+export const colliders = []; // {x,z,r} for animals / events
+export const treeList = [];   // {x,z,h,s}
+export const treeKit = {};    // geometry+materials of a forest tree (reused by events)
+
+// Wind vertex code shared by the colour material and its shadow (depth) material.
+const windVS = (strength, card) => `#include <begin_vertex>
+        {
+          vec3 ip = vec3(0.);
+          #ifdef USE_INSTANCING
+            ip = instanceMatrix[3].xyz;
+          #endif
+          float ph = dot(ip, vec3(0.13, 0., 0.17));
+          float hgt = max(position.y, 0.);
+          float w = uWind * ${strength.toFixed(2)};
+          float sway = (sin(uTime*0.9 + ph) * 0.6 + sin(uTime*2.1 + ph*1.7) * 0.25) * w;
+          transformed.x += sway * hgt * hgt * 0.004;
+          transformed.z += sway * hgt * hgt * 0.0025;
+          ${card ? 'transformed.y += sin(uTime*6.0 + ph + position.x*3.0 + position.z*2.0) * 0.02 * w * hgt*0.1;' : ''}
+        }`;
+/** Shadow (depth) material for a windy material: without it the shadow pass renders the un-swayed
+ *  geometry, so tree shadows stood still (and detached from the trees) while the trees swayed. */
+export function windDepth(mat, { strength = 1, card = false } = {}) {
+  const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaMap: mat.alphaMap || null, alphaTest: mat.alphaTest || 0, side: mat.side });
+  d.onBeforeCompile = sh => {
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uWind = U.uWind;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime, uWind;').replace('#include <begin_vertex>', windVS(strength, card));
+  };
+  d.customProgramCacheKey = () => 'winddepth' + strength + card + !!mat.alphaMap;
+  return d;
+}
+function windify(mat, { strength = 1, card = false } = {}) {
+  mat.customProgramCacheKey = () => 'wind' + strength + card; // distinct programs per strength (the
+  // onBeforeCompile source is identical text for every strength, so three.js could share one program)
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uWind = U.uWind; sh.uniforms.uWet = U.uWet;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime, uWind;')
+      .replace('#include <begin_vertex>', windVS(strength, card));
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uWet;')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.35, uWet*0.6);')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, 0.7, uWet);');
+  };
+  return mat;
+}
+
+function cardGeo(w, h, reg) {
+  // quad anchored at its base (x from 0..w along branch), uv mapped to atlas region
+  const g = new THREE.PlaneGeometry(w, h, 2, 1);
+  g.translate(w / 2, 0, 0);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    const u = uv.getX(i), v = uv.getY(i);
+    // twig atlas: stems point down in image; map branch base (u=0) to twig base (image bottom)
+    uv.setXY(i, reg[0] + (reg[2] - reg[0]) * v, (1 - reg[3]) + (reg[3] - reg[1]) * u);
+  }
+  // droop: bend outer vertices downward
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i); p.setY(i, p.getY(i) - (x / w) * (x / w) * w * 0.18); }
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildTreeTemplate(seed, kind) {
+  const R = rng(seed);
+  const H = kind === 'cedar' ? 22 : 18;
+  // trunk
+  const trunk = new THREE.CylinderGeometry(0.1, kind === 'cedar' ? 0.42 : 0.35, H, 10, 8, true);
+  trunk.translate(0, H / 2, 0);
+  const tp = trunk.attributes.position;
+  for (let i = 0; i < tp.count; i++) {
+    const y = tp.getY(i);
+    const flare = Math.max(0, 1 - y / 1.4);
+    const f = 1 + flare * flare * 0.9;
+    tp.setX(i, tp.getX(i) * f); tp.setZ(i, tp.getZ(i) * f);
+  }
+  const tuv = trunk.attributes.uv;
+  for (let i = 0; i < tuv.count; i++) tuv.setXY(i, tuv.getX(i) * 2, tuv.getY(i) * H / 3);
+  trunk.computeVertexNormals();
+
+  // branch cards
+  const cards = [];
+  const start = kind === 'cedar' ? H * 0.38 : H * 0.22;
+  const whorls = kind === 'cedar' ? 20 : 22;
+  for (let w = 0; w < whorls; w++) {
+    const t = w / (whorls - 1);
+    const y = start + (H - start - 0.3) * t;
+    const len = (kind === 'cedar' ? 3.0 : 3.6) * Math.pow(1 - t, 0.9) + 0.6;
+    const n = Math.round(5 + (1 - t) * 3);
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2 + R() * 0.6 + w * 0.7;
+      const reg = TWIGS[Math.floor(R() * TWIGS.length)];
+      const g = cardGeo(len * (0.8 + R() * 0.4), len * (0.55 + R() * 0.2), reg);
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(R() * 0.6 - 0.3 + Math.PI / 2 * (R() < 0.5 ? 0.25 : -0.25), a, -(0.12 + R() * 0.25), 'YXZ'));
+      m.compose(new THREE.Vector3(0, y + R() * 0.4, 0), q, new THREE.Vector3(1, 1, 1));
+      g.applyMatrix4(m);
+      cards.push(g);
+    }
+    // vertical crossed card cluster for density
+    if (w % 2 === 0) {
+      const reg = TWIGS[2];
+      for (let k = 0; k < 2; k++) {
+        const g = cardGeo(len * 1.6, len * 0.9, reg);
+        g.translate(-len * 0.8, 0, 0);
+        g.rotateZ(Math.PI / 2 * 0.0);
+        const m = new THREE.Matrix4().makeRotationY(k * Math.PI / 2 + w);
+        m.setPosition(0, y, 0);
+        g.applyMatrix4(m);
+        cards.push(g);
+      }
+    }
+  }
+  // top spike
+  const top = cardGeo(1.8, 0.9, TWIGS[0]); top.rotateZ(Math.PI / 2); top.translate(0, H - 0.6, 0);
+  cards.push(top);
+  const top2 = top.clone(); top2.rotateY(Math.PI / 2); cards.push(top2);
+  const merged = BGU.mergeGeometries(cards.map(c => c.toNonIndexed()));
+  // per-vertex color variation (inner darker = AO)
+  const p = merged.attributes.position;
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const r = Math.hypot(p.getX(i), p.getZ(i));
+    const ao = clamp(0.35 + r * 0.22, 0.35, 1.0) * (0.75 + 0.25 * p.getY(i) / H);
+    col[i * 3] = ao; col[i * 3 + 1] = ao; col[i * 3 + 2] = ao;
+  }
+  merged.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return { trunk, cards: merged, H };
+}
+
+function place(n, seed, test, minD = 0) {
+  const R = rng(seed), out = [];
+  let tries = 0;
+  while (out.length < n && tries < n * 30) {
+    tries++;
+    const x = WORLD.x0 + 8 + R() * (WORLD.size - 16), z = WORLD.z0 + 8 + R() * (WORLD.size - 16);
+    if (!test(x, z, R)) continue;
+    if (minD && out.some(o => (o.x - x) ** 2 + (o.z - z) ** 2 < minD * minD)) continue;
+    out.push({ x, z, r: R(), y: heightAt(x, z) });
+  }
+  return out;
+}
+
+function clearOf(x, z, spotR = 11, trackR = 5, creekR = 4.5) {
+  for (const k in SPOTS) if (Math.hypot(x - SPOTS[k].x, z - SPOTS[k].z) < spotR) return false;
+  if (trackDist(x, z) < trackR) return false;
+  if (Math.abs(x - creekX(z)) < creekR) return false;
+  return true;
+}
+
+export async function buildForest(scene) {
+  const hi = G.quality !== 'm';
+  const barkC = pbr('japanese_cedar_bark', { repeat: 1, normalScale: 1.5 });
+  const barkF = pbr('pine_bark', { repeat: 1, normalScale: 1.5 });
+  windify(barkC, { strength: 0.6 }); windify(barkF, { strength: 0.6 });
+  const needleMat = new THREE.MeshStandardMaterial({
+    map: tex('fir_twig_diff', { srgb: true }), alphaMap: tex('fir_twig_alpha'),
+    normalMap: tex('fir_twig_nor_gl'), alphaTest: 0.45, side: THREE.DoubleSide,
+    roughness: 0.85, vertexColors: true, color: new THREE.Color(0.78, 0.86, 0.72),
+  });
+  windify(needleMat, { strength: 1, card: true });
+  const depthNeedle = windDepth(needleMat, { strength: 1, card: true }), depthBark = windDepth(barkF, { strength: 0.6 });
+
+  const templates = [buildTreeTemplate(11, 'cedar'), buildTreeTemplate(23, 'fir'), buildTreeTemplate(37, 'cedar')];
+  // expose one full-quality tree (same template/materials) for the falling-tree event
+  treeKit.trunk = templates[1].trunk; treeKit.cards = templates[1].cards; treeKit.H = templates[1].H;
+  treeKit.bark = barkF; treeKit.needles = needleMat;
+  const pts = place(hi ? 1900 : 1250, 5, (x, z, R) => {
+    if (!clearOf(x, z)) return false;
+    if (slopeAt(x, z) > 1.25) return false; // no trees on the cliff faces (trunk would hang in the air)
+    const d = Math.hypot(x, z);
+    const dens = 0.55 + fbm(x * 0.02, z * 0.02, 3) * 0.8;
+    return R() < dens * (d < 30 ? 1.2 : 1);
+  }, 3.2);
+  // hand placed "close" trees framing the camper windows
+  const framing = [[-9, -12], [11, -13], [12, 6], [-9, 10], [-12, -2], [13, -3]];
+  framing.forEach(([x, z], i) => { if (clearOf(x, z, 8, 5, 3)) pts.push({ x, z, r: (i * 0.618 + 0.21) % 1, y: heightAt(x, z) }); }); // deterministic (QA frames must be reproducible)
+
+  const perT = templates.map(() => []);
+  pts.forEach((p, i) => perT[i % templates.length].push(p));
+  const dummy = new THREE.Object3D();
+  templates.forEach((T, ti) => {
+    const list = perT[ti];
+    const trunkM = new THREE.InstancedMesh(T.trunk, ti === 1 ? barkF : barkC, list.length);
+    const cardM = new THREE.InstancedMesh(T.cards, needleMat, list.length);
+    const c = new THREE.Color();
+    list.forEach((p, i) => {
+      const s = 0.7 + p.r * 0.65;
+      // sink the flared trunk to the LOWEST ground under its footprint (was: centre height − 15cm, so on a
+      // slope the downhill side of the root flare floated up to several metres above the ground)
+      let gy = p.y; const fr = 0.8 * s; for (let a = 0; a < 6.28; a += 0.785) gy = Math.min(gy, heightAt(p.x + Math.cos(a) * fr, p.z + Math.sin(a) * fr));
+      dummy.position.set(p.x, gy - 0.15, p.z);
+      dummy.rotation.set((p.r - 0.5) * 0.04, p.r * 20, (p.r - 0.5) * 0.04);
+      dummy.scale.set(s, s * (0.9 + p.r * 0.25), s);
+      dummy.updateMatrix();
+      trunkM.setMatrixAt(i, dummy.matrix); cardM.setMatrixAt(i, dummy.matrix);
+      c.setHSL(0.24 + (p.r - 0.5) * 0.05, 0.3 + p.r * 0.15, 0.5 + (p.r - 0.5) * 0.2);
+      cardM.setColorAt(i, c);
+      colliders.push({ x: p.x, z: p.z, r: 0.6 * s });
+      treeList.push({ x: p.x, z: p.z, h: T.H * s, s });
+    });
+    trunkM.customDepthMaterial = depthBark; cardM.customDepthMaterial = depthNeedle;
+    for (const m of [trunkM, cardM]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
+  });
+
+  await buildUnderstory(scene, hi);
+  await buildProps(scene);
+}
+
+// Spatially chunked instancing: each 32m cell is its own InstancedMesh so frustum culling
+// works, and small plants are distance-culled (maxDist) every few frames.
+export const chunks = [];
+const CELL = 32, _tq = new THREE.Quaternion(), _ax = new THREE.Vector3();
+// variants: the Poly Haven plant/rock packs are several variants laid out side by side (fern 2x2 grid,
+// weeds 5 in a row 0.5m apart, nettles 6, shrub_03 4, moss rocks 6 over 6m). Instancing ALL parts at
+// every point planted each pack as a regimented row and multiplied density/draw cost by 3-6x.
+// With variants:true every point gets ONE variant, re-centred on its own origin.
+async function instanceGLB(scene, name, pts, { scale = [0.8, 1.3], shadow = true, wind = 0, yOff = 0, tilt = 0.1, colliderR = 0, maxDist = 400, align = 0, variants = false } = {}) {
+  const all = await glbParts(name);
+  if (variants && all.length > 1) {
+    const v = new THREE.Vector3();
+    all.forEach(part => { part.geo.computeBoundingBox(); const b = part.geo.boundingBox; b.getCenter(v); part.geo.translate(-v.x, 0, -v.z); });
+    const groups = all.map(() => []); pts.forEach((p, i) => groups[Math.floor(((p.r * 7919) % 1) * all.length) % all.length].push(p));
+    for (let k = 0; k < all.length; k++) if (groups[k].length) await instanceParts(scene, [all[k]], groups[k], { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align });
+    return;
+  }
+  return instanceParts(scene, all, pts, { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align });
+}
+async function instanceParts(scene, parts, pts, { scale, shadow, wind, yOff, tilt, colliderR, maxDist, align }) {
+  const dummy = new THREE.Object3D();
+  const cells = new Map();
+  for (const p of pts) { const k = Math.floor(p.x / CELL) + ',' + Math.floor(p.z / CELL); (cells.get(k) || cells.set(k, []).get(k)).push(p); }
+  const mats = parts.map(part => { const m = part.mat.clone(); if (wind) windify(m, { strength: wind }); if (m.map) m.map.anisotropy = 8; return m; });
+  for (const list of cells.values()) {
+    const cx = list.reduce((a, p) => a + p.x, 0) / list.length, cz = list.reduce((a, p) => a + p.z, 0) / list.length;
+    parts.forEach((part, pi) => {
+      const im = new THREE.InstancedMesh(part.geo, mats[pi], list.length);
+      list.forEach((p, i) => {
+        const s = scale[0] + (scale[1] - scale[0]) * p.r;
+        dummy.position.set(p.x, p.y + yOff, p.z);
+        dummy.rotation.set((p.r - 0.5) * tilt, p.r * 31, (p.r * 7 % 1 - 0.5) * tilt);
+        dummy.scale.setScalar(s);
+        if (align) { // long props (logs): lie ALONG the slope instead of floating/burying one end
+          const e = align * s, ax = Math.cos(p.r * 31), az = -Math.sin(p.r * 31); // local +x after the yaw
+          const dh = heightAt(p.x + ax * e, p.z + az * e) - heightAt(p.x - ax * e, p.z - az * e);
+          _tq.setFromAxisAngle(_ax.set(-az, 0, ax), Math.atan2(dh, 2 * e)); // pitch local +x onto the grade (verified: both ends ≤20cm from ground)
+          dummy.quaternion.premultiply(_tq);
+          dummy.position.y = (heightAt(p.x + ax * e, p.z + az * e) + heightAt(p.x - ax * e, p.z - az * e)) / 2 + yOff;
+        }
+        dummy.updateMatrix();
+        im.setMatrixAt(i, dummy.matrix);
+        if (colliderR) partColliders(part.geo, dummy.matrix, colliderR);
+      });
+      im.castShadow = shadow; im.receiveShadow = true;
+      im.computeBoundingSphere();
+      scene.add(im);
+      chunks.push({ m: im, x: cx, z: cz, d: maxDist + CELL * 0.7 });
+    });
+  }
+}
+// Colliders from the real footprint of each part (multi-rock sets have their boulders metres away from
+// the instance origin, and a 3-6m log is not a 1m circle): a row of circles along the part's long axis.
+const _c0 = new THREE.Vector3(), _cs = new THREE.Vector3();
+export function partColliders(geo, m, maxR) {
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const b = geo.boundingBox, ex = (b.max.x - b.min.x) / 2, ez = (b.max.z - b.min.z) / 2;
+  if (b.max.y - b.min.y < 0.12 && Math.max(ex, ez) < 0.4) return; // tiny: not an obstacle
+  const alongX = ex >= ez, half = alongX ? ex : ez, cy = (b.min.y + b.max.y) / 2;
+  const r0 = Math.min(alongX ? ez : ex, maxR * 1.6);
+  const n = Math.max(1, Math.round(half / Math.max(r0, 0.3)));
+  for (let k = 0; k < n; k++) {
+    const t = n === 1 ? 0.5 : k / (n - 1), off = -half + r0 + (2 * half - 2 * r0) * t;
+    _c0.set((b.min.x + b.max.x) / 2 + (alongX ? (n === 1 ? 0 : off) : 0), cy, (b.min.z + b.max.z) / 2 + (alongX ? 0 : (n === 1 ? 0 : off))).applyMatrix4(m);
+    const sc = _cs.setFromMatrixScale(m).x;
+    colliders.push({ x: _c0.x, z: _c0.z, r: Math.max(0.3, (n === 1 ? Math.max(ex, ez) : r0) * sc * 0.9) });
+  }
+}
+export function updateForest(cam) {
+  if (G.frame % 10 && G.frame > 2) return; // also on the first frames (QA shots render only 6 frames: culling never ran)
+  for (const c of chunks) c.m.visible = Math.hypot(c.x - cam.x, c.z - cam.z) < c.d;
+}
+
+async function buildUnderstory(scene, hi) {
+  const k = hi ? 1 : 0.6;
+  const shady = (x, z) => clearOf(x, z, 7.5, 2.6, 3.5);
+  const ferns = place(Math.round(1800 * k), 71, (x, z, R) => shady(x, z) && slopeAt(x, z) < 0.8 && R() < 0.5 + fbm(x * 0.04, z * 0.04) * 0.9);
+  // dense ferns near the camper clearing edge (seen from windows)
+  const ring = place(Math.round(220 * k), 72, (x, z) => { const d = Math.hypot(x, z); return d > 7.5 && d < 20 && shady(x, z); });
+  await instanceGLB(scene, 'fern_02', ferns.concat(ring), { scale: [0.9, 1.7], wind: 1.2, shadow: hi, maxDist: 55, variants: true });
+  const shrubs = place(Math.round(560 * k), 73, (x, z, R) => shady(x, z) && R() < 0.6);
+  await instanceGLB(scene, 'shrub_03', shrubs.filter((_, i) => i % 2 === 0), { scale: [1.0, 2.0], wind: 1.2, shadow: hi, maxDist: 70, variants: true });
+  await instanceGLB(scene, 'shrub_04', shrubs.filter((_, i) => i % 2 === 1), { scale: [1.2, 2.4], wind: 1.2, shadow: hi, maxDist: 70, variants: true });
+  const weeds = place(Math.round(1800 * k), 74, (x, z) => {
+    if (trackDist(x, z) < 3.2) return false; // never on the road bed (pads sit right on the road)
+    for (const s in SPOTS) { const d = Math.hypot(x - SPOTS[s].x, z - SPOTS[s].z); if (d > 5 && d < 15) return true; }
+    const cd = Math.abs(x - creekX(z)); return cd > 3 && cd < 7;
+  });
+  await instanceGLB(scene, 'weed_plant_02', weeds.filter((_, i) => i % 2), { scale: [0.8, 1.4], wind: 1.6, shadow: false, maxDist: 40, variants: true });
+  await instanceGLB(scene, 'nettle_plant', weeds.filter((_, i) => !(i % 2)), { scale: [0.9, 1.5], wind: 1.6, shadow: false, maxDist: 40, variants: true });
+  const rocks = place(Math.round(160 * k), 75, (x, z, R) => clearOf(x, z, 9, 6, 0) && (slopeAt(x, z) > 0.5 || Math.abs(x - creekX(z)) < 7 || R() < 0.15));
+  await instanceGLB(scene, 'rock_moss_set_01', rocks, { scale: [0.35, 0.9], yOff: -0.2, tilt: 0.3, colliderR: 1.1, maxDist: 120, variants: true });
+  // pebbles along the creek and the road verges — but not on the bed where the road fords the creek
+  const small = place(Math.round(500 * k), 76, (x, z) => { const td = trackDist(x, z); return td > 2.8 && (Math.abs(x - creekX(z)) < 5.5 || td < 5); });
+  await instanceGLB(scene, 'rock_07', small, { scale: [0.8, 2.0], yOff: -0.03, tilt: 1, shadow: false, maxDist: 35 });
+  const logs = place(80, 77, (x, z) => clearOf(x, z, 10, 6, 4) && slopeAt(x, z) < 0.9);
+  await instanceGLB(scene, 'dead_tree_trunk', logs, { scale: [1.2, 2.2], yOff: 0.05, tilt: 0.05, colliderR: 1, align: 1.45 });
+  await instanceGLB(scene, 'tree_stump_01', place(90, 78, (x, z) => clearOf(x, z, 8, 5.5, 4)), { scale: [0.8, 1.3], yOff: -0.05, colliderR: 0.8 });
+  await instanceGLB(scene, 'dry_branches_medium_01', place(Math.round(200 * k), 79, (x, z) => clearOf(x, z, 5, 3.2, 3)), { scale: [0.8, 1.6], tilt: 0.1, shadow: false, maxDist: 40, variants: true });
+}
+
+// Camp props around the parked camper (placed in world, relative to hollow spot)
+export const camp = { fire: null, fireLight: null, table: null, generator: null };
+async function buildProps(scene) {
+  const s = SPOTS.hollow;
+  const put = async (name, lx, lz, rot = 0, sc = 1) => {
+    const g = (await glb(name)).scene.clone(true);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const x = s.x + lx, z = s.z + lz;
+    g.position.set(x, heightAt(x, z), z); g.rotation.y = rot; g.scale.setScalar(sc);
+    scene.add(g); return g;
+  };
+  camp.fire = await put('stone_fire_pit', 5.2, 3.2, 0.3);
+  camp.table = await put('outdoor_table_chair_set_01', 3.6, -1.8, 1.3);
+  camp.generator = await put('portable_generator', 2.7, 5.2, 2.0);
+  await put('metal_jerrycan', 3.3, 5.8, 0.4);
+  colliders.push({ x: s.x + 5.2, z: s.z + 3.2, r: 0.9 }, { x: s.x + 3.6, z: s.z - 1.8, r: 1.0 },
+    { x: s.x + 2.7, z: s.z + 5.2, r: 0.45 }, { x: s.x + 3.3, z: s.z + 5.8, r: 0.3 }); // generator + jerrycan (walked through before)
+  // embers / fire light (lit at night by events/ui)
+  const fl = new THREE.PointLight(0xff7a2a, 0, 12, 1.6);
+  fl.position.set(s.x + 5.2, heightAt(s.x + 5.2, s.z + 3.2) + 0.6, s.z + 3.2);
+  scene.add(fl); camp.fireLight = fl;
+}

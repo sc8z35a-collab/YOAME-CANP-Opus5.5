@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>interior preview</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// Lightweight interior-only preview (camper + flat ground + gradient sky). Used for QA shots on a
+// 1GB sandbox where the full game (terrain + forest + animals) is too heavy for swiftshader.
+//   tools/interior.html?pos=x,y,z&at=x,y,z&fov=60&night=1&w=915&h=412&q=m
+import { THREE, G, U, P } from '../js/core.js';
+import { setAniso, manager } from '../js/assets.js';
+import { buildCamper, updateCamper, C, FLOOR, ZF, uIntAmb, bakeInteriorEnv, IN } from '../js/camper.js';
+const canvas = document.getElementById('c');
+const W = +(P.get('w') || 915), H = +(P.get('h') || 412);
+const r = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(1); r.setSize(W, H);
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+r.shadowMap.enabled = !P.has('noshadow'); r.shadowMap.type = THREE.PCFSoftShadowMap;
+setAniso(8);
+const scene = new THREE.Scene(); G.scene = scene;
+const night = P.has('night');
+G.night = night ? 1 : 0; G.daylight = night ? 0 : 1;
+scene.background = new THREE.Color(night ? 0x0a1020 : 0xa9c4d8);
+const hemi = new THREE.HemisphereLight(night ? 0x223355 : 0xcfe3ff, night ? 0x0b0d08 : 0x4a5a3a, night ? 0.15 : 1.4); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1dc, night ? 0 : 3.2); sun.position.set(-8, 12, -5); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 40 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+const gnd = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x3b4a2a, roughness: 1 }));
+gnd.rotation.x = -Math.PI / 2; gnd.receiveShadow = true; scene.add(gnd);
+// a few trunks outside so the windows show something
+for (let i = 0; i < 40; i++) { const a = i * 2.39, d = 7 + (i * 37 % 23); const t = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 14, 8), new THREE.MeshStandardMaterial({ color: 0x3a2c20 })); t.position.set(Math.cos(a) * d, 7, Math.sin(a) * d); scene.add(t); }
+buildCamper(scene);
+try { const m = await import('../js/tablet.js'); m.buildTablet(C.group, FLOOR, ZF); } catch (e) { console.log('tablet skipped', e.message); }
+if (P.has('env')) { const pm = new THREE.PMREMGenerator(r); const es = new THREE.Scene(); es.background = scene.background; scene.environment = pm.fromScene(es).texture; scene.environmentIntensity = night ? 0.05 : 0.6; }
+uIntAmb.value = +(P.get('amb') || (night ? 0.3 : 0.3));
+if (P.has('lights')) G.state.lightsOn = P.get('lights') === '1';
+G.state.cooking = P.has('cook') ? 1 : 0;
+const cam = new THREE.PerspectiveCamera(+(P.get('fov') || 62), W / H, 0.02, 500);
+const v = k => (P.get(k) || '').split(',').map(Number);
+cam.position.fromArray(P.has('pos') ? v('pos') : [0.1, FLOOR + 1.6, -0.75]);
+cam.lookAt(new THREE.Vector3().fromArray(P.has('at') ? v('at') : [1.4, FLOOR + 1.3, -0.5]));
+if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); if (k === 'shell') C.group.children.forEach(o => { if (o !== C.interiorRoot) o.visible = false; }); }
+let n = 0;
+const done = () => new Promise(res => { if (manager.itemsLoaded === manager.itemsTotal) res(); else manager.onLoad = res; setTimeout(res, 60000); });
+await done(); await IN.ready; if (!P.has('noenv')) bakeInteriorEnv(r, scene, C.group);
+if (P.has('steer')) G.steerAngle = +P.get('steer'); if (P.has('drive')) { G.driving = true; G.driveSpeed = +P.get('drive'); }
+function loop() {
+  G.t += 1 / 30; G.frame++; U.uTime.value = G.t; updateCamper(1 / 30);
+  r.render(scene, cam);
+  if (++n < 4) requestAnimationFrame(loop); else { window.__SHOT = canvas.toDataURL('image/jpeg', 0.9); document.title = 'done'; }
+}
+loop();
+</script></body></html>

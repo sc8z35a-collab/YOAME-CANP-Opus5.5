@@ -1,4 +1,12 @@
-node_modules/
-.DS_Store
 *.log
+.DS_Store
+.boot.log
 /tmp/
+__pycache__/
+build/*.log
+build/base/
+build/qa_errors_base.py
+build/shots/
+dist/
+node_modules/
+build/err.txt

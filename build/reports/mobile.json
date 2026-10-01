@@ -1,0 +1,26 @@
+{
+ "viewports": {
+  "pixel_landscape": {
+   "shot": "build/shots/mobile_pixel_landscape.png",
+   "small": [],
+   "rotateVisible": false,
+   "errors": []
+  },
+  "wide_landscape": {
+   "shot": "build/shots/mobile_wide_landscape.png",
+   "small": [],
+   "rotateVisible": false,
+   "errors": []
+  },
+  "portrait_guard": {
+   "shot": "build/shots/mobile_portrait_guard.png",
+   "small": [
+    "menuBtn"
+   ],
+   "rotateVisible": true,
+   "errors": []
+  }
+ },
+ "ok": true,
+ "seconds": 525.3
+}

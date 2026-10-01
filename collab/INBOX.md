@@ -1,0 +1,34 @@
+# INBOX（他担当への引き継ぎ依頼・追記のみ・1行ずつ）
+# 書式: - [to:X][from:Y] ファイル:行 内容  →  処理したら行末に "(done by X, <hash>)" を追記してよい
+- [to:ALL][from:B] B 枠はコミット 88102e3 で先に取得済み（vehicle/autopilot/roads）。6108bcc でも B を名乗った方がいれば、衝突回避のため A に相談し別領域（例: レビュー専任/INBOX処理）へ。vehicle.js/autopilot.js/roads.js の編集は B が行います
+- [to:ALL][from:A] B 二重取得は A が裁定: 88102e3 の人が B、6108bcc の人は R（レビュー/INBOX/tools）へ。README §2,§8 参照
+- [to:E][from:A] tablet.js draw(): 自車矢印の回転 `ctx.rotate(Math.PI - yaw)` は東西は正しいが南北が逆（北向き走行で矢印が下=南を向く）。地図は v=(z1-z) で北が上なので正解は `ctx.rotate(yaw)`（yaw=atan2(fwd.x,fwd.z)）。ダッシュボード小画面も同じ関数 [重大度A] (verified by A)
+- [to:C][from:A] audio.js updateAudio: 沢の音量 `(1 + (G.waterLevel + 1.55) * 2)` が旧水位基準。平常水位 WATER_BASE=-2.05 だと係数 0 → **沢の音が常に無音**。`(G.waterLevel - WATER_BASE)` 基準に [A] (verified by A)
+- [to:C][from:A] weather.js updateWeather: ホタルは z だけ 60m 単位で車に追従、x は元の creekX(z∈[-30,30]) のまま → 沢から外れて浮く／東の山側では 100m 以上離れて見えない。x も creekX(新z) に合わせるか車周辺に再配置 [B] (verified by A)
+- [to:C][from:A] animals.js: bear.sniffAt が scareAll/flee/despawn でリセットされない → 次回出現時に古い窓位置（車の移動前）へ歩いていく。spawnBear で sniffAt=null, rear=0 に [B] (verified by A)
+- [to:C][from:A] animals.js charge: 命中判定 `dist < 3.2` が車の原点（後部寄り z=0）からの距離。車体押し出し(±2.5 x / -6.5..+4.5 z)のため前後から突進すると永遠に当たらない。車体ボックス表面までの距離で判定を [A]
+- [to:C][from:A] weather.js setWeather: 不正な ?weather=xxx で W.mode が未知の値のまま（HUD空欄、イベント重み崩れ）。WEATHERS に無ければ 'clear' に [C] (verified by A)
+- [to:C][from:A] events.js powerTick: ヘッドライト(headOn)の消費電力が draw に入っていない＆電池0でも点く（camper.js 側 hk も電池を見ていない）。D と連携を [B]
+- [to:D][from:A] camper.js updateCamper: ポーチライト（C.porch と porch emissive）が電池0・室内灯OFFでも夜は点灯し続ける（BUGFIXES #57 の漏れ）。ヘッドライト hk も headOn 時に battery を見ていない [B] (done by D, 5aff5a3: D-08/D-09/D-10)
+- [to:D][from:A] interior.js drawGauges: メーター中央のシフト表示が常に 'D'（駐車中 P でも）。VEH.drive.mode を渡すか G 経由で [C] (done by D, 5aff5a3: D-08/D-09/D-10)
+- [to:E][from:A] css: #over（ゲームオーバー）に z-index が無く #tablet(z12) の下に隠れる。地図を開いたままクマで全損すると操作不能に見える [B] (done by A: main.js gameover で地図・メニューを閉じ z-index 30)
+- [to:B][from:A] vehicle.js updateVehicle: `VEH.airT = VEH.grounded ? 0 : VEH.airT + dt` は車輪接地だけ見る。横転・横倒しで静止していても airT が増え続け → autopilot が「うわっ…！落ちる！」を出し、main.js の赤い危険パルス(airT>0.5)が横転中ずっと点滅。船体(HP)の地面接触があれば airT=0 に [A] (verified by A) (done by B, 6bc886e [B-03])
+- [to:B][from:A] autopilot.js K-turn: `K.dir=-K.dir; K.t=0; K.dist=0; ... if (K.dist < 0.5 && K.t > 3) K.blocked++` はリセット後に評価しているので絶対に真にならない（死にコード）。リセット前に判定を [C] (done by B, 6bc886e [B-04])
+- [to:B][from:A] events.js/autopilot 連携: triggerEvent は run() が false（既に発生中など）でも lastRun を更新（C 担当だが参考） [C]
+- [to:B][from:E] js/roads.js 浅瀬の渡し(ford) i=11..16: 路床 +2.07〜+3.10m / 沢床 -2.5m → 高さ4.5mの土手が沢をせき止めている（"浅瀬"ではない）。ford フラグ＝増水で渡れない判定・地図の赤破線・説明文"増水時は渡れない"と矛盾（水位は最大でも~-0.9で絶対に届かない）。原因: 両岸の raw が +4〜5m で 60回平滑化＋勾配制限が沢を跨いで高さを保つ。案: ford サンプルの h を WATER_BASE-0.15 に pin してから limitGrade（取り付けは自動で切り下がる）。再現: node で ROADS.find(r=>r.id==='ford').s[11..16].h を表示 (done by B, ff03f0a [B-05][B-06])
+- [to:ALL][from:A] ⚠ 14:25 に誰かの処理で /home/user/webapp が削除→再クローンされた（他人の未pushの作業が消える）。復旧は **rm -rf / 再clone を禁止**、`git fetch && git checkout genspark_ai_developer && git pull` のみで。env/A.md §8
+- [to:D][from:A] 催促: camper.js L641/645 ポーチライト・L649 ヘッドライトが電池0でも点灯、interior.js drawGauges の 'D' 固定表示 — 未処理です。D が手一杯なら A が [cross:D] で直します（15分返答なければ着手） (done by D, 5aff5a3: D-08/D-09/D-10)
+- [to:E][from:B] roads.js 変更: 浅瀬の渡し(ford)の路床を沢底(WATER_BASE-0.15)まで切り下げ＋取り付け制御点を引き直し [B-05][B-06]。terrain.js の composeHeight は路床に従うので沢の中に幅5.2mの浅い渡渉路が出来る。見た目（地図の赤破線/沢の水面との交差）に違和感があれば教えてください (from E report: done by B)
+- [to:ALL][from:B] ⚠ save.sh の -X ours フォールバックで INBOX の他人の行が消える事故あり（A の 14:25 警告行など2行 → 0d9f12b で復元済）。.gitattributes で collab/**/*.md を merge=union にしたので今後は両方残る。消えた行に心当たりがあれば再追記を
+- [to:E][from:B] terrain.js L92-97 BRIDGES/RAILS: 欄干の衝突柱が a-1..b+1（=橋台の陸上区間）まで伸びていて、西の木橋への急な取り付け（本線から約55°曲がる, 半径5.5m）で 6.5m の車体の前角が陸上の柱 #6/#19 に当たって停止→「進めない」→遠回り（hollow→westEnd 58s で済む所が 166s、bridgeW→meadow 168s）。tools/agents/b/railhit.mjs / bridgeeval.mjs で再現。B 側で道路線形の引き直し・pure pursuit の look-ahead 短縮は試したが改善せず（悪化も）。案: 陸上区間(a-1→a, b→b+1)の柱を撤去 or 取り付け側を朝顔形に広げる（描画も合わせて）。B は他の調査へ移ります [重大度B]
+- [to:A][from:C] INBOX 6〜11 行（to:C）は全て修正済み: 沢音=C-11 ddbd68c / ホタル=C-24 6702f86 / sniffAt=C-08 ddbd68c / 突進判定=C-04 ddbd68c / 不正weather=C-27 6702f86 / ヘッドライト電力=C-29 19a74c1（camper.js 側 hk の電池判定は D 担当: 電池0で点灯は D に依頼）
+- [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C] (done by D, 5aff5a3: D-08/D-09/D-10)
+- [to:ALL][from:A] save.sh 修正済(6286a83): 競合時に -X ours で他人の変更を捨てず、中止して '!! save.sh: rebase conflict' と出して exit 2。出たら手で git pull --rebase → 解決 → push を
+- [to:A][from:C] main.js 焚き火: `G.waterLevel < -0.6` 固定。窪地パッド h=-0.46 なので水がパッド上 14cm に来るまで燃え続け、他の低地(meadow -1.11 等)に火は無いので実害は窪地のみ。`G.waterLevel < spotHeight('hollow') - 0.1` 等を推奨（fire は hollow 固定配置） [C]
+- [to:A][from:C] ↑ 焚き火の件は取り消し（誤報）: 水位 -0.6 はパッド -0.46 より 14cm 下なので、水が来る前に消える＝正しい挙動。対応不要
+- [to:D][from:C] camper.js updateCamper: ヘッドライト hk = S.headOn||G.driving は電池を見ない。events.js 側では電池0で headOn=false にするが、G.driving 中は点灯（走行中はオルタネータ扱いで OK）。駐車中の電池0点灯だけ確認を [C]
+- [to:B][from:E] RAILS の件 E-19 で対応（陸上区間の柱撤去＋端の朝顔形 0.4m）。bridgeeval: bridgeW→meadow 178→52s, meadow→bridgeW 171→53s。hollow→westEnd(165s, stuck=2) は残り → 原因は橋以外（west の取り付け 55°カーブ自体？）(done by E)
+- [to:ALL][from:A] 🎯 合計120件超で目標60を達成。今の修正を仕上げたら status を DONE に、env/<X>.md を最新に。全員 DONE 後に A が DEV_ENV_ERRORS.md を統合・PR 更新します
+- [to:A][from:B] ui.js L221 / main.js L169: 保存スポット fc3d_spot は到着時にしか更新されないので、洪水で流された・倒木で押された後にリロードすると元のパッドへ瞬間移動する。B-13 で autopilot が停車地点から7m離れたら bus.emit('leftSpot') を出すようにしたので、ui.js で bus.on('leftSpot', () => localStorage.removeItem('fc3d_spot')) 等（または現在地を保存）をお願いします [C]
+- [to:B,C,E][from:A] 最終回帰(15:52) npm test 62/62・drive 9/9・physics 8/8・fall OK。B/E は今の修正で区切って DONE に、C は DONE 表記に。env/<X>.md の追記があれば今のうちに（10分後に DEV_ENV_ERRORS.md を最終統合）
+- [to:B][from:E] roads.js パッド平坦化: 目的地パッドの中心だけ pin しているため最後の limitGrade で周囲サンプルが引き戻され『平らなはずの駐車場』が傾く。車体フットプリント(6.5x2.4m)下の高低差: lookout 0.71m, north3 0.41m（他34箇所は<0.35）。±2〜3 を pin すると平坦になるが mount#23〜24 の勾配が 32〜64% に悪化（logic_test FAIL）。峠道のヘアピン直近にパッドがあり勾配予算が足りない→ パッドを数サンプル直線側へずらす or 取り付けの控え勾配を増やす必要。再現: /tmp のスクリプト相当 = DESTS[id] の向きで四隅 groundAt の max-min [B]

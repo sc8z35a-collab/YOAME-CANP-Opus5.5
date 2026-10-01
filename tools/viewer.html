@@ -1,0 +1,13 @@
+<!doctype html><html><body style="margin:0;background:#888"><script type="module">
+import * as THREE from '../js/lib/three.module.js';
+import {GLTFLoader} from '../js/lib/addons/GLTFLoader.js';
+const files=new URLSearchParams(location.search).get('f').split(',');
+const W=300,H=300; const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); r.setSize(W*files.length,H); document.body.appendChild(r.domElement);
+r.setScissorTest(true);
+const L=new GLTFLoader(); let done=0;
+files.forEach((f,i)=>L.load(f,g=>{const s=new THREE.Scene(); s.background=new THREE.Color(0x9ab);
+ s.add(new THREE.HemisphereLight(0xffffff,0x444444,2)); const d=new THREE.DirectionalLight(0xffffff,2); d.position.set(3,5,4); s.add(d);
+ s.add(g.scene); const b=new THREE.Box3().setFromObject(g.scene); const c=b.getCenter(new THREE.Vector3()); const sz=b.getSize(new THREE.Vector3()).length();
+ const cam=new THREE.PerspectiveCamera(40,1,0.01,1000); cam.position.copy(c).add(new THREE.Vector3(sz*.7,sz*.35,sz*.7)); cam.lookAt(c);
+ r.setViewport(i*W,0,W,H); r.setScissor(i*W,0,W,H); r.render(s,cam); console.log('SIZE',f,sz.toFixed(2),JSON.stringify(b.getSize(new THREE.Vector3()).toArray().map(v=>+v.toFixed(2)))); if(++done==files.length) document.title='done';},undefined,e=>{console.log('ERR',f,e); if(++done==files.length) document.title='done';}));
+</script></body></html>

@@ -1,0 +1,298 @@
+// Entry: renderer, post FX (bloom + cinematic grade/vignette/grain + rain lens), loop, driving.
+import { THREE, G, U, P, QA, bus, clamp, damp, lerp, smooth } from './core.js';
+import { setAniso, progress } from './assets.js';
+import { buildTerrain, heightAt, SPOTS, spotHeight } from './terrain.js';
+import { VEH, setPose, updateVehicle, originOf } from './vehicle.js';
+import { AP, updateAutopilot, engage, disengage } from './autopilot.js';
+import { PL, initPlayer, updatePlayer, goOutside, goInside } from './player.js';
+import { buildTablet, updateTablet } from './tablet.js';
+import { FLOOR, ZF } from './camper.js';
+import { buildForest, camp, updateForest } from './forest.js';
+import { buildCamper, updateCamper, C, bakeInteriorEnv, IN } from './camper.js';
+import { buildWeather, updateWeather, W } from './weather.js';
+import { buildAnimals, updateAnimals, Z } from './animals.js';
+import { buildEvents, updateEvents, E, startForcedEvent } from './events.js';
+import { initView, updateView, V } from './view.js';
+import { buildUI, updateUI, toast } from './ui.js';
+import { initAudio, updateAudio, sfx } from './audio.js';
+import { glassShared } from './glass.js';
+import { updateDamage, loadDamage, repairAll } from './damage.js';
+import { EffectComposer } from './lib/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from './lib/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from './lib/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from './lib/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from './lib/addons/postprocessing/OutputPass.js';
+
+window.__QA = { ready: false, fps: 0 };
+if (QA) { window.__G = G; import('./view.js').then(m => window.__V = m.V); }
+window.__QA.resume = () => { window.__QA.run = true; requestAnimationFrame(loop); };
+const loadEl = document.getElementById('loading');
+const barEl = document.getElementById('loadbar');
+
+// ---------------------------------------------------------------- renderer
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+const maxDPR = G.quality === 'm' ? 1.25 : (QA ? 1 : 2.0);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDPR));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+setAniso(Math.min(16, renderer.capabilities.getMaxAnisotropy()));
+G.renderer = renderer;
+
+const scene = new THREE.Scene(); G.scene = scene;
+const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.03, 3000); G.camera = camera;
+scene.add(camera);
+
+// PMREM env from the sky for reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+let envRT = null, envTimer = 0;
+function updateEnv() {
+  const s = new THREE.Scene();
+  s.add(W.sky.clone()); s.add(W.dome.clone());
+  s.background = null;
+  if (envRT) envRT.dispose();
+  envRT = pmrem.fromScene(s, 0, 1, 5000);
+  scene.environment = envRT.texture;
+  scene.environmentIntensity = lerp(0.08, 1.0, G.daylight) * lerp(1, 0.55, G.cloud);
+}
+
+// ---------------------------------------------------------------- post
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: G.quality === 'm' ? 0 : 4 }));
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.35, 0.45, 0.92);
+composer.addPass(bloom);
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uTime: U.uTime, uVig: { value: 0.35 }, uGrain: { value: 0.018 }, uRed: { value: 0 },
+    uWarm: { value: 0 }, uLens: { value: 0 }, uAspect: { value: 1.7 }, uDark: { value: 0 }, uSub: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uVig, uGrain, uRed, uWarm, uLens, uAspect, uDark, uSub; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec2 uv = vUv;
+      // underwater-ish wobble when the flood reaches the floor
+      uv += vec2(sin(uv.y*30. + uTime*2.), cos(uv.x*25. + uTime*1.7))*0.002*uSub;
+      // chromatic aberration at edges
+      vec2 d = uv - .5; float r2 = dot(d,d);
+      vec3 c;
+      c.r = texture2D(tDiffuse, uv - d*r2*0.012).r;
+      c.g = texture2D(tDiffuse, uv).g;
+      c.b = texture2D(tDiffuse, uv + d*r2*0.012).b;
+      // warm/cool split-tone grade
+      float l = dot(c, vec3(0.299,0.587,0.114));
+      vec3 shadowT = mix(vec3(0.92,1.0,1.08), vec3(1.0), smoothstep(0.0, 0.5, l));
+      vec3 hiT = mix(vec3(1.0), vec3(1.07,1.0,0.9), smoothstep(0.3, 1.0, l));
+      c *= mix(vec3(1.), shadowT*hiT, 0.8);
+      c = mix(c, c*vec3(1.08,0.98,0.86), uWarm);
+      c = mix(vec3(l), c, 1.06);
+      // vignette
+      vec2 vd = d*vec2(uAspect, 1.); float v = smoothstep(0.95, 0.2, length(vd)*0.9);
+      c *= mix(1.0, v, uVig + uDark*0.4);
+      // danger pulse
+      c = mix(c, c*vec3(1.35,0.55,0.5), uRed*(0.5+0.5*sin(uTime*6.))*smoothstep(0.2, 0.9, length(vd)));
+      // film grain
+      c += (h(uv*vec2(1920.,1080.) + fract(uTime)*100.) - 0.5) * uGrain;
+      gl_FragColor = vec4(max(c, 0.), 1.);
+    }`,
+});
+composer.addPass(grade);
+composer.addPass(new OutputPass());
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloom.setSize(w / 2, h / 2);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  grade.uniforms.uAspect.value = w / h;
+}
+window.addEventListener('resize', resize);
+
+// ---------------------------------------------------------------- camper placement & physics
+function placeCamper(spot) {
+  const s = SPOTS[spot] || SPOTS.hollow; G.camperSpot = s.id;
+  setPose(s.x, s.z, s.rot, 0.05);
+  updateVehicle(0, C.group);
+}
+bus.on('driveTo', to => engage(to)); // legacy event name (menus, QA)
+// menu 'キャンプ地へ戻す' (always-available escape hatch; the physics-based recovery normally suffices)
+bus.on('rescueHome', () => {
+  disengage(); // stop the autopilot BEFORE teleporting (the old async import let it steer the towed van for a frame)
+  placeCamper('hollow'); AP.at = 'hollow'; C.group.updateMatrixWorld(true);
+  if (!PL.inside) goInside(C.group);                      // you ride along in the tow truck
+  try { localStorage.setItem('fc3d_spot', 'hollow'); } catch (e) {}
+  toast('レッカーでキャンプ地まで運んでもらった', 'info');
+});
+// vehicle acceleration in camper-local space (sways the walking player & curtains)
+const _pv = new THREE.Vector3(), _qa = new THREE.Quaternion();
+G.vehAccL = new THREE.Vector3();
+function updateDrive(dt) {
+  updateAutopilot(dt);
+  _pv.copy(VEH.v);
+  updateVehicle(dt, C.group);
+  if (dt > 0) G.vehAccL.copy(VEH.v).sub(_pv).divideScalar(dt).applyQuaternion(_qa.copy(VEH.q).invert());
+  G.driveSpeed = VEH.fwdSpeed; G.steerAngle = VEH.steer;
+  G.submerge = VEH.submerged * 1.6;
+  // road rumble & wind gusts rock the van a little (camera shake is felt, not scripted)
+  if (G.driving && VEH.speed > 1) G.shake = Math.max(G.shake, 0.05 + VEH.speed * 0.008);
+}
+// wind: gust force on the tall flat side of the van (can topple it on a cliff edge in a storm)
+// wind: a real air velocity (m/s) fed to the vehicle aero model; storms gust to ~25 m/s, which
+// is enough to rock the tall box on its springs (and tip it on a cliff edge together with a slope)
+function updateRock(dt) {
+  const gust = Math.max(0, Math.sin(G.t * 0.9) * Math.sin(G.t * 0.37 + 1.1)) * Math.max(0, G.wind - 0.5) * 2;
+  const sp = G.wind * 9 + gust * 12;
+  G.windVec = G.windVec || new THREE.Vector3();
+  G.windVec.set(-0.53, 0, 0.85).multiplyScalar(sp);
+  G.rockAngle = VEH.roll || 0;
+}
+
+bus.on('gameover', src => {
+  if (G.state.over) return; G.state.over = true;
+  disengage(); // the engine / drive HUD / autopilot must stop with the game
+  import('./tablet.js').then(m => m.TAB.open && m.closeTablet()); // the map overlay (z-index 12) would hide the game-over panel
+  for (const id of ['menu', 'sheet', 'intro']) document.getElementById(id)?.classList.add('hidden');
+  const why = { bear: 'クマの攻撃で車体が壊れた…', flood: '濁流に飲み込まれた…', rock: '土砂に埋もれた…', tree: '倒木が屋根を突き破った…' }[src] || '限界だ…';
+  document.getElementById('over').innerHTML = `<div class="panel"><h2>${why}</h2><p>${G.day}日目 ${Math.floor(G.hour)}時 / 生き延びた夜: ${G.state.nightsSurvived}</p><button data-touch class="chip wide" onclick="location.reload()">もう一度</button></div>`;
+  const ov = document.getElementById('over'); ov.style.zIndex = 30; ov.classList.remove('hidden');
+});
+
+// ---------------------------------------------------------------- start
+async function init() {
+  buildWeather(scene, renderer); W.renderer = renderer;
+  buildTerrain(scene);
+  buildCamper(scene);
+  if (!P.has('qa')) loadDamage();
+  if (P.has('dmgdemo')) import('./damage.js').then(m => { const V3 = THREE.Vector3; m.addDent(new V3(1.2, 1.6, -1.5), new V3(-1, 0, 0), 1, 'rock'); m.addDent(new V3(1.2, 1.1, 1.2), new V3(-1, 0, 0), 0.6, 'crash'); m.addScratch(new V3(1.2, 0.9, -3.5), new V3(1.2, 1.2, 1.5), 0.08, 1); });
+  placeCamper(P.get('spot') || (() => { try { return localStorage.getItem('fc3d_spot'); } catch (e) { return null; } })() || 'hollow');
+  buildTablet(C.group, FLOOR, ZF);
+  await buildForest(scene);
+  await buildAnimals(scene);
+  buildEvents(scene);
+  initPlayer(); initView(canvas);
+  C.group.updateMatrixWorld(true); // goOutside() converts camper-local -> world: needs the placed pose
+  if (PL.pendingOutside) { PL.pendingOutside = false; goOutside(C.group); }
+  startForcedEvent(); // after camper placement + view (staging uses both)
+  if (P.has('hide')) for (const k of P.get('hide').split(',')) { if (k === 'curtains') C.curtains.forEach(c => c.visible = false); if (k === 'glass') Object.values(C.glass).forEach(g => g.visible = false); }
+  buildUI();
+  // QA: pre-simulate autopilot driving (?dest=<id>&sim=<seconds>), chase cam (?cam=chase), open tablet (?tablet=1)
+  if (P.has('dest')) {
+    engage(P.get('dest'));
+    const n = Math.round((parseFloat(P.get('sim')) || 0) * 30);
+    for (let i = 0; i < n; i++) { G.t += 1 / 30; updateDrive(1 / 30); if (P.has('event2') && i === Math.round(n * 0.5)) startForcedEvent(P.get('event2')); }
+    C.group.updateMatrixWorld(true);
+  }
+  if (P.get('cam') === 'chase') { const m = await import('./view.js'); m.setView('chase'); if (P.has('cyaw')) m.V.chase.yaw = parseFloat(P.get('cyaw')); }
+  if (P.has('tablet')) { const m = await import('./tablet.js'); while (!m.bakeStep(50)); m.openTablet(); if (P.has('sel')) { m.TAB.sel = P.get('sel'); } }
+  resize();
+  updateWeather(0.016, camera);
+  updateEnv();
+  // interior reflections (after CC0 props are in) + warm up shaders
+  try { await IN.ready; bakeInteriorEnv(renderer, scene, C.group); } catch (e) { console.warn('env bake', e); }
+  renderer.compile(scene, camera);
+  loadEl.classList.add('done'); loadEl.removeAttribute('aria-busy');
+  barEl.style.strokeDashoffset = 0; clearInterval(loadTick); setTimeout(() => loadEl.remove(), 1200);
+  if (!QA) {
+    let seen = false; try { seen = localStorage.getItem('fc3d_intro') === '1'; } catch (e) {}
+    if (!seen) showIntro(); else toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
+  }
+  // first gesture: audio + fullscreen landscape lock
+  const first = async () => {
+    initAudio();
+    try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
+    try { await screen.orientation.lock('landscape'); } catch (e) {}
+  };
+  window.addEventListener('pointerdown', first, { once: true });
+  requestAnimationFrame(loop);
+}
+// the loading manager's total grows while later GLBs are queued: never let the ring run backwards
+let loadMax = 0;
+const loadTick = setInterval(() => { if (progress.total) { loadMax = Math.max(loadMax, progress.loaded / progress.total); barEl.style.strokeDashoffset = 276.5 * (1 - loadMax * 0.95); } }, 100);
+
+let last = performance.now(), fpsAcc = 0, fpsN = 0, qaFrames = 0;
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
+function loop(now) {
+  if (QA && window.__QA.ready && !window.__QA.run) { window.__QA.frozen = true; return; }
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (QA) dt = 1 / 30;
+  G.dt = dt; G.t += dt; G.frame++;
+  U.uTime.value = G.t;
+  // time of day
+  if (!QA) {
+    // (prev-edge test removed, see below)
+    G.hour += dt * G.hoursPerSec * G.timeMul;
+    if (G.hour >= 24) { G.hour -= 24; G.day++; }
+    // dawn: any time we are past 6:00 of a day not yet counted, after having been in the night (also works when
+    // the menu's +3h jumps over 6:00, which the old prev<6 edge test missed)
+    if (G.hour < 5) G.state.sawNight = true;
+    if (G.state.sawNight && G.hour >= 6 && G.hour < 12 && G.state.lastDawnDay !== G.day) { G.state.sawNight = false; G.state.lastDawnDay = G.day; G.state.nightsSurvived++; toast(`🌅 夜が明けた。${G.state.nightsSurvived}夜目を越えた`, 'info', 5000); }
+  }
+  if (!G.state.over) updateDrive(dt);
+  updateRock(dt);
+  C.group.updateMatrixWorld(true);
+  updatePlayer(dt, C.group, G.driving);
+  updateTablet(dt);
+  updateWeather(dt, camera);
+  if (!G.state.over) { updateEvents(dt); updateAnimals(dt); }
+  updateCamper(dt);
+  updateDamage(dt, VEH.scrapes);
+  updateView(dt, camera);
+  updateForest(camera.position);
+  updateAudio(dt);
+  updateUI();
+  // campfire at dusk/night when calm
+  camp.fireLight.intensity = G.night > 0.4 && G.rain < 0.3 && G.waterLevel < -0.6 ? 6 * (0.8 + Math.sin(G.t * 11) * 0.1 + Math.sin(G.t * 23) * 0.08) : 0;
+  // glass condensation: rises with cold + heater/cooking inside
+  glassShared.uFogGlass.value = damp(glassShared.uFogGlass.value, clamp(G.rain * 0.35 + (G.state.cooking > 0 ? 0.5 : 0) + G.night * 0.1), 0.1, dt);
+  // env map refresh (sky changes slowly)
+  envTimer -= dt; if (envTimer < 0) { envTimer = QA ? 1e9 : 4; updateEnv(); }
+  // exposure: eye adapts inside vs night
+  const inside = !VIEWS_out();
+  const target = lerp(1.25, 0.72, G.daylight) * (inside ? 1 : 0.9) + (G.state.lightsOn ? -0.1 * G.night : 0.35 * G.night);
+  renderer.toneMappingExposure = damp(renderer.toneMappingExposure, target, 1.5, dt);
+  const gu = grade.uniforms;
+  gu.uWarm.value = C.lightLevel * G.night * 0.25;
+  gu.uRed.value = damp(gu.uRed.value, Z.bear?.state === 'charge' || G.state.hull < 25 || VEH.airT > 0.5 ? 0.35 : 0, 3, dt);
+  gu.uDark.value = G.state.hiding ? 1 : 0;
+  gu.uSub.value = clamp((G.submerge || 0) - 0.5);
+  bloom.strength = 0.28 + G.night * 0.14 + G.flash * 0.5;
+  if (P.has('nopost')) renderer.render(scene, camera); else composer.render(dt);
+  // fps
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 1) { window.__QA.fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
+  window.__QA.frames = qaFrames + 1;
+  if (QA && ++qaFrames === (parseInt(P.get('frames')) || 6)) { window.__QA.ready = true; try { window.__QA.shot = canvas.toDataURL('image/jpeg', 0.9); } catch (e) { window.__QA.shotErr = String(e); }
+    // subject diagnostics: where are active animals on screen (NDC) and are they visible?
+    window.__QA.subjects = [...Z.deer, ...Z.fawns, Z.bear, ...Z.wolves].filter(a => a && a.active).map(a => {
+      const p = a.pos.clone(); p.y += 0.6; const n = p.clone().project(camera);
+      return { k: a.kind, st: a.state, vis: a.obj.visible, pos: a.pos.toArray().map(v => +v.toFixed(1)), ndc: [+n.x.toFixed(2), +n.y.toFixed(2), +n.z.toFixed(3)] };
+    });
+    window.__QA.cam = camera.position.toArray().map(v => +v.toFixed(2)).concat(G.camper.position.toArray().map(v => +v.toFixed(2))); window.__QA.exp = renderer.toneMappingExposure; window.__QA.fogD = scene.fog.density; window.__QA.info = renderer.info.render;
+    window.__QA.state = { ...G.state, hour: G.hour, weather: W.mode, water: G.waterLevel }; }
+}
+function showIntro() {
+  const el = document.getElementById('intro');
+  el.innerHTML = `<div class="panel intro">
+    <h2>森の奥のキャンプカー</h2>
+    <p>林道の先、沢沿いの窪地に車を停めた。<br>雨の音を聞きながら、夜を越えよう。</p>
+    <ul>
+      <li>画面<b>左半分</b>をなぞって車内を<b>歩く</b>／<b>右半分</b>で見回す・ピンチで窓の外を覗く</li>
+      <li>右下のボタンで<b>座る・横になる・外に出る</b>。運転席の<b>タブレット🗺</b>で地図から目的地を選ぶと<b>自動運転</b></li>
+      <li>道には落石や倒木。崖から落ちても大丈夫、もう一度目的地を選べば<b>ゆっくり再発進</b>する</li>
+      <li>夜は<b>クマ</b>が来る。料理の匂いと明かりに注意。<b>息をひそめる</b>か<b>投光器・クラクション</b>で追い払う</li>
+      <li>長雨は<b>洪水</b>・<b>土砂崩れ</b>を呼ぶ。窪地は水に弱く、斜面の下は土砂に弱い</li>
+    </ul>
+    <button data-touch class="chip wide" id="introGo">はじめる</button></div>`;
+  el.classList.remove('hidden');
+  document.getElementById('introGo').onclick = () => {
+    el.classList.add('hidden');
+    try { localStorage.setItem('fc3d_intro', '1'); } catch (e) {}
+    toast('森の奥、沢沿いの窪地。今夜はここで過ごそう。', 'info', 5500);
+  };
+}
+function VIEWS_out() { return !G.camInside; }
+
+init().catch(e => { console.error(e); clearInterval(loadTick); loadEl.removeAttribute('aria-busy'); loadEl.innerHTML = '<p style="color:#f88;font-size:12px">⚠ ' + e.message + '</p>'; window.__QA.error = String(e); window.__QA.ready = true; });

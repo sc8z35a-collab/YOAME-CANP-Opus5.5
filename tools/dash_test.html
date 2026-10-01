@@ -1,0 +1,16 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<!-- dashboard (3D-mounted) tablet screen harness: tools/dash_test.html?route=summit -->
+<script type="module">
+import * as T from '../js/tablet.js';
+import { setPose } from '../js/vehicle.js';
+import { DESTS } from '../js/roads.js';
+import { engage } from '../js/autopilot.js';
+const P = new URLSearchParams(location.search);
+const d = DESTS[P.get('at') || 'hollow']; setPose(d.x, d.z, d.rot);
+T.buildTablet({ add() {} }, 0.72, -4.3);
+while (!T.bakeStep(100));
+if (P.has('route')) engage(P.get('route'));
+T.updateTablet(1);
+document.body.appendChild(T.TAB.canvas);
+window.__done = true;
+</script></body></html>
