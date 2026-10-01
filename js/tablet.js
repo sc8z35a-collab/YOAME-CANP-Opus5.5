@@ -90,7 +90,7 @@ export function bakeStep(ms = 6) {
 }
 
 // ---------------------------------------------------------------- live render (vector overlay in screen px)
-const _lab = [];
+const _lab = [], _flood = { wl: 0, runs: null };
 function draw(ctx, W, H, full, dpr = 1) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0b100d'; ctx.fillRect(0, 0, W, H);
@@ -113,13 +113,29 @@ function draw(ctx, W, H, full, dpr = 1) {
   const k = dpr;                                      // UI scale in device px
   // flood water (valley floor below the water level)
   if (G.waterLevel > -1.7) {
+    // one smooth polygon per flooded stretch (left bank down, right bank back up). The old version
+    // filled a 4m-tall rectangle per row with a coarse x step, giving jagged staircase edges.
     ctx.fillStyle = `rgba(70,140,220,${clamp((G.waterLevel + 1.7) * 0.35, 0.1, 0.5)})`;
-    const step = Math.max(2, 6 * mpp * 3);
-    for (let zz = WORLD.z0; zz < WORLD.z1; zz += 4) {
-      const cx = creekX(zz); let a = cx, b = cx;
-      while (a > cx - 60 && heightAt(a, zz) < G.waterLevel) a -= step;
-      while (b < cx + 60 && heightAt(b, zz) < G.waterLevel) b += step;
-      const [x0, y0] = SW(a, zz + 2), [x1, y1] = SW(b, zz - 2); ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    const wl = G.waterLevel, dz = 2;
+    if (!_flood.runs || Math.abs(_flood.wl - wl) > 0.02) { // shoreline only changes with the water level: cache it
+    const runs = _flood.runs = []; _flood.wl = wl; let cur = null;
+    for (let zz = WORLD.z0; zz <= WORLD.z1; zz += dz) {
+      const cx = creekX(zz);
+      if (heightAt(cx, zz) >= wl) { cur = null; continue; }
+      let a = cx, b = cx; // march out to the shoreline, then refine it by bisection (sub-metre edge)
+      while (a > cx - 60 && heightAt(a - 1, zz) < wl) a -= 1;
+      while (b < cx + 60 && heightAt(b + 1, zz) < wl) b += 1;
+      let lo = a - 1, hi = a; for (let k = 0; k < 4; k++) { const m = (lo + hi) / 2; heightAt(m, zz) < wl ? hi = m : lo = m; } a = hi;
+      lo = b; hi = b + 1; for (let k = 0; k < 4; k++) { const m = (lo + hi) / 2; heightAt(m, zz) < wl ? lo = m : hi = m; } b = lo;
+      if (!cur) runs.push(cur = []);
+      cur.push([zz, a, b]);
+    }
+    }
+    for (const r of _flood.runs) {
+      ctx.beginPath();
+      r.forEach(([zz, a], i) => { const [x, y] = SW(a, zz); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      for (let i = r.length - 1; i >= 0; i--) { const [x, y] = SW(r[i][2], r[i][0]); ctx.lineTo(x, y); }
+      ctx.closePath(); ctx.fill();
     }
   }
   // roads: dark casing + light fill; width in metres, but never thinner than readable

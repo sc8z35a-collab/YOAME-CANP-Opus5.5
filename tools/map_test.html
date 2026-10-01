@@ -15,6 +15,7 @@ T.buildTablet({ add() {} }, 0.72, -4.3);
 while (!T.bakeStep(100));
 T.initTabletUI(document.body);
 if (P.has('route')) engage(P.get('route'));
+if (P.has('water')) { const { G } = await import('../js/core.js'); G.waterLevel = +P.get('water'); }
 T.openTablet();
 if (P.has('zoom')) T.TAB.zoom = +P.get('zoom');
 if (P.has('sel')) T.TAB.sel = P.get('sel');

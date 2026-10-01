@@ -172,3 +172,9 @@ tools/dash_test.html を追加（車内ダッシュボード小画面の撮影�
 - 場所: js/tablet.js updateTablet() `emissiveIntensity = 0.55 + night*0.2`
 - 症状: 電池切れで真っ暗になっても、クマから隠れて全消灯しても、運転席の地図画面だけが夜ほど明るく光り続ける（BUGFIXES #57 の漏れ）
 - 修正: 走行中以外は battery>0.5 のときだけ点灯、hiding 中は 15% に減光
+
+### E-32 [C] 地図の洪水表示が 4m 幅の横縞の積み重ねで、岸線がギザギザの階段状
+- 場所: js/tablet.js draw() 洪水（行ごと fillRect、x 探索ステップも粗い）
+- 修正: 岸線を 1m 刻み＋二分法で求め、連続区間を1つのポリゴンで塗る。水位が 2cm 以上変わった時だけ再計算（キャッシュ）
+- 検証: map_test.html?water=0.1&zoom=2 で修正前後を撮影（なめらかな岸線）。キャッシュ有無で画素差 0。計算 ~1.3ms/回 → 水位変化時のみ
+tools/map_test.html に `water=` パラメータを追加
