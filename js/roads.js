@@ -133,7 +133,16 @@ for (const d of DEF) {
     road.bridge = [a, b];
   }
   // pads: flatten ±4 samples around the pad (height taken from the already graded profile)
-  for (const [, i] of pads) { const ph = h[i]; for (let k = -3; k <= 3; k++) if (h[i + k] !== undefined && !pinned[i + k]) h[i + k] = ph; if (!pinned[i]) pinned[i] = true; }
+  // the parked van covers ±2 samples: pin that window level too, as wide as the grade budget to the
+  // next pinned sample allows (a pad right before a hairpin can't take the full window)
+  const feasible = (i0, i1, ph) => { const g = GRADE_MAX * STEP * 0.97;
+    for (let j = i0 - 1; j >= 0; j--) if (pinned[j]) { if (Math.abs(h[j] - ph) > (i0 - j) * g) return false; break; }
+    for (let j = i1 + 1; j < n; j++) if (pinned[j]) { if (Math.abs(h[j] - ph) > (j - i1) * g) return false; break; }
+    return true; };
+  for (const [, i] of pads) { const ph = h[i]; for (let k = -3; k <= 3; k++) if (h[i + k] !== undefined && !pinned[i + k]) h[i + k] = ph;
+    for (let w = 2; w >= 0; w--) { const i0 = Math.max(1, i - w), i1 = Math.min(n - 2, i + w); let clash = false; for (let j = i0; j <= i1; j++) if (pinned[j] && h[j] !== ph) clash = true;
+      if (!clash && feasible(i0, i1, ph)) { for (let j = i0; j <= i1; j++) pinned[j] = true; break; } }
+    pinned[i] = true; }
   limitGrade(h, pinned);
   s.forEach((p, i) => { p.h = h[i]; p.fill = h[i] - rawHeight(p.x, p.z); });
   // arc length
